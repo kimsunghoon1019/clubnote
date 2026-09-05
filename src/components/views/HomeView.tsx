@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { DataTable, type Column } from "@/components/ui/DataTable";
+import { GhostButton } from "@/components/ui/GhostButton";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { MiniCalendar } from "@/components/ui/MiniCalendar";
@@ -10,6 +11,7 @@ import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction } from "@/lib/bankExcel";
 import { formatDateKo, formatWeekday, formatWon, todayISO } from "@/lib/format";
+import { todayMemoItems, type TodayMemo } from "@/lib/notice";
 import { balanceSpark, eventSpark, memberSpark, unpaidSpark } from "@/lib/seed";
 import {
   attendanceStatusMap,
@@ -29,6 +31,7 @@ import {
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
+import { Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type MouseEvent } from "react";
 import {
@@ -47,7 +50,7 @@ const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968"];
 const RECENT_PRACTICE_COUNT = 12;
 
 export function HomeView() {
-  const { members, categories, events, attendance, transactions, inspectMember, inspectedMemberId } = useClub();
+  const { members, categories, events, attendance, transactions, inspectMember, inspectedMemberId, toast } = useClub();
   const router = useRouter();
   const today = todayISO();
   const recordMap = useMemo(() => attendanceStatusMap(attendance), [attendance]);
@@ -88,6 +91,19 @@ export function HomeView() {
     }))
     .sort((a, b) => b.participation - a.participation || b.diligence - a.diligence)
     .slice(0, 10);
+  const memos = useMemo(
+    () => todayMemoItems(events, members, categories, recordMap, today),
+    [events, members, categories, recordMap, today],
+  );
+
+  const copyMemo = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("멘트를 복사했어요");
+    } catch {
+      toast("복사에 실패했어요");
+    }
+  };
 
   const dismissInspected = (event: MouseEvent<HTMLElement>) => {
     if (!inspectedMemberId) return;
@@ -132,7 +148,7 @@ export function HomeView() {
             sparkColor="auto"
           />
           <KpiCard
-            label="연습"
+            label="진행한 연습"
             value={`${held.length}회 · 남은 ${remaining.length}회`}
             caption="오늘 기준"
             spark={practiceSpark}
@@ -308,20 +324,34 @@ export function HomeView() {
           </div>
         </section>
 
-        <section className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold">오늘/최근 출석 요약</h2>
-            <button type="button" className="text-[13px] text-brand-text" onClick={() => router.push("/attendance")}>
-              출석체크 보기
-            </button>
+        <section className="grid border-b border-line-soft lg:grid-cols-2">
+          <div className="min-w-0 border-b border-line-soft p-5 lg:border-b-0 lg:border-r">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold">오늘/최근 출석 요약</h2>
+              <button type="button" className="text-[13px] text-brand-text" onClick={() => router.push("/attendance")}>
+                출석체크 보기
+              </button>
+            </div>
+            <p className="mb-3 text-[12px] text-faint">참여도 높은 순 · 상위 10명 · {formatDateKo(today)} 기준</p>
+            <DataTable
+              columns={columns}
+              rows={ranked}
+              tableClassName="min-w-[420px]"
+              selectedIds={inspectedMemberId ? [inspectedMemberId] : []}
+              onRowClick={(row) => inspectMember(inspectedMemberId === row.id ? null : row.id)}
+            />
           </div>
-          <p className="mb-3 text-[12px] text-faint">참여도 높은 순 · 상위 10명 · {formatDateKo(today)} 기준</p>
-          <DataTable
-            columns={columns}
-            rows={ranked}
-            selectedIds={inspectedMemberId ? [inspectedMemberId] : []}
-            onRowClick={(row) => inspectMember(inspectedMemberId === row.id ? null : row.id)}
-          />
+          <div className="min-w-0 p-5">
+            <div className="mb-3">
+              <h2 className="text-[15px] font-semibold">오늘의 멘트</h2>
+              <p className="mt-1 text-[12px] text-faint">카톡방에 바로 붙여넣을 수 있어요</p>
+            </div>
+            <div className="space-y-3">
+              {memos.map((memo) => (
+                <CopyMemoCard key={memo.id} memo={memo} onCopy={() => copyMemo(memo.text)} />
+              ))}
+            </div>
+          </div>
         </section>
       </main>
 
@@ -338,5 +368,25 @@ export function HomeView() {
         )}
       </RightRail>
     </>
+  );
+}
+
+function CopyMemoCard({ memo, onCopy }: { memo: TodayMemo; onCopy: () => void }) {
+  return (
+    <div className="rounded-card border border-line-soft">
+      <div className="flex items-start justify-between gap-2 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold">{memo.title}</p>
+          {memo.caption ? <p className="mt-0.5 text-[12px] text-faint">{memo.caption}</p> : null}
+        </div>
+        <GhostButton className="h-8 shrink-0 px-2.5 text-[12px]" onClick={onCopy}>
+          <Copy className="h-3.5 w-3.5" />
+          복사
+        </GhostButton>
+      </div>
+      <pre className="max-h-40 overflow-auto whitespace-pre-wrap border-t border-line-soft bg-muted px-3.5 py-3 text-[13px] leading-6 text-ink scrollbar-thin">
+        {memo.text}
+      </pre>
+    </div>
   );
 }

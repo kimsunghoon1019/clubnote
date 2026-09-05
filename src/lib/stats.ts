@@ -1,4 +1,4 @@
-import { ATTENDANCE_STATUSES, isPresentStatus } from "./constants";
+import { ATTENDANCE_STATUSES, isAbsentStatus, isPresentStatus } from "./constants";
 import { formatWeekday, parseISODate, startOfWeekMonday, toISODate, todayISO, weekdayToPracticeDay } from "./format";
 import type { Attendance, AttendanceStatus, ClubEvent, Member, PracticeDay } from "./types";
 
@@ -181,6 +181,18 @@ export function presentMembersForEvent(
   return membersForEvent(members, event).filter((member) => {
     const status = recordMap.get(`${event.id}:${member.id}`);
     return Boolean(status && isPresentStatus(status));
+  });
+}
+
+/** 그날 대상 회원 중 결석이 아닌 사람. 미체크는 참석 예정. */
+export function expectedMembersForEvent(
+  event: ClubEvent,
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+) {
+  return membersForEvent(members, event).filter((member) => {
+    const status = recordMap.get(`${event.id}:${member.id}`);
+    return !status || !isAbsentStatus(status);
   });
 }
 

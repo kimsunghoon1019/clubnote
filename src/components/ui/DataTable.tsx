@@ -42,7 +42,7 @@ export function DataTable<T extends { id: string }>({
 
   return (
     <div className="overflow-auto scrollbar-thin">
-      <table className={cn("w-full min-w-[760px] border-collapse text-table", tableClassName)}>
+      <table className={cn("w-full border-collapse text-table", tableClassName ?? "min-w-[760px]")}>
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="border-b border-line-soft text-faint">
             {onToggle ? (
