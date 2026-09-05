@@ -204,7 +204,11 @@ export function FinanceView() {
     {
       key: "proof",
       header: "증빙",
-      render: (row) => <ProofThumbs proofs={txProofs(row)} />,
+      render: (row) => (
+        <div className="flex h-7 max-h-7 items-center overflow-hidden">
+          <ProofThumbs proofs={txProofs(row)} />
+        </div>
+      ),
     },
   ];
 

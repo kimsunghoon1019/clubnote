@@ -9,9 +9,14 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export function ProofThumbs({ proofs, size = "table" }: { proofs: TxProof[]; size?: "table" | "rail" }) {
-  if (!proofs.length) return <span className="text-[12px] text-faint">증빙없음</span>;
+  if (!proofs.length) return <span className="text-[12px] leading-none text-faint">증빙없음</span>;
   return (
-    <span className={cn("inline-flex items-center", size === "table" ? "gap-1" : "w-full flex-col gap-2")}>
+    <span
+      className={cn(
+        "inline-flex items-center",
+        size === "table" ? "h-6 max-h-6 flex-nowrap gap-0.5 overflow-hidden" : "w-full flex-col gap-2",
+      )}
+    >
       {proofs.map((proof) => (
         <ProofThumb key={proof.id} proof={proof} size={size} />
       ))}
@@ -26,10 +31,13 @@ export function ProofThumb({ proof, size = "table" }: { proof: TxProof; size?: "
   const rail = size === "rail";
 
   return (
-    <span className={cn("inline-flex", rail && "block w-full")} onClick={(event) => event.stopPropagation()}>
-      <ProofZoom proof={proof} url={url} blob={blob}>
+    <span
+      className={cn(rail ? "block w-full" : "inline-block h-6 w-6 shrink-0")}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <ProofZoom proof={proof} url={url} blob={blob} rail={rail}>
         {image && url ? (
-          <span className="relative inline-flex w-full">
+          <span className={cn("relative overflow-hidden", rail ? "block w-full" : "block h-6 w-6")}>
             <img
               src={url}
               alt=""
@@ -37,7 +45,7 @@ export function ProofThumb({ proof, size = "table" }: { proof: TxProof; size?: "
                 "bg-muted object-cover",
                 rail
                   ? "h-28 w-full rounded-btn border border-line-soft object-contain"
-                  : "h-9 w-9 rounded-[4px] border border-line-soft",
+                  : "h-6 w-6 rounded-[3px] border border-line-soft",
               )}
             />
             {kind === "pdf" ? <PdfBadge rail={rail} /> : null}
@@ -46,10 +54,14 @@ export function ProofThumb({ proof, size = "table" }: { proof: TxProof; size?: "
           <span
             className={cn(
               "relative overflow-hidden border border-line-soft bg-white",
-              rail ? "block h-28 w-full rounded-btn" : "inline-flex h-9 w-7 rounded-[3px]",
+              rail ? "block h-28 w-full rounded-btn" : "block h-6 w-6 rounded-[3px]",
             )}
           >
-            <iframe title={proof.name} src={url} className="pointer-events-none h-[140%] w-full border-0 bg-white" />
+            <iframe
+              title={proof.name}
+              src={url}
+              className="pointer-events-none absolute left-0 top-0 h-[220%] w-[180%] max-h-none border-0 bg-white"
+            />
             <PdfBadge rail={rail} />
           </span>
         ) : (
@@ -78,16 +90,16 @@ function FilePageThumb({ kind, rail }: { kind: "pdf" | "other" | "image" | "none
     <span
       className={cn(
         "relative flex flex-col overflow-hidden border border-line-soft bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]",
-        rail ? "h-28 w-full items-center justify-center rounded-btn" : "h-9 w-7 rounded-[3px] px-[5px] pt-[5px]",
+        rail ? "h-28 w-full items-center justify-center rounded-btn" : "h-6 w-6 rounded-[3px] px-[4px] pt-[4px]",
       )}
     >
       {rail ? (
         <FileText className="h-8 w-8 text-faint" />
       ) : (
         <>
-          <span className="h-[3px] w-full rounded-sm bg-[#e5e8eb]" />
-          <span className="mt-[3px] h-[3px] w-[70%] rounded-sm bg-[#f2f4f6]" />
-          <span className="mt-[3px] h-[3px] w-[85%] rounded-sm bg-[#f2f4f6]" />
+          <span className="h-[2px] w-full rounded-sm bg-[#e5e8eb]" />
+          <span className="mt-[2px] h-[2px] w-[70%] rounded-sm bg-[#f2f4f6]" />
+          <span className="mt-[2px] h-[2px] w-[85%] rounded-sm bg-[#f2f4f6]" />
         </>
       )}
       {kind === "pdf" ? <PdfBadge rail={rail} /> : null}
@@ -99,22 +111,24 @@ function ProofZoom({
   proof,
   url,
   blob,
+  rail,
   children,
 }: {
   proof: TxProof;
   url: string;
   blob?: Blob;
+  rail: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <span className="relative inline-flex w-full">
+      <span className={cn("relative", rail ? "inline-flex w-full" : "block h-6 w-6")}>
         {children}
         <button
           type="button"
-          className="absolute inset-0 cursor-zoom-in rounded-[4px]"
+          className="absolute inset-0 cursor-zoom-in rounded-[3px]"
           aria-label={`${proof.name} 증빙 보기`}
           onClick={(event) => {
             event.stopPropagation();
