@@ -14,6 +14,7 @@ import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
 import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
 import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
+import { duesSemester, inSemester, previousSemester } from "@/lib/dues";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { txProofs } from "@/lib/proof";
@@ -24,6 +25,8 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#F04452", "#FFB800", "#4E5968", "#8B95A1", "#1B64DA"];
+const PERIODS = ["당기", "전기", "전체"] as const;
+type Period = (typeof PERIODS)[number];
 
 export function FinanceView() {
   const {
@@ -37,7 +40,7 @@ export function FinanceView() {
     importBankTransactions,
     toast,
   } = useClub();
-  const [period, setPeriod] = useState("전체");
+  const [period, setPeriod] = useState<Period>("당기");
   const [type, setType] = useState<"전체" | TxType>("전체");
   const [category, setCategory] = useState("전체");
   const [inspectedTxId, setInspectedTxId] = useState<string | null>(null);
@@ -50,20 +53,25 @@ export function FinanceView() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const ordered = useMemo(() => [...transactions].sort(compareTxDesc), [transactions]);
+  const currentSemester = useMemo(() => duesSemester(), []);
+  const priorSemester = useMemo(() => previousSemester(), []);
 
   const filtered = useMemo(() => {
+    const range = period === "당기" ? currentSemester : period === "전기" ? priorSemester : null;
     return ordered.filter((row) => {
-      if (period === "이번 달" && !row.occurredOn.startsWith("2026-05")) return false;
-      if (period === "지난 달" && !row.occurredOn.startsWith("2026-04")) return false;
+      if (range && !inSemester(row.occurredOn, range)) return false;
       if (type !== "전체" && row.type !== type) return false;
       if (category !== "전체" && row.category !== category) return false;
       return true;
     });
-  }, [ordered, period, type, category]);
+  }, [ordered, period, type, category, currentSemester, priorSemester]);
 
-  const monthRows = transactions.filter((row) => row.occurredOn.startsWith("2026-05") || row.occurredOn.startsWith("2026-04"));
-  const income = monthRows.filter((r) => r.type === "입금").reduce((s, r) => s + r.amount, 0);
-  const expense = monthRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
+  const semesterRows = useMemo(
+    () => transactions.filter((row) => inSemester(row.occurredOn, currentSemester)),
+    [transactions, currentSemester],
+  );
+  const income = semesterRows.filter((r) => r.type === "입금").reduce((s, r) => s + r.amount, 0);
+  const expense = semesterRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
   const balance = ordered[0]?.balanceAfter ?? 0;
 
   useEffect(() => {
@@ -219,12 +227,12 @@ export function FinanceView() {
       <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
         <section className="grid grid-cols-3 border-b border-line-soft">
           <Kpi label="잔액" value={formatWon(balance)} />
-          <Kpi label="수입 (이번 달)" value={formatSignedWon(income)} up />
-          <Kpi label="지출 (이번 달)" value={formatSignedWon(expense)} />
+          <Kpi label="수입 (당기)" value={formatSignedWon(income)} up />
+          <Kpi label="지출 (당기)" value={formatSignedWon(expense)} />
         </section>
 
         <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line-soft px-5 py-1.5">
-          {["전체", "이번 달", "지난 달"].map((item) => (
+          {PERIODS.map((item) => (
             <FilterChip key={item} active={period === item} onClick={() => setPeriod(item)}>
               {item}
             </FilterChip>

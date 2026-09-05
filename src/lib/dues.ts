@@ -1,4 +1,4 @@
-import { formatDateDot, parseISODate, todayISO } from "./format";
+import { formatDateDot, parseISODate, toISODate, todayISO } from "./format";
 import { sortMembersByCategory } from "./stats";
 import type { DuesOverride, Member, Transaction } from "./types";
 
@@ -41,6 +41,16 @@ export function duesSemester(today = todayISO()): DuesSemester {
 
 export function formatDuesPeriod(semester: DuesSemester) {
   return `${formatDateDot(semester.start)} – ${formatDateDot(semester.end)}`;
+}
+
+export function previousSemester(today = todayISO()): DuesSemester {
+  const start = parseISODate(duesSemester(today).start);
+  start.setDate(start.getDate() - 1);
+  return duesSemester(toISODate(start));
+}
+
+export function inSemester(iso: string, semester: DuesSemester) {
+  return iso >= semester.start && iso <= semester.end;
 }
 
 /** 공백·문장부호를 빼고 글자만 남겨 글리강은채 / 글리 강은채도 같은 이름으로 본다. */
