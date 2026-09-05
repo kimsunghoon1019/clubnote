@@ -122,6 +122,13 @@ export function MembersView() {
       return;
     }
 
+    if (selectedMemberIds.length === 1 && selectedMemberIds[0] === row.id) {
+      inspectMember(null);
+      clearSelection();
+      setSelectionAnchorId(null);
+      return;
+    }
+
     setSelectionAnchorId(row.id);
     inspectMember(row.id);
     selectAll([row.id]);

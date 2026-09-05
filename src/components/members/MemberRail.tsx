@@ -154,15 +154,14 @@ export function MemberRail({ memberId }: { memberId: string }) {
         </div>
       ) : (
         <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+          <Info label="전공" value={member.major} />
           <Info label="분류" value={member.category} />
           <Info label="성별" value={member.gender} />
           <Info label="나이" value={`${member.age}세`} />
           <Info label="근속" value={tenureLabel(member.joinedAt)} />
           <Info label="학번" value={member.studentId} />
           <Info label="가입" value={formatDateDot(member.joinedAt)} />
-          <div className="col-span-2">
-            <Info label="연락처" value={member.phone || "-"} />
-          </div>
+          <Info label="연락처" value={member.phone || "-"} />
         </dl>
       )}
 
