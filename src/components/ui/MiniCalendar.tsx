@@ -11,11 +11,13 @@ export function MiniCalendar({
   selected,
   onSelect,
   month,
+  compact,
 }: {
   events: ClubEvent[];
   selected?: string;
   onSelect?: (iso: string) => void;
   month?: string;
+  compact?: boolean;
 }) {
   const base = parseISODate(month ?? todayISO());
   const year = base.getFullYear();
@@ -30,25 +32,27 @@ export function MiniCalendar({
   while (cells.length % 7 !== 0) cells.push(null);
 
   const eventDates = new Set(events.flatMap((event) => eachISODate(event.date, eventEndDate(event))));
+  const cellSize = compact ? "h-6 w-6 text-[11px]" : "h-8 w-8 text-[12px]";
+  const emptySize = compact ? "h-6" : "h-8";
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[13px] font-semibold text-ink">
+      <div className={cn("flex items-center justify-between", compact ? "mb-1" : "mb-2")}>
+        <p className={cn("font-semibold text-ink", compact ? "text-[12px]" : "text-[13px]")}>
           {year}년 {monthIndex + 1}월
         </p>
-        <p className="text-[12px] text-faint">오늘 {formatDateKo(todayISO())}</p>
+        {compact ? null : <p className="text-[12px] text-faint">오늘 {formatDateKo(todayISO())}</p>}
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] text-faint">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="py-1">
+          <div key={d} className={compact ? "py-0.5" : "py-1"}>
             {d}
           </div>
         ))}
       </div>
       <div className="grid grid-cols-7 text-center">
         {cells.map((day, index) => {
-          if (!day) return <div key={`e-${index}`} className="h-8" />;
+          if (!day) return <div key={`e-${index}`} className={emptySize} />;
           const iso = toISODate(new Date(year, monthIndex, day));
           const isToday = iso === todayISO();
           const isSelected = iso === selected;
@@ -59,7 +63,8 @@ export function MiniCalendar({
               type="button"
               onClick={() => onSelect?.(iso)}
               className={cn(
-                "relative mx-auto flex h-8 w-8 items-center justify-center rounded-full text-[12px]",
+                "relative mx-auto flex items-center justify-center rounded-full",
+                cellSize,
                 isToday && "bg-brand font-semibold text-white",
                 !isToday && isSelected && "ring-1 ring-brand text-brand-text",
                 !isToday && !isSelected && "text-ink hover:bg-muted",
@@ -67,7 +72,7 @@ export function MiniCalendar({
             >
               {day}
               {hasEvent && !isToday ? (
-                <span className="absolute bottom-1 h-1 w-1 rounded-full bg-brand" />
+                <span className={cn("absolute h-1 w-1 rounded-full bg-brand", compact ? "bottom-0.5" : "bottom-1")} />
               ) : null}
             </button>
           );

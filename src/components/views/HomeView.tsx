@@ -1,18 +1,15 @@
 "use client";
 
-import { AiInsightCard } from "@/components/ui/AiInsightCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { DataTable, type Column } from "@/components/ui/DataTable";
-import { GhostButton } from "@/components/ui/GhostButton";
 import { KpiCard } from "@/components/ui/KpiCard";
-import { MiniWeek } from "@/components/ui/MiniCalendar";
-import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { LiveClock } from "@/components/ui/LiveClock";
+import { MiniCalendar } from "@/components/ui/MiniCalendar";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction } from "@/lib/bankExcel";
 import { formatDateKo, formatWeekday, formatWon, todayISO } from "@/lib/format";
-import { isAbsentStatus } from "@/lib/constants";
 import { balanceSpark, eventSpark, memberSpark, unpaidSpark } from "@/lib/seed";
 import {
   attendanceStatusMap,
@@ -27,11 +24,11 @@ import {
   remainingPracticeEvents,
   thisWeekHeldPractices,
   upcomingPractice,
+  upcomingPracticeEvents,
   weeklyAttendanceSpark,
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
-import { CalendarPlus, MessageSquare, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type MouseEvent } from "react";
 import {
@@ -50,17 +47,19 @@ const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968"];
 const RECENT_PRACTICE_COUNT = 12;
 
 export function HomeView() {
-  const { members, categories, events, attendance, transactions, openModal, inspectMember, inspectedMemberId } = useClub();
+  const { members, categories, events, attendance, transactions, inspectMember, inspectedMemberId } = useClub();
   const router = useRouter();
   const today = todayISO();
   const recordMap = useMemo(() => attendanceStatusMap(attendance), [attendance]);
   const held = useMemo(() => heldPracticeEvents(events, today), [events, today]);
   const remaining = useMemo(() => remainingPracticeEvents(events, today), [events, today]);
   const weekHeld = useMemo(() => thisWeekHeldPractices(events, today), [events, today]);
-  const recentHeld = held.slice(-RECENT_PRACTICE_COUNT);
+  const fromToday = useMemo(
+    () => upcomingPracticeEvents(events, today).slice(0, RECENT_PRACTICE_COUNT),
+    [events, today],
+  );
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const selectedEvent =
-    recentHeld.find((event) => event.id === selectedEventId) ?? recentHeld[recentHeld.length - 1] ?? null;
+  const selectedEvent = fromToday.find((event) => event.id === selectedEventId) ?? fromToday[0] ?? null;
   const selectedPresent = selectedEvent ? presentMembersForEvent(selectedEvent, members, recordMap) : [];
   const selectedRoster = selectedEvent ? membersForEvent(members, selectedEvent) : [];
   const pieData = categoryPresentCounts(selectedPresent, categories);
@@ -69,7 +68,7 @@ export function HomeView() {
   const avgRate = pooledRosterRate(held, members, recordMap);
   const attendanceSpark = weeklyAttendanceSpark(events, members, recordMap, today);
   const practiceSpark = monthlyHeldPracticeSpark(events, today);
-  const participationByDate = recentHeld.map((event) => ({
+  const participationByDate = fromToday.map((event) => ({
     id: event.id,
     date: event.date,
     label: `${Number(event.date.slice(5, 7))}/${Number(event.date.slice(8, 10))}`,
@@ -87,17 +86,8 @@ export function HomeView() {
       diligence: diligenceScore(member, events, attendance),
       participation: participationScore(member, events, attendance),
     }))
-    .sort((a, b) => b.diligence - a.diligence || b.participation - a.participation)
+    .sort((a, b) => b.participation - a.participation || b.diligence - a.diligence)
     .slice(0, 10);
-
-  const watch = [...members]
-    .map((member) => {
-      const rows = attendance.filter((row) => row.memberId === member.id);
-      const recentAbsent = rows.filter((row) => isAbsentStatus(row.status)).length;
-      return { ...member, recentAbsent, diligence: diligenceScore(member, events, attendance) };
-    })
-    .sort((a, b) => b.recentAbsent - a.recentAbsent || a.diligence - b.diligence)
-    .slice(0, 5);
 
   const dismissInspected = (event: MouseEvent<HTMLElement>) => {
     if (!inspectedMemberId) return;
@@ -118,14 +108,14 @@ export function HomeView() {
     },
     { key: "role", header: "직책", render: (row) => <span className="text-sub">{row.role}</span> },
     {
-      key: "diligence",
-      header: "성실도",
-      render: (row) => <ScoreBar value={row.diligence} />,
-    },
-    {
       key: "participation",
       header: "참여도",
       render: (row) => <ScoreBar value={row.participation} color="var(--brand)" />,
+    },
+    {
+      key: "diligence",
+      header: "성실도",
+      render: (row) => <ScoreBar value={row.diligence} />,
     },
   ];
 
@@ -166,10 +156,10 @@ export function HomeView() {
           <div className="border-b border-line-soft p-5 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">날짜별 연습 참여 인원</h2>
-              <span className="text-[12px] text-faint">최근 {recentHeld.length}회 · 출석표</span>
+              <span className="text-[12px] text-faint">오늘부터 {fromToday.length}회 · 출석표</span>
             </div>
             {participationByDate.length === 0 ? (
-              <p className="flex h-[160px] items-center text-[13px] text-faint">아직 지난 연습이 없어요</p>
+              <p className="flex h-[160px] items-center text-[13px] text-faint">오늘 이후 연습이 없어요</p>
             ) : (
               <div className="h-[160px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -325,7 +315,7 @@ export function HomeView() {
               출석체크 보기
             </button>
           </div>
-          <p className="mb-3 text-[12px] text-faint">성실도 높은 순 · 상위 10명 · {formatDateKo(today)} 기준</p>
+          <p className="mb-3 text-[12px] text-faint">참여도 높은 순 · 상위 10명 · {formatDateKo(today)} 기준</p>
           <DataTable
             columns={columns}
             rows={ranked}
@@ -336,54 +326,15 @@ export function HomeView() {
       </main>
 
       <RightRail>
+        <RailSection>
+          <LiveClock />
+        </RailSection>
         {inspectedMemberId ? (
           <MemberRail memberId={inspectedMemberId} />
         ) : (
-          <>
-            <RailSection>
-              <AiInsightCard text="주중 연습 참석률이 지난달 대비 4.1% 올랐어요" />
-            </RailSection>
-            <RailSection title="관심 회원 TOP 5" action={<span className="text-[12px] text-faint">성실도/최근 결석</span>}>
-              <ul>
-                {watch.map((member, index) => (
-                  <li key={member.id}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-btn px-1 py-2 text-left hover:bg-muted"
-                      onClick={() => inspectMember(member.id)}
-                    >
-                      <span className="w-4 text-[12px] text-faint">{index + 1}</span>
-                      <Avatar name={member.name} size={24} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium">{member.name}</span>
-                        <span className="block text-[11px] text-faint">최근 결석 {member.recentAbsent}회</span>
-                      </span>
-                      <span className="text-[12px] font-medium text-up">{member.diligence.toFixed(2)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </RailSection>
-            <RailSection>
-              <MiniWeek events={events} onSelect={() => router.push("/calendar")} />
-            </RailSection>
-            <RailSection title="바로가기">
-              <div className="grid gap-2">
-                <PrimaryButton onClick={() => openModal("sms")}>
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  문자보내기
-                </PrimaryButton>
-                <GhostButton onClick={() => openModal("event")}>
-                  <CalendarPlus className="h-3.5 w-3.5" />
-                  일정생성
-                </GhostButton>
-                <GhostButton onClick={() => openModal("transaction")}>
-                  <Plus className="h-3.5 w-3.5" />
-                  거래등록
-                </GhostButton>
-              </div>
-            </RailSection>
-          </>
+          <RailSection>
+            <MiniCalendar compact events={events} onSelect={() => router.push("/calendar")} />
+          </RailSection>
         )}
       </RightRail>
     </>

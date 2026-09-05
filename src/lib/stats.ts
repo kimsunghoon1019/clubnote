@@ -149,6 +149,13 @@ export function remainingPracticeEvents(events: ClubEvent[], today = todayISO())
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 }
 
+/** 오늘 포함, 다가오는 연습 (오늘 → 미래) */
+export function upcomingPracticeEvents(events: ClubEvent[], today = todayISO()) {
+  return practiceEvents(events)
+    .filter((event) => event.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
+
 export function thisWeekHeldPractices(events: ClubEvent[], today = todayISO()) {
   const start = startOfWeekMonday(today);
   const end = new Date(start);
