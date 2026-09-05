@@ -1,7 +1,7 @@
 import { decryptOfficeWorkbook, isEncryptedOffice, WrongPasswordError } from "./officeDecrypt";
 import type { Transaction, TxType } from "./types";
 
-export type ParsedBankTx = Omit<Transaction, "id" | "category" | "proofName">;
+export type ParsedBankTx = Omit<Transaction, "id" | "category" | "proofName" | "proofMime" | "proofDataUrl">;
 
 const DATE_HEADERS = ["거래일시", "거래일자", "거래일", "일자", "날짜", "일시"];
 const TYPE_HEADERS = ["거래유형", "거래구분", "구분", "유형"];
@@ -12,7 +12,7 @@ const WITHDRAW_HEADERS = ["출금", "출금액", "찾으신금액", "출금금�
 const BALANCE_HEADERS = ["거래후잔액", "거래 후 잔액", "거래후 잔액", "잔액", "잔액(원)"];
 const INSTITUTION_HEADERS = ["거래기관", "금융기관", "은행", "취급점", "거래점", "상대은행"];
 const ACCOUNT_HEADERS = ["계좌번호", "계좌", "계좌 번호"];
-const MEMO_HEADERS = ["메모", "비고", "기재내용", "거래메모", "거래 메모"];
+const MEMO_HEADERS = ["세부내역", "메모", "비고", "기재내용", "거래메모", "거래 메모"];
 
 function normHeader(value: unknown): string {
   return String(value ?? "")

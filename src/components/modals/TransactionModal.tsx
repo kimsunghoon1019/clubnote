@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { TX_TYPES } from "@/lib/constants";
 import { todayISO } from "@/lib/format";
+import { proofFromFile, type ProofFields } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { TxType } from "@/lib/types";
 import { Paperclip } from "lucide-react";
@@ -22,7 +23,7 @@ export function TransactionModal() {
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
   const [category, setCategory] = useState("");
-  const [proofName, setProofName] = useState("");
+  const [proof, setProof] = useState<ProofFields>({});
   const [occurredOn, setOccurredOn] = useState(todayISO());
 
   if (!open) return null;
@@ -32,7 +33,7 @@ export function TransactionModal() {
     setAmount("");
     setMemo("");
     setCategory("");
-    setProofName("");
+    setProof({});
     setType("출금");
   };
 
@@ -89,18 +90,29 @@ export function TransactionModal() {
           </SelectInput>
         </div>
         <div className="col-span-2">
-          <FieldLabel>메모</FieldLabel>
-          <TextArea value={memo} onChange={(e) => setMemo(e.target.value)} />
+          <FieldLabel>세부내역</FieldLabel>
+          <TextArea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="세부내역" />
         </div>
         <div className="col-span-2">
           <FieldLabel>증빙</FieldLabel>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
             <Paperclip className="h-3.5 w-3.5" />
-            {proofName || "파일첨부"}
+            {proof.proofName || "파일첨부"}
             <input
               type="file"
+              accept="image/*,.pdf,application/pdf"
               className="hidden"
-              onChange={(e) => setProofName(e.target.files?.[0]?.name ?? "")}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) {
+                  setProof({});
+                  return;
+                }
+                void proofFromFile(file)
+                  .then(setProof)
+                  .catch((error: unknown) => toast(error instanceof Error ? error.message : "증빙을 읽지 못했어요"));
+              }}
             />
           </label>
         </div>
@@ -121,7 +133,9 @@ export function TransactionModal() {
               amount: signed,
               memo,
               category,
-              proofName: proofName || undefined,
+              proofName: proof.proofName,
+              proofMime: proof.proofMime,
+              proofDataUrl: proof.proofDataUrl,
             });
             toast("거래를 등록했어요");
             reset();

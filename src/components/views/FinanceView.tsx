@@ -1,5 +1,6 @@
 "use client";
 
+import { ProofThumb } from "@/components/finance/ProofPreview";
 import { TransactionRail } from "@/components/finance/TransactionRail";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -196,8 +197,15 @@ export function FinanceView() {
     },
     {
       key: "memo",
-      header: "메모",
+      header: "세부내역",
       render: (row) => <span className="max-w-[200px] truncate text-sub">{row.memo || "-"}</span>,
+    },
+    {
+      key: "proof",
+      header: "증빙",
+      render: (row) => (
+        <ProofThumb name={row.proofName} mime={row.proofMime} dataUrl={row.proofDataUrl} />
+      ),
     },
   ];
 

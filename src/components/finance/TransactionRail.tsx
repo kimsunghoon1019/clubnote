@@ -1,13 +1,15 @@
 "use client";
 
+import { ProofThumb } from "@/components/finance/ProofPreview";
 import { FieldLabel, SelectInput, TextArea } from "@/components/ui/Field";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
+import { EMPTY_PROOF, proofFromFile } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import { Paperclip, X } from "lucide-react";
 import { useRef } from "react";
 
 export function TransactionRail({ txId, onClose }: { txId: string; onClose: () => void }) {
-  const { transactions, txCategories, updateTransaction } = useClub();
+  const { transactions, txCategories, updateTransaction, toast } = useClub();
   const tx = transactions.find((item) => item.id === txId);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -53,12 +55,12 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
       </div>
 
       <div className="mb-3">
-        <FieldLabel>메모</FieldLabel>
+        <FieldLabel>세부내역</FieldLabel>
         <TextArea
           className="min-h-[72px] text-[13px]"
           value={tx.memo}
-          placeholder="메모"
-          aria-label="거래 메모"
+          placeholder="세부내역"
+          aria-label="거래 세부내역"
           onChange={(e) => updateTransaction(tx.id, { memo: e.target.value })}
         />
       </div>
@@ -68,33 +70,39 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
         <input
           ref={fileRef}
           type="file"
+          accept="image/*,.pdf,application/pdf"
           className="hidden"
           aria-label="증빙 첨부"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) updateTransaction(tx.id, { proofName: file.name });
             e.target.value = "";
+            if (!file) return;
+            void proofFromFile(file)
+              .then((proof) => updateTransaction(tx.id, proof))
+              .catch((error: unknown) => toast(error instanceof Error ? error.message : "증빙을 읽지 못했어요"));
           }}
         />
         {tx.proofName ? (
-          <div className="flex items-center gap-1 rounded-btn border border-line-soft px-2.5 py-2">
-            <Paperclip className="h-3.5 w-3.5 shrink-0 text-faint" />
-            <p className="min-w-0 flex-1 truncate text-[13px]">{tx.proofName}</p>
-            <button
-              type="button"
-              className="text-[12px] text-sub hover:text-ink"
-              onClick={() => fileRef.current?.click()}
-            >
-              변경
-            </button>
-            <button
-              type="button"
-              className="rounded p-0.5 text-faint hover:text-up"
-              aria-label="증빙 삭제"
-              onClick={() => updateTransaction(tx.id, { proofName: undefined })}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+          <div className="space-y-2">
+            <ProofThumb name={tx.proofName} mime={tx.proofMime} dataUrl={tx.proofDataUrl} size="rail" />
+            <div className="flex items-center gap-1">
+              <p className="min-w-0 flex-1 truncate text-[12px] text-sub">{tx.proofName}</p>
+              <button
+                type="button"
+                className="text-[12px] text-sub hover:text-ink"
+                onClick={() => fileRef.current?.click()}
+              >
+                변경
+              </button>
+              <button
+                type="button"
+                className="rounded p-0.5 text-faint hover:text-up"
+                aria-label="증빙 삭제"
+                onClick={() => updateTransaction(tx.id, EMPTY_PROOF)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         ) : (
           <button

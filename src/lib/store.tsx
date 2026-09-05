@@ -116,6 +116,16 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function withSeedProof(row: Transaction): Transaction {
+  if (!row.proofName) return row;
+  const usable =
+    row.proofDataUrl?.startsWith("data:image/") || row.proofDataUrl?.startsWith("data:application/");
+  if (usable) return row;
+  const seed = seedTransactions.find((item) => item.id === row.id && item.proofName === row.proofName);
+  if (!seed?.proofDataUrl) return row;
+  return { ...row, proofMime: row.proofMime ?? seed.proofMime, proofDataUrl: seed.proofDataUrl };
+}
+
 function uniqueNames(...groups: Array<string[] | readonly string[]>) {
   const out: string[] = [];
   for (const group of groups) {
@@ -189,7 +199,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         }),
       );
       setNotes(data.notes ?? []);
-      setTransactions(data.transactions ?? seedTransactions);
+      setTransactions((data.transactions ?? seedTransactions).map(withSeedProof));
       setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
       setRoles(data.roles?.length ? data.roles : DEFAULT_ROLES);
       setEventTypes(
@@ -230,7 +240,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       places,
       txCategories,
     };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      /* quota: keep in-memory state */
+    }
   }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories]);
 
   const toast = useCallback((message: string) => {

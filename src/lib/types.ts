@@ -74,6 +74,8 @@ export type Transaction = {
   memo: string;
   category: string;
   proofName?: string;
+  proofMime?: string;
+  proofDataUrl?: string;
 };
 
 export type NavKey = "home" | "members" | "attendance" | "finance" | "calendar";
