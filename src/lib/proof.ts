@@ -1,4 +1,4 @@
-import type { Transaction, TxProof } from "./types";
+import type { ClubEvent, EventAttachment, Transaction, TxProof } from "./types";
 
 const MAX_PROOF_BYTES = 8 * 1024 * 1024;
 const IMAGE_MAX_EDGE = 1280;
@@ -18,6 +18,31 @@ export function persistableTransaction(row: Transaction): Transaction {
   return { ...rest, proofs: txProofs(row) };
 }
 
+export function eventAttachments(event: Pick<ClubEvent, "id" | "attachments" | "attachmentName">): EventAttachment[] {
+  if (Array.isArray(event.attachments)) return event.attachments;
+  if (event.attachmentName) {
+    return [{ id: `att-${event.id}`, name: event.attachmentName, mime: "" }];
+  }
+  return [];
+}
+
+export function persistableEvent(event: ClubEvent): ClubEvent {
+  const { attachmentName: _legacy, ...rest } = event;
+  return { ...rest, attachments: eventAttachments(event) };
+}
+
+export function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name || "download";
+  anchor.rel = "noopener";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 export function proofKind(name?: string, mime?: string): ProofKind {
   if (!name && !mime) return "none";
   const m = (mime ?? "").toLowerCase();
@@ -34,7 +59,7 @@ export function isImageBlob(blob?: Blob, mime?: string) {
 
 export async function fileToProof(file: File): Promise<{ meta: TxProof; blob: Blob }> {
   if (file.size > MAX_PROOF_BYTES) {
-    throw new Error("증빙은 8MB 이하만 올릴 수 있어요");
+    throw new Error("파일은 8MB 이하만 올릴 수 있어요");
   }
   const mime = file.type || guessMime(file.name);
   const kind = proofKind(file.name, mime);

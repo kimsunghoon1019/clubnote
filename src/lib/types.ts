@@ -44,6 +44,12 @@ export type ChartNote = {
   author: string;
 };
 
+export type EventAttachment = {
+  id: string;
+  name: string;
+  mime: string;
+};
+
 export type ClubEvent = {
   id: string;
   date: string;
@@ -55,6 +61,8 @@ export type ClubEvent = {
   startTime: string;
   endTime: string;
   allDay?: boolean;
+  attachments?: EventAttachment[];
+  /** @deprecated attachments로 이전. 예전 DB 호환. */
   attachmentName?: string;
   /** 출석 마감 시각. 있으면 출석표에 반영. 연습일 자정 이후 자동 설정. */
   attendanceClosedAt?: string;

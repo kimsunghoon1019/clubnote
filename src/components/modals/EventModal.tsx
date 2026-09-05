@@ -1,5 +1,6 @@
 "use client";
 
+import { PendingFileList } from "@/components/calendar/EventAttachments";
 import { DateTimeRangeField, type DateTimeRangeValue } from "@/components/ui/DateTimeRangeField";
 import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
@@ -9,7 +10,6 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { PLACE } from "@/lib/constants";
 import { todayISO } from "@/lib/format";
 import { useClub } from "@/lib/store";
-import { Paperclip } from "lucide-react";
 import { useEffect, useState } from "react";
 
 function defaultRange(date = todayISO()): DateTimeRangeValue {
@@ -27,6 +27,7 @@ export function EventModal() {
     modal,
     closeModal,
     addEvent,
+    addEventAttachment,
     toast,
     eventTypes,
     places,
@@ -42,7 +43,7 @@ export function EventModal() {
   const [range, setRange] = useState<DateTimeRangeValue>(defaultRange);
   const [place, setPlace] = useState(PLACE);
   const [preview, setPreview] = useState("");
-  const [fileName, setFileName] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -52,7 +53,7 @@ export function EventModal() {
     setRange(defaultRange(date));
     setPlace(PLACE);
     setPreview("");
-    setFileName("");
+    setFiles([]);
   }, [open, eventModalDate]);
 
   if (!open) return null;
@@ -70,24 +71,32 @@ export function EventModal() {
           <PrimaryButton
             disabled={!title || !range.startDate}
             onClick={() => {
-              addEvent({
-                date: range.startDate,
-                endDate: range.endDate !== range.startDate ? range.endDate : undefined,
-                title,
-                type,
-                place,
-                preview,
-                startTime: range.startTime,
-                endTime: range.endTime,
-                allDay: range.allDay,
-                attachmentName: fileName || undefined,
-              });
-              toast(
-                type === "정기연습" || type === "연습"
-                  ? "연습 일정을 만들었어요. 출석체크에 바로 반영돼요."
-                  : "일정을 만들었어요",
-              );
-              closeModal();
+              void (async () => {
+                const created = addEvent({
+                  date: range.startDate,
+                  endDate: range.endDate !== range.startDate ? range.endDate : undefined,
+                  title,
+                  type,
+                  place,
+                  preview,
+                  startTime: range.startTime,
+                  endTime: range.endTime,
+                  allDay: range.allDay,
+                });
+                try {
+                  for (const file of files) {
+                    await addEventAttachment(created.id, file);
+                  }
+                } catch (error: unknown) {
+                  toast(error instanceof Error ? error.message : "첨부파일을 읽지 못했어요");
+                }
+                toast(
+                  type === "정기연습" || type === "연습"
+                    ? "연습 일정을 만들었어요. 출석체크에 바로 반영돼요."
+                    : "일정을 만들었어요",
+                );
+                closeModal();
+              })();
             }}
           >
             일정 생성
@@ -137,11 +146,7 @@ export function EventModal() {
         </div>
         <div>
           <FieldLabel>첨부파일</FieldLabel>
-          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
-            <Paperclip className="h-3.5 w-3.5" />
-            {fileName || "파일첨부"}
-            <input type="file" className="hidden" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
-          </label>
+          <PendingFileList files={files} onChange={setFiles} />
         </div>
       </div>
     </Modal>

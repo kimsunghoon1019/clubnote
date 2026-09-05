@@ -45,7 +45,14 @@ import {
   type WeatherDay,
 } from "./weather";
 import { compareTxAsc, newBankRows, type ParsedBankTx } from "./bankExcel";
-import { dataUrlToBlob, fileToProof, persistableTransaction, txProofs } from "./proof";
+import {
+  dataUrlToBlob,
+  eventAttachments,
+  fileToProof,
+  persistableEvent,
+  persistableTransaction,
+  txProofs,
+} from "./proof";
 import { deleteProofBlob, getProofBlob, putProofBlob } from "./proofDb";
 import { createClient } from "./supabase/client";
 import type {
@@ -136,6 +143,8 @@ type ClubContextValue = {
   removeTransactionProof: (id: string, proofId: string) => Promise<void>;
   addEvent: (input: Omit<ClubEvent, "id">) => ClubEvent;
   updateEvent: (id: string, patch: Partial<ClubEvent>) => void;
+  addEventAttachment: (id: string, file: File) => Promise<void>;
+  removeEventAttachment: (id: string, attachmentId: string) => Promise<void>;
   deleteEvent: (id: string) => void;
   toast: (message: string) => void;
   dismissToast: (id: string) => void;
@@ -290,7 +299,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           cutoff < EVENTS_KEEP_FROM
             ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
             : { events: data.events, attendance: attendanceRows };
-        setEvents(loaded.events);
+        setEvents(loaded.events.map(persistableEvent));
         setAttendance(loaded.attendance);
         setMembers(withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance));
         setEventsClearedBefore(EVENTS_KEEP_FROM);
@@ -352,7 +361,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     const payload: Persisted = {
       members: withFineTallies(members, events, attendance),
-      events,
+      events: events.map(persistableEvent),
       attendance,
       notes,
       transactions: transactions.map(persistableTransaction),
@@ -681,7 +690,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addEvent = useCallback((input: Omit<ClubEvent, "id">) => {
-    const created: ClubEvent = { ...input, id: uid("e") };
+    const created: ClubEvent = persistableEvent({ ...input, id: uid("e") });
     if (isPracticeEvent(created) && created.date < todayISO() && !created.attendanceClosedAt) {
       created.attendanceClosedAt = new Date().toISOString();
     }
@@ -695,7 +704,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setEvents((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
-        const next = { ...row, ...patch };
+        const next = persistableEvent({ ...row, ...patch });
         if (isPracticeEvent(next) && next.date < todayISO() && !next.attendanceClosedAt) {
           next.attendanceClosedAt = new Date().toISOString();
         }
@@ -706,8 +715,45 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     if (patch.place) setPlaces((prev) => (prev.includes(patch.place!) ? prev : [...prev, patch.place!]));
   }, []);
 
+  const addEventAttachment = useCallback(async (id: string, file: File) => {
+    const { meta, blob } = await fileToProof(file);
+    await putProofBlob(meta.id, blob);
+    setEvents((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const current = Array.isArray(row.attachments) ? row.attachments : [];
+        return persistableEvent({ ...row, attachments: [...current, meta] });
+      }),
+    );
+  }, []);
+
+  const removeEventAttachment = useCallback(async (id: string, attachmentId: string) => {
+    setEvents((prev) => {
+      const next = prev.map((row) => {
+        if (row.id !== id) return row;
+        return persistableEvent({
+          ...row,
+          attachments: eventAttachments(row).filter((item) => item.id !== attachmentId),
+        });
+      });
+      const stillUsed = next.some((row) => eventAttachments(row).some((item) => item.id === attachmentId));
+      if (!stillUsed) void deleteProofBlob(attachmentId);
+      return next;
+    });
+  }, []);
+
   const deleteEvent = useCallback((id: string) => {
-    setEvents((prev) => prev.filter((row) => row.id !== id));
+    setEvents((prev) => {
+      const doomed = prev.find((row) => row.id === id);
+      const next = prev.filter((row) => row.id !== id);
+      if (doomed) {
+        for (const item of eventAttachments(doomed)) {
+          const stillUsed = next.some((row) => eventAttachments(row).some((file) => file.id === item.id));
+          if (!stillUsed) void deleteProofBlob(item.id);
+        }
+      }
+      return next;
+    });
     setAttendance((prev) => prev.filter((row) => row.eventId !== id));
   }, []);
 
@@ -776,6 +822,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeTransactionProof,
       addEvent,
       updateEvent,
+      addEventAttachment,
+      removeEventAttachment,
       deleteEvent,
       toast,
       dismissToast,
@@ -836,6 +884,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeTransactionProof,
       addEvent,
       updateEvent,
+      addEventAttachment,
+      removeEventAttachment,
       deleteEvent,
       toast,
       dismissToast,

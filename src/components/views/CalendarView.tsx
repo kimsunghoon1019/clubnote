@@ -1,5 +1,6 @@
 "use client";
 
+import { EventAttachmentList } from "@/components/calendar/EventAttachments";
 import { DateTimeRangeField, type DateTimeRangeValue } from "@/components/ui/DateTimeRangeField";
 import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
@@ -31,6 +32,7 @@ import {
   todayISO,
 } from "@/lib/format";
 import { practiceNoticeText } from "@/lib/notice";
+import { eventAttachments } from "@/lib/proof";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
@@ -75,7 +77,7 @@ function cloneEventOntoDate(event: ClubEvent, date: string): Omit<ClubEvent, "id
     startTime: event.startTime,
     endTime: event.endTime,
     allDay: event.allDay,
-    attachmentName: event.attachmentName,
+    attachments: eventAttachments(event),
   };
 }
 
@@ -298,20 +300,9 @@ export function CalendarView() {
                         toast("일정을 수정했어요");
                       }}
                       onCancel={() => setEditing(false)}
-                      onAttach={(name) => {
-                        updateEvent(active.id, { attachmentName: name });
-                        toast("첨부파일을 추가했어요");
-                      }}
                     />
                   ) : (
-                    <EventDetail
-                      key={active.id}
-                      event={active}
-                      onAttach={(name) => {
-                        updateEvent(active.id, { attachmentName: name });
-                        toast("첨부파일을 추가했어요");
-                      }}
-                    />
+                    <EventDetail key={active.id} event={active} />
                   )}
                 </div>
               ) : (
@@ -501,11 +492,13 @@ function EventBar({
   onPick: (clientX: number) => void;
 }) {
   const { event, lane, colStart, colSpan, continuesLeft, continuesRight } = segment;
+  const hasAttach = eventAttachments(event).length > 0;
   return (
     <button
       type="button"
       data-event-id={event.id}
       data-col-span={colSpan}
+      data-event-has-attach={hasAttach ? "true" : undefined}
       title={event.title}
       onClick={(e) => {
         e.stopPropagation();
@@ -513,7 +506,7 @@ function EventBar({
       }}
       onDoubleClick={(e) => e.stopPropagation()}
       className={cn(
-        "pointer-events-auto h-[18px] truncate px-1.5 text-left text-[11px] leading-[18px]",
+        "pointer-events-auto flex h-[18px] items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px]",
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
         continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
         barClass(event.type),
@@ -524,8 +517,11 @@ function EventBar({
         gridRow: lane + 1,
       }}
     >
-      {continuesLeft ? "·· " : ""}
-      {barLabel(event)}
+      <span className="min-w-0 truncate">
+        {continuesLeft ? "·· " : ""}
+        {barLabel(event)}
+      </span>
+      {hasAttach ? <Paperclip className="h-2.5 w-2.5 shrink-0 opacity-80" aria-hidden /> : null}
     </button>
   );
 }
@@ -560,12 +556,7 @@ function eventWhenText(event: ClubEvent) {
   return `${formatDateWeekday(event.date)} ${startT} → ${formatDateWeekday(end)} ${endT}`;
 }
 
-function EventDetail({ event, onAttach }: { event: ClubEvent; onAttach: (name: string) => void }) {
-  const pickFile = (file: File | undefined) => {
-    if (!file) return;
-    onAttach(file.name);
-  };
-
+function EventDetail({ event }: { event: ClubEvent }) {
   return (
     <dl className="space-y-4" data-event-fields="readonly">
       <Info label="제목" value={event.title || "-"} />
@@ -581,21 +572,7 @@ function EventDetail({ event, onAttach }: { event: ClubEvent; onAttach: (name: s
       <div>
         <dt className="text-[12px] font-medium text-sub">첨부파일</dt>
         <dd className="mt-1">
-          {event.attachmentName ? (
-            <p className="inline-flex items-center gap-2 text-[14px] text-ink">
-              <Paperclip className="h-3.5 w-3.5 text-faint" />
-              {event.attachmentName}
-            </p>
-          ) : (
-            <label
-              data-attach-add
-              className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-medium text-brand-text hover:underline"
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-              첨부파일 추가하기
-              <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
-            </label>
-          )}
+          <EventAttachmentList eventId={event.id} />
         </dd>
       </div>
     </dl>
@@ -612,39 +589,33 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function EventFields({
+  eventId,
   title,
   type,
   place,
   preview,
   range,
-  attachmentName,
   onTitle,
   onType,
   onPlace,
   onPreview,
   onRange,
-  onAttach,
 }: {
+  eventId: string;
   title: string;
   type: string;
   place: string;
   preview: string;
   range: DateTimeRangeValue;
-  attachmentName?: string;
   onTitle: (value: string) => void;
   onType: (value: string) => void;
   onPlace: (value: string) => void;
   onPreview: (value: string) => void;
   onRange: (value: DateTimeRangeValue) => void;
-  onAttach: (name: string) => void;
 }) {
   const { eventTypes, places, addEventType, removeEventType, addPlace, removePlace } = useClub();
   const typeItems = eventTypes.includes(type) ? eventTypes : [...eventTypes, type];
   const placeItems = places.includes(place) ? places : [...places, place];
-  const pickFile = (file: File | undefined) => {
-    if (!file) return;
-    onAttach(file.name);
-  };
 
   return (
     <div className="space-y-3" data-event-fields="edit">
@@ -686,11 +657,7 @@ function EventFields({
       </div>
       <div>
         <FieldLabel>첨부파일</FieldLabel>
-        <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
-          <Paperclip className="h-3.5 w-3.5" />
-          {attachmentName || "파일첨부"}
-          <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
-        </label>
+        <EventAttachmentList eventId={eventId} />
       </div>
     </div>
   );
@@ -700,12 +667,10 @@ function EditEvent({
   event,
   onSave,
   onCancel,
-  onAttach,
 }: {
   event: ClubEvent;
   onSave: (patch: Partial<ClubEvent>) => void;
   onCancel: () => void;
-  onAttach: (name: string) => void;
 }) {
   const [title, setTitle] = useState(event.title);
   const [type, setType] = useState(event.type);
@@ -715,18 +680,17 @@ function EditEvent({
   return (
     <div className="space-y-3">
       <EventFields
+        eventId={event.id}
         title={title}
         type={type}
         place={place}
         preview={preview}
         range={range}
-        attachmentName={event.attachmentName}
         onTitle={setTitle}
         onType={setType}
         onPlace={setPlace}
         onPreview={setPreview}
         onRange={setRange}
-        onAttach={onAttach}
       />
       <div className="flex gap-2">
         <PrimaryButton
