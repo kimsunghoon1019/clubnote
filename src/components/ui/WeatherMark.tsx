@@ -66,7 +66,7 @@ export function WeatherMark({ day }: { day: WeatherDay }) {
   return (
     <span
       data-weather={day.date}
-      className="inline-flex items-center gap-px"
+      className="inline-flex shrink-0 items-center gap-px whitespace-nowrap"
       title={`신촌 ${label}`}
       aria-label={`신촌 ${label}`}
     >

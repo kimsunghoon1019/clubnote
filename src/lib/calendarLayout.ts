@@ -3,7 +3,7 @@ import type { ClubEvent } from "./types";
 
 export const CALENDAR_MAX_LANES = 3;
 export const CALENDAR_LANE_H = 20;
-export const CALENDAR_DAY_HEAD = 44;
+export const CALENDAR_DAY_HEAD = 32;
 export const CALENDAR_MORE_H = 16;
 
 export type CalendarCell = {
@@ -112,5 +112,5 @@ export function hiddenCountForDay(iso: string, segments: WeekSegment[], maxLanes
 
 export function weekMinHeight(laneCount: number, hasMore: boolean) {
   const shown = Math.min(Math.max(laneCount, 0), CALENDAR_MAX_LANES);
-  return CALENDAR_DAY_HEAD + shown * CALENDAR_LANE_H + (hasMore ? CALENDAR_MORE_H : 8);
+  return Math.max(96, CALENDAR_DAY_HEAD + shown * CALENDAR_LANE_H + (hasMore ? CALENDAR_MORE_H : 8));
 }

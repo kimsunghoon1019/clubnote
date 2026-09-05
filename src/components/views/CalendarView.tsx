@@ -312,66 +312,67 @@ function WeekRow({
   const laneCount = segments.reduce((max, seg) => Math.max(max, seg.lane + 1), 0);
   const moreByDay = weekIsos.map((iso) => hiddenCountForDay(iso, segments));
   const hasMore = moreByDay.some((n) => n > 0);
+  const height = weekMinHeight(laneCount, hasMore);
+  const bodyMin = height - CALENDAR_DAY_HEAD;
 
   return (
     <div
       ref={ref}
-      className="relative border-b border-line-soft"
-      style={{ minHeight: Math.max(92, weekMinHeight(laneCount, hasMore)) }}
+      className="grid border-b border-line-soft"
+      style={{
+        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+        gridTemplateRows: `${CALENDAR_DAY_HEAD}px minmax(${bodyMin}px, auto)`,
+      }}
     >
-      <div className="grid h-full grid-cols-7">
-        {week.map((cell, index) => {
-          const isToday = cell.iso === today;
-          const isSelected = cell.iso === selected;
-          const weather = forecast.get(cell.iso);
-          const hasPractice = events.some(
-            (event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso && isPracticeEvent(event),
-          );
-          const showDate = cell.inMonth && (isToday || hasPractice || Boolean(weather));
-          const more = moreByDay[index];
-          return (
-            <button
-              key={cell.iso}
-              type="button"
-              data-iso={cell.iso}
-              aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
-              onClick={() => onSelectDay(cell.iso)}
-              className={cn(
-                "relative min-h-[92px] border-r border-line-soft p-1.5 text-left hover:bg-muted",
-                !cell.inMonth && "bg-[#fcfcfd]",
-                isSelected && "bg-[#F7FBFF]",
-              )}
+      {week.map((cell, index) => {
+        const isToday = cell.iso === today;
+        const isSelected = cell.iso === selected;
+        const weather = forecast.get(cell.iso);
+        const hasPractice = events.some(
+          (event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso && isPracticeEvent(event),
+        );
+        const more = moreByDay[index];
+        return (
+          <button
+            key={cell.iso}
+            type="button"
+            data-iso={cell.iso}
+            aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
+            onClick={() => onSelectDay(cell.iso)}
+            style={{ gridColumn: index + 1, gridRow: "1 / 3" }}
+            className={cn(
+              "relative flex flex-col border-r border-line-soft text-left hover:bg-muted",
+              !cell.inMonth && "bg-[#fcfcfd]",
+              isSelected && "bg-[#F7FBFF]",
+            )}
+          >
+            <span
+              data-day-head
+              className="flex shrink-0 items-center justify-between gap-1 px-1.5"
+              style={{ height: CALENDAR_DAY_HEAD }}
             >
-              <span className="relative z-[1] flex h-7 items-center gap-0.5">
-                {showDate ? (
-                  <span
-                    className={cn(
-                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px]",
-                      isToday && "bg-brand font-semibold text-white",
-                      !isToday && "text-ink",
-                    )}
-                  >
-                    {cell.day}
-                  </span>
-                ) : cell.inMonth ? (
-                  <span className="inline-flex h-6 w-6" />
-                ) : (
-                  <span className="inline-flex h-6 w-6 items-center justify-center text-[12px] text-faint">
-                    {cell.day}
-                  </span>
+              <span
+                className={cn(
+                  "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px]",
+                  isToday && "bg-brand font-semibold text-white",
+                  !isToday && cell.inMonth && "text-ink",
+                  !isToday && !cell.inMonth && "text-faint",
                 )}
-                {weather ? <WeatherMark day={weather} /> : null}
+              >
+                {cell.day}
               </span>
-              {more > 0 ? (
-                <span className="absolute bottom-1 left-1.5 text-[10px] text-faint">+{more}</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+              {weather ? <WeatherMark day={weather} /> : null}
+            </span>
+            {more > 0 ? (
+              <span className="absolute bottom-1 left-1.5 text-[10px] text-faint">+{more}</span>
+            ) : null}
+          </button>
+        );
+      })}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-1 grid auto-rows-[18px] grid-cols-7 gap-y-[2px]"
-        style={{ top: CALENDAR_DAY_HEAD }}
+        data-event-overlay
+        className="pointer-events-none relative z-[1] grid auto-rows-[18px] grid-cols-7 gap-y-[2px] self-stretch py-0.5"
+        style={{ gridColumn: "1 / -1", gridRow: 2 }}
       >
         {visible.map((seg) => (
           <EventBar
