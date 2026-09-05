@@ -124,7 +124,7 @@ export function MembersView() {
 
     setSelectionAnchorId(row.id);
     inspectMember(row.id);
-    clearSelection();
+    selectAll([row.id]);
   };
 
   const exportCsv = () => {
