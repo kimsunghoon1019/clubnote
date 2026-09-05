@@ -112,15 +112,14 @@ export function categoryAttendance(
   const catMembers = members.filter((member) => member.category === category);
   const ids = new Set(catMembers.map((m) => m.id));
   const rows = records.filter((row) => ids.has(row.memberId));
-  const present = catMembers.filter((member) => {
-    const status = rows.find((row) => row.memberId === member.id)?.status;
-    return Boolean(status && isPresentStatus(status));
-  }).length;
+  const counts = countByStatus(rows);
+  const unchecked = Math.max(0, catMembers.length - rows.length);
+  const shown = counts.출석 + counts.통보지각 + counts.미통보지각 + unchecked;
   return {
-    rate: catMembers.length === 0 ? 0 : (present / catMembers.length) * 100,
-    counts: countByStatus(rows),
+    shown,
+    counts,
     total: catMembers.length,
-    unchecked: Math.max(0, catMembers.length - rows.length),
+    unchecked,
   };
 }
 

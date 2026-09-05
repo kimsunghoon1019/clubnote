@@ -250,7 +250,7 @@ export function AttendanceView() {
         {inspectedMemberId ? (
           <MemberRail memberId={inspectedMemberId} />
         ) : (
-          <RailSection title="분류 출석현황">
+          <RailSection title="분류별 출석현황">
             <ul className="space-y-4">
               {categories.map((category) => {
                 const stat = categoryAttendance(category, roster, records);
@@ -258,7 +258,7 @@ export function AttendanceView() {
                   <li key={category}>
                     <div className="mb-1 flex items-center justify-between text-[13px]">
                       <span className="text-sub">{category}</span>
-                      <span className="font-medium text-ink">{stat.rate.toFixed(0)}%</span>
+                      <span className="font-medium text-ink">{stat.shown}명</span>
                     </div>
                     <StatusMixBar counts={stat.counts} unchecked={stat.unchecked} />
                     <ul className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-faint">
