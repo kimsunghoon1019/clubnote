@@ -93,7 +93,5 @@ export function duesStatus(
     };
   });
 
-  rows.sort((a, b) => Number(a.paid) - Number(b.paid) || a.name.localeCompare(b.name, "ko"));
-
   return { semester, rows };
 }
