@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { formatDateKo, parseISODate, toISODate, todayISO } from "@/lib/format";
+import { eachISODate, eventEndDate, formatDateKo, parseISODate, toISODate, todayISO } from "@/lib/format";
 import type { ClubEvent } from "@/lib/types";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -29,7 +29,7 @@ export function MiniCalendar({
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const eventDates = new Set(events.map((event) => event.date));
+  const eventDates = new Set(events.flatMap((event) => eachISODate(event.date, eventEndDate(event))));
 
   return (
     <div>
@@ -94,7 +94,7 @@ export function MiniWeek({
     d.setDate(start.getDate() + i);
     return d;
   });
-  const eventDates = new Set(events.map((e) => e.date));
+  const eventDates = new Set(events.flatMap((e) => eachISODate(e.date, eventEndDate(e))));
 
   return (
     <div>

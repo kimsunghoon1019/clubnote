@@ -7,7 +7,12 @@ export async function middleware(request: NextRequest) {
   if (!url || !key) return NextResponse.next();
 
   const { pathname } = request.nextUrl;
-  if (pathname === "/login" || pathname.startsWith("/auth") || pathname.startsWith("/_next")) {
+  if (
+    pathname === "/login" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api")
+  ) {
     return NextResponse.next();
   }
 

@@ -170,6 +170,17 @@ function generatePracticeEvents(): ClubEvent[] {
 const extraEvents: ClubEvent[] = [
   { id: "e-aud", date: "2026-03-07", title: "신입 오디션", type: "오디션", place: PLACE, preview: "1지망 자유곡 1곡", startTime: "18:00", endTime: "21:00" },
   { id: "e-meet", date: "2026-03-14", title: "운영진 회의", type: "회의", place: "학생회관 301호", preview: "학기 운영 계획", startTime: "19:00", endTime: "20:30" },
+  {
+    id: "e-show",
+    date: "2026-09-18",
+    endDate: "2026-09-20",
+    title: "정기공연",
+    type: "공연",
+    place: PLACE,
+    preview: "금–일 공연",
+    startTime: "18:00",
+    endTime: "21:00",
+  },
 ];
 
 export const events: ClubEvent[] = [...extraEvents, ...generatePracticeEvents()].sort((a, b) =>

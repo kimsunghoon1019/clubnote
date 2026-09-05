@@ -6,13 +6,27 @@ import { GhostButton } from "@/components/ui/GhostButton";
 import { InlineTaxonomySelect } from "@/components/ui/InlineTaxonomySelect";
 import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { useSinchonForecast, WeatherMark } from "@/components/ui/WeatherMark";
+import {
+  CALENDAR_DAY_HEAD,
+  CALENDAR_MAX_LANES,
+  chunkWeeks,
+  hiddenCountForDay,
+  isMultiDayEvent,
+  layoutWeek,
+  monthCells,
+  weekMinHeight,
+  type CalendarCell,
+  type WeekSegment,
+} from "@/lib/calendarLayout";
 import { cn } from "@/lib/cn";
 import {
+  eachISODate,
+  eventEndDate,
   formatDateKo,
-  formatEventTime,
+  formatEventWhen,
   formatWeekday,
   parseISODate,
-  toISODate,
   todayISO,
 } from "@/lib/format";
 import { practiceNoticeText } from "@/lib/notice";
@@ -20,7 +34,7 @@ import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -37,8 +51,22 @@ function typeTone(type: string) {
   return TYPE_TONE[type] ?? "default";
 }
 
+function barClass(type: string) {
+  if (type === "공연") return "bg-[#FFF1F1] text-up";
+  if (type === "회식") return "bg-[#FFF8E1] text-[#B78103]";
+  if (type === "회의") return "bg-[#F2F4F6] text-sub";
+  return "bg-brand-soft text-brand-text";
+}
+
+function barLabel(event: ClubEvent) {
+  const title = event.title === "정기연습" ? "연습" : event.title;
+  if (event.allDay || isMultiDayEvent(event)) return title;
+  return `${event.startTime} ${title}`;
+}
+
 export function CalendarView() {
   const { events, updateEvent, deleteEvent, openModal, toast } = useClub();
+  const forecast = useSinchonForecast();
   const today = todayISO();
   const [cursor, setCursor] = useState(() => parseISODate(today));
   const [selected, setSelected] = useState<string | null>(null);
@@ -47,24 +75,16 @@ export function CalendarView() {
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
-  const first = new Date(year, monthIndex, 1);
-  const startPad = first.getDay();
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const cells: { iso: string | null; day: number | null }[] = [
-    ...Array.from({ length: startPad }, () => ({ iso: null, day: null })),
-    ...Array.from({ length: daysInMonth }, (_, i) => {
-      const iso = toISODate(new Date(year, monthIndex, i + 1));
-      return { iso, day: i + 1 };
-    }),
-  ];
-  while (cells.length % 7 !== 0) cells.push({ iso: null, day: null });
+  const weeks = useMemo(() => chunkWeeks(monthCells(year, monthIndex)), [year, monthIndex]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, ClubEvent[]>();
     events.forEach((event) => {
-      const list = map.get(event.date) ?? [];
-      list.push(event);
-      map.set(event.date, list);
+      for (const iso of eachISODate(event.date, eventEndDate(event))) {
+        const list = map.get(iso) ?? [];
+        list.push(event);
+        map.set(iso, list);
+      }
     });
     return map;
   }, [events]);
@@ -119,74 +139,40 @@ export function CalendarView() {
             <GhostButton className="ml-1 h-8 px-2.5 text-[12px]" onClick={goToday}>
               오늘
             </GhostButton>
+            {forecast.size > 0 ? <span className="ml-2 text-[12px] text-faint">신촌 예보</span> : null}
           </div>
           <PrimaryButton onClick={() => openModal("event")}>일정 생성</PrimaryButton>
         </div>
 
-        <div className="grid grid-cols-7 border-l border-t border-line-soft" onClick={(e) => e.stopPropagation()}>
-          {WEEKDAYS.map((d) => (
-            <div key={d} className="border-b border-r border-line-soft bg-muted px-2 py-2 text-[12px] text-faint">
-              {d}
-            </div>
+        <div className="border-l border-t border-line-soft" onClick={(e) => e.stopPropagation()}>
+          <div className="grid grid-cols-7">
+            {WEEKDAYS.map((d) => (
+              <div key={d} className="border-b border-r border-line-soft bg-muted px-2 py-2 text-[12px] text-faint">
+                {d}
+              </div>
+            ))}
+          </div>
+          {weeks.map((week) => (
+            <WeekRow
+              key={week[0].iso}
+              week={week}
+              events={events}
+              today={today}
+              selected={selected}
+              activeId={activeId}
+              forecast={forecast}
+              onSelectDay={(iso) => {
+                setSelected(iso);
+                setActiveId((byDate.get(iso) ?? [])[0]?.id ?? null);
+                setEditing(false);
+              }}
+              onSelectEvent={(iso, id) => {
+                setSelected(iso);
+                setActiveId(id);
+                setEditing(false);
+              }}
+            />
           ))}
-          {cells.map((cell, index) => {
-            if (!cell.iso) {
-              return (
-                <button
-                  key={`e-${index}`}
-                  type="button"
-                  className="min-h-[92px] border-b border-r border-line-soft bg-[#fcfcfd]"
-                  onClick={resetPanel}
-                  aria-label="빈 칸"
-                />
-              );
-            }
-            const isToday = cell.iso === today;
-            const isSelected = cell.iso === selected;
-            const dayEvents = byDate.get(cell.iso) ?? [];
-            const hasPractice = dayEvents.some(isPracticeEvent);
-            const showDate = isToday || hasPractice;
-            return (
-              <button
-                key={cell.iso}
-                type="button"
-                aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
-                onClick={() => {
-                  setSelected(cell.iso);
-                  setActiveId(dayEvents[0]?.id ?? null);
-                  setEditing(false);
-                }}
-                className={cn(
-                  "min-h-[92px] border-b border-r border-line-soft p-1.5 text-left hover:bg-muted",
-                  isSelected && "bg-[#F7FBFF]",
-                )}
-              >
-                {showDate ? (
-                  <span
-                    className={cn(
-                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px]",
-                      isToday && "bg-brand font-semibold text-white",
-                      !isToday && "text-ink",
-                    )}
-                  >
-                    {cell.day}
-                  </span>
-                ) : (
-                  <span className="inline-flex h-6 w-6" />
-                )}
-                <div className="mt-1 space-y-1">
-                  {dayEvents.slice(0, 3).map((event) => (
-                    <span
-                      key={event.id}
-                      className="block truncate rounded-[6px] bg-brand-soft px-1.5 py-0.5 text-[11px] text-brand-text"
-                    >
-                      {event.allDay ? event.title.replace("정기", "") : `${event.startTime} ${event.title.replace("정기", "")}`}
-                    </span>
-                  ))}
-                </div>
-              </button>
-            );
-          })}
         </div>
       </main>
 
@@ -236,7 +222,7 @@ export function CalendarView() {
                         {isPracticeEvent(active) ? <Pill tone="brand">출석대상</Pill> : null}
                       </div>
                       <p className="mt-3 text-[13px] text-sub">
-                        {formatEventTime(active)} · {active.place}
+                        {formatEventWhen(active)} · {active.place}
                       </p>
                       {active.preview ? <p className="mt-2 text-[14px] leading-6 text-ink">{active.preview}</p> : null}
                       <div className="mt-5 rounded-btn border border-dashed border-line px-3 py-3">
@@ -290,6 +276,155 @@ export function CalendarView() {
         </div>
       </aside>
     </div>
+  );
+}
+
+function isoAtClientX(weekEl: HTMLElement, clientX: number, weekIsos: string[]) {
+  const rect = weekEl.getBoundingClientRect();
+  if (rect.width <= 0) return weekIsos[0];
+  const col = Math.min(6, Math.max(0, Math.floor((clientX - rect.left) / (rect.width / 7))));
+  return weekIsos[col];
+}
+
+function WeekRow({
+  week,
+  events,
+  today,
+  selected,
+  activeId,
+  forecast,
+  onSelectDay,
+  onSelectEvent,
+}: {
+  week: CalendarCell[];
+  events: ClubEvent[];
+  today: string;
+  selected: string | null;
+  activeId: string | null;
+  forecast: Map<string, { date: string; code: number; tmax: number }>;
+  onSelectDay: (iso: string) => void;
+  onSelectEvent: (iso: string, id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const weekIsos = week.map((cell) => cell.iso);
+  const segments = layoutWeek(weekIsos, events);
+  const visible = segments.filter((seg) => seg.lane < CALENDAR_MAX_LANES);
+  const laneCount = segments.reduce((max, seg) => Math.max(max, seg.lane + 1), 0);
+  const moreByDay = weekIsos.map((iso) => hiddenCountForDay(iso, segments));
+  const hasMore = moreByDay.some((n) => n > 0);
+
+  return (
+    <div
+      ref={ref}
+      className="relative border-b border-line-soft"
+      style={{ minHeight: Math.max(92, weekMinHeight(laneCount, hasMore)) }}
+    >
+      <div className="grid h-full grid-cols-7">
+        {week.map((cell, index) => {
+          const isToday = cell.iso === today;
+          const isSelected = cell.iso === selected;
+          const weather = forecast.get(cell.iso);
+          const hasPractice = events.some(
+            (event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso && isPracticeEvent(event),
+          );
+          const showDate = cell.inMonth && (isToday || hasPractice || Boolean(weather));
+          const more = moreByDay[index];
+          return (
+            <button
+              key={cell.iso}
+              type="button"
+              data-iso={cell.iso}
+              aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
+              onClick={() => onSelectDay(cell.iso)}
+              className={cn(
+                "relative min-h-[92px] border-r border-line-soft p-1.5 text-left hover:bg-muted",
+                !cell.inMonth && "bg-[#fcfcfd]",
+                isSelected && "bg-[#F7FBFF]",
+              )}
+            >
+              <span className="relative z-[1] flex h-7 items-center gap-0.5">
+                {showDate ? (
+                  <span
+                    className={cn(
+                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px]",
+                      isToday && "bg-brand font-semibold text-white",
+                      !isToday && "text-ink",
+                    )}
+                  >
+                    {cell.day}
+                  </span>
+                ) : cell.inMonth ? (
+                  <span className="inline-flex h-6 w-6" />
+                ) : (
+                  <span className="inline-flex h-6 w-6 items-center justify-center text-[12px] text-faint">
+                    {cell.day}
+                  </span>
+                )}
+                {weather ? <WeatherMark day={weather} /> : null}
+              </span>
+              {more > 0 ? (
+                <span className="absolute bottom-1 left-1.5 text-[10px] text-faint">+{more}</span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-1 grid auto-rows-[18px] grid-cols-7 gap-y-[2px]"
+        style={{ top: CALENDAR_DAY_HEAD }}
+      >
+        {visible.map((seg) => (
+          <EventBar
+            key={`${seg.event.id}-${seg.colStart}`}
+            segment={seg}
+            active={activeId === seg.event.id}
+            onPick={(clientX) => {
+              const weekEl = ref.current;
+              const iso = weekEl ? isoAtClientX(weekEl, clientX, weekIsos) : weekIsos[seg.colStart - 1];
+              onSelectEvent(iso, seg.event.id);
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EventBar({
+  segment,
+  active,
+  onPick,
+}: {
+  segment: WeekSegment;
+  active: boolean;
+  onPick: (clientX: number) => void;
+}) {
+  const { event, lane, colStart, colSpan, continuesLeft, continuesRight } = segment;
+  return (
+    <button
+      type="button"
+      data-event-id={event.id}
+      data-col-span={colSpan}
+      title={event.title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPick(e.clientX);
+      }}
+      className={cn(
+        "pointer-events-auto h-[18px] truncate px-1.5 text-left text-[11px] leading-[18px]",
+        continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
+        continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
+        barClass(event.type),
+        active && "ring-1 ring-inset ring-brand",
+      )}
+      style={{
+        gridColumn: `${colStart} / span ${colSpan}`,
+        gridRow: lane + 1,
+      }}
+    >
+      {continuesLeft ? "·· " : ""}
+      {barLabel(event)}
+    </button>
   );
 }
 

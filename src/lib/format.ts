@@ -86,6 +86,35 @@ export function formatEventTime(event: { startTime: string; endTime: string; all
   return formatTimeRange(event.startTime, event.endTime);
 }
 
+export function eventEndDate(event: { date: string; endDate?: string }) {
+  return event.endDate && event.endDate > event.date ? event.endDate : event.date;
+}
+
+export function eachISODate(from: string, to: string) {
+  const dates: string[] = [];
+  const cursor = parseISODate(from);
+  const last = parseISODate(to);
+  if (Number.isNaN(cursor.getTime()) || last < cursor) return from ? [from] : [];
+  while (cursor <= last) {
+    dates.push(toISODate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+export function formatEventWhen(event: {
+  date: string;
+  endDate?: string;
+  startTime: string;
+  endTime: string;
+  allDay?: boolean;
+}) {
+  const end = eventEndDate(event);
+  if (end === event.date) return formatEventTime(event);
+  if (event.allDay) return `${formatDateKo(event.date)} – ${formatDateKo(end)}`;
+  return `${formatDateKo(event.date)} ${event.startTime} – ${formatDateKo(end)} ${event.endTime}`;
+}
+
 export function formatChartStamp(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
