@@ -99,4 +99,10 @@ export type Transaction = {
   proofDataUrl?: string;
 };
 
+export type DuesOverride = {
+  memberId: string;
+  semesterStart: string;
+  paid: boolean;
+};
+
 export type NavKey = "home" | "members" | "attendance" | "finance" | "calendar";

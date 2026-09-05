@@ -60,6 +60,7 @@ import type {
   AttendanceStatus,
   ChartNote,
   ClubEvent,
+  DuesOverride,
   Member,
   PracticeDay,
   Transaction,
@@ -86,6 +87,7 @@ type Persisted = {
   weatherDays?: WeatherDay[];
   weatherFetchedAt?: string;
   eventsClearedBefore?: string;
+  duesOverrides?: DuesOverride[];
 };
 
 type ClubContextValue = {
@@ -151,6 +153,8 @@ type ClubContextValue = {
   eventModalDate: string | null;
   openModal: (key: Exclude<ModalKey, null>, payload?: { date?: string }) => void;
   closeModal: () => void;
+  duesOverrides: DuesOverride[];
+  setDuesOverride: (memberId: string, semesterStart: string, paid: boolean | null) => void;
 };
 
 const ClubContext = createContext<ClubContextValue | null>(null);
@@ -189,6 +193,20 @@ async function hydrateTransactionProofs(rows: Transaction[]): Promise<Transactio
     }
     const { proofName: _name, proofMime: _mime, proofDataUrl: _data, ...rest } = row;
     out.push({ ...rest, proofs });
+  }
+  return out;
+}
+
+function normalizeDuesOverrides(raw: unknown): DuesOverride[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DuesOverride[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const item = row as Partial<DuesOverride>;
+    if (typeof item.memberId !== "string" || !item.memberId) continue;
+    if (typeof item.semesterStart !== "string" || !item.semesterStart) continue;
+    if (typeof item.paid !== "boolean") continue;
+    out.push({ memberId: item.memberId, semesterStart: item.semesterStart, paid: item.paid });
   }
   return out;
 }
@@ -281,6 +299,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
   const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
+  const [duesOverrides, setDuesOverrides] = useState<DuesOverride[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -329,6 +348,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           ),
         );
         setChartSeenByAccount(normalizeChartSeen(data.chartSeenByAccount));
+        setDuesOverrides(normalizeDuesOverrides(data.duesOverrides));
       }
       setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
       setReady(true);
@@ -374,13 +394,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       weatherDays,
       weatherFetchedAt,
       eventsClearedBefore,
+      duesOverrides,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       /* quota: keep in-memory state */
     }
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, duesOverrides]);
 
   const practiceDaysKey = members.map((member) => `${member.id}:${member.practiceDays.join(",")}`).join("|");
   useEffect(() => {
@@ -546,6 +567,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     }
     setSelectedMemberIds((prev) => prev.filter((id) => !drop.has(id)));
     setInspectedMemberId((current) => (current && drop.has(current) ? null : current));
+    setDuesOverrides((prev) => prev.filter((row) => !drop.has(row.memberId)));
   }, [notes]);
 
   const setPracticeDays = useCallback((id: string, days: PracticeDay[]) => {
@@ -766,6 +788,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setEventModalDate(null);
   }, []);
 
+  const setDuesOverride = useCallback((memberId: string, semesterStart: string, paid: boolean | null) => {
+    setDuesOverrides((prev) => {
+      const without = prev.filter((row) => !(row.memberId === memberId && row.semesterStart === semesterStart));
+      if (paid === null) return without;
+      return [...without, { memberId, semesterStart, paid }];
+    });
+  }, []);
+
   const value = useMemo<ClubContextValue>(
     () => ({
       groups: seedGroups,
@@ -830,6 +860,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventModalDate,
       openModal,
       closeModal,
+      duesOverrides,
+      setDuesOverride,
     }),
     [
       members,
@@ -892,6 +924,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventModalDate,
       openModal,
       closeModal,
+      duesOverrides,
+      setDuesOverride,
     ],
   );
 

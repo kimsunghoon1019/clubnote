@@ -1,6 +1,6 @@
 import { formatDateDot, parseISODate, todayISO } from "./format";
 import { sortMembersByCategory } from "./stats";
-import type { Member, Transaction } from "./types";
+import type { DuesOverride, Member, Transaction } from "./types";
 
 export type DuesSemester = {
   start: string;
@@ -14,8 +14,10 @@ export type DuesRow = {
   category: string;
   role: string;
   paid: boolean;
+  autoPaid: boolean;
   paidAmount: number;
   titles: string[];
+  manual: boolean;
 };
 
 function lastDayOfFeb(year: number) {
@@ -41,15 +43,23 @@ export function formatDuesPeriod(semester: DuesSemester) {
   return `${formatDateDot(semester.start)} – ${formatDateDot(semester.end)}`;
 }
 
-function titleHasName(title: string, name: string) {
-  if (!name) return false;
-  if (title.includes(name)) return true;
-  return title.replace(/\s+/g, "").includes(name);
+/** 공백·문장부호를 빼고 글자만 남겨 글리강은채 / 글리 강은채도 같은 이름으로 본다. */
+function compactText(value: string) {
+  return value.normalize("NFC").replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+export function titleHasName(title: string, name: string) {
+  const compactName = compactText(name);
+  if (!compactName) return false;
+  return compactText(title).includes(compactName);
 }
 
 function matchingNames(title: string, names: string[]) {
   const hits = names.filter((name) => titleHasName(title, name));
-  return hits.filter((name) => !hits.some((other) => other !== name && other.includes(name)));
+  return hits.filter((name) => {
+    const compactName = compactText(name);
+    return !hits.some((other) => other !== name && compactText(other).includes(compactName));
+  });
 }
 
 function isDuesDeposit(row: Transaction) {
@@ -60,11 +70,16 @@ export function duesStatus(
   members: Member[],
   transactions: Transaction[],
   categories: string[],
-  today = todayISO(),
+  options: { today?: string; overrides?: DuesOverride[] } = {},
 ): { semester: DuesSemester; rows: DuesRow[] } {
-  const semester = duesSemester(today);
+  const semester = duesSemester(options.today ?? todayISO());
   const names = [...new Set(members.map((member) => member.name).filter(Boolean))];
   const byName = new Map<string, { amount: number; titles: string[] }>();
+  const overrideByMember = new Map(
+    (options.overrides ?? [])
+      .filter((row) => row.semesterStart === semester.start)
+      .map((row) => [row.memberId, row] as const),
+  );
 
   for (const row of transactions) {
     if (row.occurredOn < semester.start || row.occurredOn > semester.end) continue;
@@ -82,14 +97,19 @@ export function duesStatus(
   const rows = sortMembersByCategory(members, categories).map((member) => {
     const match = byName.get(member.name);
     const paidAmount = match?.amount ?? 0;
+    const autoPaid = paidAmount > 0;
+    const override = overrideByMember.get(member.id);
+    const paid = override ? override.paid : autoPaid;
     return {
       id: member.id,
       name: member.name,
       category: member.category,
       role: member.role,
-      paid: paidAmount > 0,
-      paidAmount,
+      paid,
+      autoPaid,
+      paidAmount: paid ? paidAmount : 0,
       titles: match?.titles ?? [],
+      manual: Boolean(override),
     };
   });
 
