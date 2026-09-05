@@ -3,8 +3,10 @@
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { AiInsightCard } from "@/components/ui/AiInsightCard";
 import { DataTable, type Column } from "@/components/ui/DataTable";
+import { FieldLabel, TextInput } from "@/components/ui/Field";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { GhostButton } from "@/components/ui/GhostButton";
+import { Modal } from "@/components/ui/Modal";
 import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
@@ -25,6 +27,10 @@ export function FinanceView() {
   const [type, setType] = useState<"전체" | TxType>("전체");
   const [category, setCategory] = useState<"전체" | TxCategory>("전체");
   const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const ordered = useMemo(() => [...transactions].sort(compareTxDesc), [transactions]);
@@ -44,22 +50,45 @@ export function FinanceView() {
   const expense = monthRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
   const balance = ordered[0]?.balanceAfter ?? 0;
 
-  async function onExcelUpload(file: File | undefined) {
-    if (!file) return;
-    setUploading(true);
+  function clearPendingExcel() {
+    setPendingFile(null);
+    setPassword("");
+    setPasswordError("");
+    setUnlocking(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function importExcel(file: File, excelPassword?: string) {
+    const fromPasswordModal = Boolean(excelPassword);
+    if (fromPasswordModal) setUnlocking(true);
+    else setUploading(true);
     try {
-      const { rows, error } = await parseBankExcelFile(file);
+      const { rows, error, needsPassword } = await parseBankExcelFile(file, excelPassword);
+      if (needsPassword) {
+        setPendingFile(file);
+        setPassword("");
+        setPasswordError("");
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
       if (error) {
+        if (fromPasswordModal) {
+          setPasswordError(error);
+          return;
+        }
         toast(error);
+        if (fileRef.current) fileRef.current.value = "";
         return;
       }
       const added = importBankTransactions(rows);
       toast(added === 0 ? "이미 있는 내역이에요. 새로 추가된 거래가 없어요" : `은행 엑셀에서 ${added}건을 추가했어요`);
+      clearPendingExcel();
     } catch {
-      toast("엑셀 파일을 읽지 못했어요");
+      if (fromPasswordModal) setPasswordError("엑셀 파일을 읽지 못했어요");
+      else toast("엑셀 파일을 읽지 못했어요");
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      setUnlocking(false);
     }
   }
 
@@ -182,7 +211,10 @@ export function FinanceView() {
               accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
               className="hidden"
               aria-label="은행 엑셀 업로드"
-              onChange={(e) => void onExcelUpload(e.target.files?.[0])}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void importExcel(file);
+              }}
             />
             <GhostButton disabled={uploading} onClick={() => fileRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
@@ -261,6 +293,41 @@ export function FinanceView() {
           )}
         </RailSection>
       </RightRail>
+
+      <Modal open={Boolean(pendingFile)} title="엑셀 비밀번호" onClose={clearPendingExcel} width={400}>
+        <p className="text-[14px] leading-6 text-ink">비밀번호가 걸려있나요? 걸려있다면 알려주세요.</p>
+        {pendingFile ? <p className="mt-1 truncate text-[12px] text-faint">{pendingFile.name}</p> : null}
+        <form
+          className="mt-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!pendingFile || !password.trim()) return;
+            void importExcel(pendingFile, password.trim());
+          }}
+        >
+          <FieldLabel>비밀번호</FieldLabel>
+          <TextInput
+            type="password"
+            autoFocus
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setPasswordError("");
+            }}
+            placeholder="엑셀 비밀번호"
+            autoComplete="off"
+          />
+          {passwordError ? <p className="mt-1.5 text-[12px] text-down">{passwordError}</p> : null}
+          <div className="mt-5 flex justify-end gap-2">
+            <GhostButton type="button" onClick={clearPendingExcel}>
+              취소
+            </GhostButton>
+            <PrimaryButton type="submit" disabled={!password.trim() || unlocking}>
+              {unlocking ? "여는 중" : "열기"}
+            </PrimaryButton>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

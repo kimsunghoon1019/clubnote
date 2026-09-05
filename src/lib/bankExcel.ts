@@ -1,3 +1,4 @@
+import { decryptOfficeWorkbook, isEncryptedOffice, WrongPasswordError } from "./officeDecrypt";
 import type { Transaction, TxType } from "./types";
 
 export type ParsedBankTx = Omit<Transaction, "id" | "category" | "proofName">;
@@ -126,14 +127,11 @@ function headerAccount(rows: unknown[][]): string {
   return "";
 }
 
-function looksEncrypted(buffer: ArrayBuffer): boolean {
-  const u = new Uint8Array(buffer);
-  if (u.length < 8) return false;
-  const ole = u[0] === 0xd0 && u[1] === 0xcf && u[2] === 0x11 && u[3] === 0xe0;
-  if (!ole) return false;
-  const head = new TextDecoder("utf-16le").decode(u.slice(0, Math.min(u.length, 16384)));
-  return head.includes("EncryptedPackage") || head.includes("EncryptionInfo");
-}
+export type ParseBankExcelResult = {
+  rows: ParsedBankTx[];
+  error?: string;
+  needsPassword?: boolean;
+};
 
 function pickSheetRows(sheets: { name: string; rows: unknown[][] }[]): unknown[][] {
   let best: unknown[][] = [];
@@ -281,13 +279,18 @@ export function parseBankWorkbook(
   return { rows: parsed };
 }
 
-export async function parseBankExcelFile(file: File): Promise<{ rows: ParsedBankTx[]; error?: string }> {
+export async function parseBankExcelFile(file: File, password?: string): Promise<ParseBankExcelResult> {
   const buffer = await file.arrayBuffer();
-  if (looksEncrypted(buffer)) {
-    return {
-      rows: [],
-      error: "암호가 걸린 엑셀이에요. 엑셀에서 암호를 해제한 뒤 다시 올려 주세요",
-    };
+  let bytes = new Uint8Array(buffer);
+
+  if (isEncryptedOffice(bytes)) {
+    if (!password) return { rows: [], needsPassword: true };
+    try {
+      bytes = decryptOfficeWorkbook(bytes, password);
+    } catch (error) {
+      if (error instanceof WrongPasswordError) return { rows: [], error: "비밀번호가 맞지 않아요" };
+      return { rows: [], error: error instanceof Error ? error.message : "암호가 걸린 엑셀을 열지 못했어요" };
+    }
   }
 
   const XLSX = await import("xlsx");
@@ -295,15 +298,13 @@ export async function parseBankExcelFile(file: File): Promise<{ rows: ParsedBank
   try {
     const lower = file.name.toLowerCase();
     if (lower.endsWith(".csv") || lower.endsWith(".tsv")) {
-      const text = new TextDecoder("utf-8").decode(buffer);
+      const text = new TextDecoder("utf-8").decode(bytes);
       workbook = XLSX.read(text, { type: "string", raw: true, FS: lower.endsWith(".tsv") ? "\t" : "," });
     } else {
-      workbook = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: false, raw: true });
+      workbook = XLSX.read(bytes, { type: "array", cellDates: false, raw: true });
     }
   } catch {
-    if (looksEncrypted(buffer)) {
-      return { rows: [], error: "암호가 걸린 엑셀이에요. 엑셀에서 암호를 해제한 뒤 다시 올려 주세요" };
-    }
+    if (isEncryptedOffice(buffer)) return { rows: [], needsPassword: !password, error: password ? "비밀번호가 맞지 않아요" : undefined };
     return { rows: [], error: "엑셀 파일을 읽지 못했어요" };
   }
 
