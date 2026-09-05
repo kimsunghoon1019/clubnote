@@ -179,6 +179,14 @@ export function latestTransaction(rows: Transaction[]): Transaction | undefined 
   return [...rows].sort(compareTxDesc)[0];
 }
 
+/** 회계 거래의 거래후잔액을 시간순으로 이은 스파크라인. */
+export function transactionBalanceSpark(rows: Transaction[], maxPoints = 12): number[] {
+  const series = [...rows].sort(compareTxAsc).map((row) => row.balanceAfter);
+  const trimmed = series.length > maxPoints ? series.slice(-maxPoints) : series;
+  if (trimmed.length === 1) return [trimmed[0], trimmed[0]];
+  return trimmed;
+}
+
 export function parseBankWorkbook(
   sheets: { name: string; rows: unknown[][] }[],
   fileName: string,

@@ -6,10 +6,10 @@ import { LiveClock } from "@/components/ui/LiveClock";
 import { MiniCalendar } from "@/components/ui/MiniCalendar";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
-import { latestTransaction } from "@/lib/bankExcel";
+import { latestTransaction, transactionBalanceSpark } from "@/lib/bankExcel";
 import { formatDateKo, formatWeekday, formatWon, todayISO } from "@/lib/format";
 import { todayMemoItems, type TodayMemo } from "@/lib/notice";
-import { balanceSpark, eventSpark, memberSpark, unpaidSpark } from "@/lib/seed";
+import { eventSpark, memberSpark, unpaidSpark } from "@/lib/seed";
 import {
   attendanceStatusMap,
   categoryPresentCounts,
@@ -88,6 +88,7 @@ export function HomeView() {
   const unpaidSum = unpaidMembers.reduce((sum, m) => sum + m.unpaidFee, 0);
   const nextEvent = upcomingPractice(events, today) ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
   const balance = latestTransaction(transactions)?.balanceAfter ?? 0;
+  const balanceSpark = useMemo(() => transactionBalanceSpark(transactions), [transactions]);
 
   const memos = useMemo(
     () => todayMemoItems(events, members, categories, recordMap, today),
@@ -127,7 +128,7 @@ export function HomeView() {
             caption="오늘 기준"
             spark={practiceSpark}
           />
-          <KpiCard label="통장 잔액" value={formatWon(balance)} spark={balanceSpark} sparkColor="var(--up)" />
+          <KpiCard label="통장 잔액" value={formatWon(balance)} spark={balanceSpark} sparkColor="auto" />
           <KpiCard
             label="미납 회비"
             value={`${unpaidMembers.length}명 · ${formatWon(unpaidSum)}`}

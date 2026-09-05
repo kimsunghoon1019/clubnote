@@ -252,7 +252,6 @@ export const memberTrend = [
 export const memberSpark = [42, 43, 44, 44, 45, 46, 46, 47, 47, 48];
 export const attendanceSpark = [86.2, 88.0, 87.4, 90.1, 91.6, 89.8, 93.1, 92.4];
 export const practiceSpark = [4, 5, 5, 6, 5, 6];
-export const balanceSpark = [980, 1020, 995, 1145, 868, 1023, 1323, 1284];
 export const unpaidSpark = [5, 4, 4, 3, 3];
 export const eventSpark = [2, 3, 3, 4, 5];
 
