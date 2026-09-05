@@ -1,4 +1,4 @@
-export const CLUB_NAME = "한빛 오케스트라";
+export const CLUB_NAME = "글리클럽";
 export const PLACE = "학생회관 404호";
 export const OPERATOR_NAME = "김서연";
 export const OPERATOR_ROLE = "운영진";
@@ -13,8 +13,8 @@ export const EVENT_TYPES = ["연습", "정기연습", "공연", "회식", "오�
 export const PRACTICE_DAYS = ["화", "목", "토"] as const;
 
 export const SMS_TEMPLATES = {
-  "연습 리마인드": `[한빛 오케스트라] 오늘 저녁 7시 학생회관 404호에서 정기연습이 있어요. 출석 체크 잊지 말고 와 주세요.`,
-  "회비 미납": `[한빛 오케스트라] 이번 달 회비가 아직 확인되지 않았어요. 여유 되실 때 총무에게 보내 주세요.`,
+  "연습 리마인드": `[${CLUB_NAME}] 오늘 저녁 7시 학생회관 404호에서 정기연습이 있어요. 출석 체크 잊지 말고 와 주세요.`,
+  "회비 미납": `[${CLUB_NAME}] 이번 달 회비가 아직 확인되지 않았어요. 여유 되실 때 총무에게 보내 주세요.`,
   "직접 작성": "",
 } as const;
 

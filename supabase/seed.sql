@@ -1,4 +1,4 @@
--- 한빛 오케스트라 더미. schema.sql 이후 실행.
+-- 글리클럽 더미. schema.sql 이후 실행.
 
 insert into public.groups (id, name, sort_order) values
   ('11111111-1111-1111-1111-111111111111', '그룹1 현악', 1),

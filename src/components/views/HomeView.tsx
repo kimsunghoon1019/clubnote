@@ -11,6 +11,7 @@ import { ScoreBar } from "@/components/ui/ScoreBar";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
 import { formatDateKo, formatWon, todayISO } from "@/lib/format";
+import { CLUB_NAME } from "@/lib/constants";
 import {
   attendanceSpark,
   balanceSpark,
@@ -118,7 +119,7 @@ export function HomeView() {
           <div className="border-b border-line-soft p-5 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">분류별 회원 구성</h2>
-              <span className="text-[12px] text-faint">한빛 오케스트라</span>
+              <span className="text-[12px] text-faint">{CLUB_NAME}</span>
             </div>
             <div className="flex items-center gap-6">
               <div className="h-[168px] w-[168px] shrink-0">

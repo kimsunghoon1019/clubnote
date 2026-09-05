@@ -1,6 +1,6 @@
 # ClubNote
 
-한빛 오케스트라 동아리 운영 콘솔. Next.js App Router + Tailwind + Pretendard. 로컬 DB는 `localStorage` 키 `clubnote-db-v3`.
+글리클럽 동아리 운영 콘솔. Next.js App Router + Tailwind + Pretendard. 로컬 DB는 `localStorage` 키 `clubnote-db-v3`.
 
 ## 작업 루프 (필수)
 
