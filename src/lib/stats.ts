@@ -156,6 +156,112 @@ export function upcomingPracticeEvents(events: ClubEvent[], today = todayISO()) 
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 }
 
+function monthDayLabel(iso: string) {
+  return `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`;
+}
+
+export type PracticeParticipationRow = {
+  id: string;
+  date: string;
+  label: string;
+  roster: number;
+  joined: number;
+  rest: number;
+  isFuture: boolean;
+  isToday: boolean;
+  isPad: boolean;
+  isPlaceholder: boolean;
+};
+
+/** 미래는 대상 전원, 오늘·과거는 결석을 뺀 실제 참여. */
+export function joinedMembersForEvent(
+  event: ClubEvent,
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+  today = todayISO(),
+) {
+  if (event.date > today) return membersForEvent(members, event);
+  return expectedMembersForEvent(event, members, recordMap);
+}
+
+function participationRowFromEvent(
+  event: ClubEvent,
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+  today: string,
+): PracticeParticipationRow {
+  const roster = membersForEvent(members, event).length;
+  const joined = joinedMembersForEvent(event, members, recordMap, today).length;
+  return {
+    id: event.id,
+    date: event.date,
+    label: monthDayLabel(event.date),
+    roster,
+    joined,
+    rest: Math.max(0, roster - joined),
+    isFuture: event.date > today,
+    isToday: event.date === today,
+    isPad: false,
+    isPlaceholder: false,
+  };
+}
+
+function padParticipationRow(id: string): PracticeParticipationRow {
+  return {
+    id,
+    date: "",
+    label: "",
+    roster: 0,
+    joined: 0,
+    rest: 0,
+    isFuture: false,
+    isToday: false,
+    isPad: true,
+    isPlaceholder: false,
+  };
+}
+
+/** 오늘이 가운데 오도록 전후 연습을 잘라 대상/참여 막대를 만든다. */
+export function centeredPracticeParticipation(
+  events: ClubEvent[],
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+  today = todayISO(),
+  count = 12,
+): PracticeParticipationRow[] {
+  const list = practiceEvents(events).sort(
+    (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+  );
+  const past = list.filter((event) => event.date < today);
+  const todayEvent = list.find((event) => event.date === today);
+  const future = list.filter((event) => event.date > today);
+  const leftSlots = Math.max(0, Math.floor((count - 1) / 2));
+  const rightSlots = Math.max(0, count - 1 - leftSlots);
+  const leftEvents = past.slice(-leftSlots);
+  const rightEvents = future.slice(0, rightSlots);
+  const middle: PracticeParticipationRow = todayEvent
+    ? participationRowFromEvent(todayEvent, members, recordMap, today)
+    : {
+        id: "today-placeholder",
+        date: today,
+        label: monthDayLabel(today),
+        roster: 0,
+        joined: 0,
+        rest: 0,
+        isFuture: false,
+        isToday: true,
+        isPad: false,
+        isPlaceholder: true,
+      };
+  return [
+    ...Array.from({ length: leftSlots - leftEvents.length }, (_, i) => padParticipationRow(`pad-l-${i}`)),
+    ...leftEvents.map((event) => participationRowFromEvent(event, members, recordMap, today)),
+    middle,
+    ...rightEvents.map((event) => participationRowFromEvent(event, members, recordMap, today)),
+    ...Array.from({ length: rightSlots - rightEvents.length }, (_, i) => padParticipationRow(`pad-r-${i}`)),
+  ];
+}
+
 export function thisWeekHeldPractices(events: ClubEvent[], today = todayISO()) {
   const start = startOfWeekMonday(today);
   const end = new Date(start);

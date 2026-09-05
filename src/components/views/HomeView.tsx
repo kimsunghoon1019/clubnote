@@ -13,15 +13,15 @@ import { balanceSpark, eventSpark, memberSpark, unpaidSpark } from "@/lib/seed";
 import {
   attendanceStatusMap,
   categoryPresentCounts,
+  centeredPracticeParticipation,
   heldPracticeEvents,
+  joinedMembersForEvent,
   membersForEvent,
   monthlyHeldPracticeSpark,
   pooledRosterRate,
-  presentMembersForEvent,
   remainingPracticeEvents,
   thisWeekHeldPractices,
   upcomingPractice,
-  upcomingPracticeEvents,
   weeklyAttendanceSpark,
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
@@ -35,6 +35,7 @@ import {
   Cell,
   Pie,
   PieChart,
+  Rectangle,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -42,6 +43,8 @@ import {
 } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968"];
+const JOINED_BAR = "#3182F6";
+const ROSTER_BAR = "#B4C8E8";
 const RECENT_PRACTICE_COUNT = 12;
 
 export function HomeView() {
@@ -52,27 +55,35 @@ export function HomeView() {
   const held = useMemo(() => heldPracticeEvents(events, today), [events, today]);
   const remaining = useMemo(() => remainingPracticeEvents(events, today), [events, today]);
   const weekHeld = useMemo(() => thisWeekHeldPractices(events, today), [events, today]);
-  const fromToday = useMemo(
-    () => upcomingPracticeEvents(events, today).slice(0, RECENT_PRACTICE_COUNT),
-    [events, today],
+  const participationByDate = useMemo(
+    () => centeredPracticeParticipation(events, members, recordMap, today, RECENT_PRACTICE_COUNT),
+    [events, members, recordMap, today],
   );
+  const selectableRows = participationByDate.filter((row) => !row.isPad && !row.isPlaceholder);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const selectedEvent = fromToday.find((event) => event.id === selectedEventId) ?? fromToday[0] ?? null;
-  const selectedPresent = selectedEvent ? presentMembersForEvent(selectedEvent, members, recordMap) : [];
+  const fallbackEventId =
+    selectableRows.find((row) => row.isToday)?.id ??
+    selectableRows.find((row) => row.date >= today)?.id ??
+    selectableRows.at(-1)?.id ??
+    null;
+  const selectedEvent =
+    events.find((event) => event.id === selectedEventId && selectableRows.some((row) => row.id === event.id)) ??
+    events.find((event) => event.id === fallbackEventId) ??
+    null;
+  const selectedJoined = selectedEvent ? joinedMembersForEvent(selectedEvent, members, recordMap, today) : [];
   const selectedRoster = selectedEvent ? membersForEvent(members, selectedEvent) : [];
-  const pieData = categoryPresentCounts(selectedPresent, categories);
+  const pieData = categoryPresentCounts(selectedJoined, categories);
   const pieSlices = pieData.filter((row) => row.value > 0);
   const weekRate = pooledRosterRate(weekHeld, members, recordMap);
   const avgRate = pooledRosterRate(held, members, recordMap);
   const attendanceSpark = weeklyAttendanceSpark(events, members, recordMap, today);
   const practiceSpark = monthlyHeldPracticeSpark(events, today);
-  const participationByDate = fromToday.map((event) => ({
-    id: event.id,
-    date: event.date,
-    label: `${Number(event.date.slice(5, 7))}/${Number(event.date.slice(8, 10))}`,
-    present: presentMembersForEvent(event, members, recordMap).length,
-    roster: membersForEvent(members, event).length,
-  }));
+
+  const selectChartRow = (id?: string) => {
+    if (!id) return;
+    if (!selectableRows.some((row) => row.id === id)) return;
+    setSelectedEventId(id);
+  };
   const unpaidMembers = members.filter((m) => m.unpaidFee > 0);
   const unpaidSum = unpaidMembers.reduce((sum, m) => sum + m.unpaidFee, 0);
   const nextEvent = upcomingPractice(events, today) ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
@@ -135,32 +146,42 @@ export function HomeView() {
           <div className="border-b border-line-soft p-5 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">날짜별 연습 참여 인원</h2>
-              <span className="text-[12px] text-faint">오늘부터 {fromToday.length}회 · 출석표</span>
+              <div className="flex items-center gap-3 text-[12px] text-faint">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-sm" style={{ background: JOINED_BAR }} />
+                  참여
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-sm" style={{ background: ROSTER_BAR }} />
+                  대상
+                </span>
+              </div>
             </div>
-            {participationByDate.length === 0 ? (
-              <p className="flex h-[160px] items-center text-[13px] text-faint">오늘 이후 연습이 없어요</p>
+            {selectableRows.length === 0 && !participationByDate.some((row) => row.isToday) ? (
+              <p className="flex h-[160px] items-center text-[13px] text-faint">연습 일정이 없어요</p>
             ) : (
-              <div className="h-[160px]">
+              <div className="h-[160px]" data-chart="participation">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={participationByDate}
                     margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
                     onClick={(state) => {
                       const payload = state?.activePayload?.[0]?.payload as { id?: string } | undefined;
-                      const byLabel = participationByDate.find((row) => row.label === state?.activeLabel);
-                      const id = payload?.id ?? byLabel?.id;
-                      if (typeof id === "string") setSelectedEventId(id);
+                      const byId = participationByDate.find((row) => row.id === state?.activeLabel);
+                      selectChartRow(payload?.id ?? byId?.id);
                     }}
                   >
                     <XAxis
-                      dataKey="label"
+                      dataKey="id"
                       axisLine={false}
                       tickLine={false}
                       interval={0}
                       tick={(props: { x: number; y: number; payload: { value: string } }) => {
                         const { x, y, payload } = props;
-                        const row = participationByDate.find((item) => item.label === payload.value);
-                        const active = row?.id === selectedEvent?.id;
+                        const row = participationByDate.find((item) => item.id === payload.value);
+                        if (!row || row.isPad) return <g />;
+                        const active = row.id === selectedEvent?.id;
+                        const todayMark = row.isToday;
                         return (
                           <text
                             x={x}
@@ -168,15 +189,15 @@ export function HomeView() {
                             dy={12}
                             textAnchor="middle"
                             fontSize={11}
-                            fill={active ? "#1B64DA" : "#8b95a1"}
-                            fontWeight={active ? 600 : 400}
-                            style={{ cursor: "pointer" }}
+                            fill={active || todayMark ? "#1B64DA" : "#8b95a1"}
+                            fontWeight={active || todayMark ? 600 : 400}
+                            style={{ cursor: row.isPlaceholder ? "default" : "pointer" }}
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (row) setSelectedEventId(row.id);
+                              selectChartRow(row.id);
                             }}
                           >
-                            {payload.value}
+                            {row.label}
                           </text>
                         );
                       }}
@@ -184,35 +205,63 @@ export function HomeView() {
                     <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#8b95a1" }} axisLine={false} tickLine={false} />
                     <Tooltip
                       cursor={{ fill: "rgba(49, 130, 246, 0.06)" }}
-                      contentStyle={{ border: "1px solid #e5e8eb", borderRadius: 12, fontSize: 12 }}
-                      formatter={(value, _name, item) => {
-                        const roster = Number(item?.payload?.roster ?? 0);
-                        return [`${value}명 / 대상 ${roster}명`, "참여"];
-                      }}
-                      labelFormatter={(_, payload) => {
-                        const date = payload?.[0]?.payload?.date as string | undefined;
-                        return date ? `${formatDateKo(date)} (${formatWeekday(date)})` : "";
+                      content={({ active, payload }) => {
+                        const row = payload?.[0]?.payload as
+                          | { date?: string; roster?: number; joined?: number; isPad?: boolean; isPlaceholder?: boolean }
+                          | undefined;
+                        if (!active || !row || row.isPad || row.isPlaceholder || !row.date) return null;
+                        return (
+                          <div className="rounded-card border border-line-soft bg-white px-3 py-2 text-[12px] shadow-sm">
+                            <p className="font-medium text-ink">
+                              {formatDateKo(row.date)} ({formatWeekday(row.date)})
+                            </p>
+                            <p className="mt-1 text-sub">대상 {row.roster ?? 0}명</p>
+                            <p className="text-sub">참여 {row.joined ?? 0}명</p>
+                          </div>
+                        );
                       }}
                     />
                     <Bar
-                      dataKey="present"
+                      dataKey="joined"
                       name="참여"
-                      radius={[4, 4, 0, 0]}
+                      stackId="part"
+                      fill={JOINED_BAR}
                       maxBarSize={28}
-                      minPointSize={3}
                       cursor="pointer"
                       isAnimationActive={false}
-                      onClick={(data) => {
-                        if (typeof data?.id === "string") setSelectedEventId(data.id);
+                      shape={(props: {
+                        x?: number;
+                        y?: number;
+                        width?: number;
+                        height?: number;
+                        fill?: string;
+                        payload?: { rest?: number };
+                      }) => {
+                        const rest = Number(props.payload?.rest ?? 0);
+                        return (
+                          <Rectangle
+                            x={props.x}
+                            y={props.y}
+                            width={props.width}
+                            height={props.height}
+                            fill={props.fill}
+                            radius={rest === 0 ? [4, 4, 0, 0] : 0}
+                          />
+                        );
                       }}
-                    >
-                      {participationByDate.map((row) => (
-                        <Cell
-                          key={row.id}
-                          fill={row.id === selectedEvent?.id ? "#3182F6" : "#B4C8E8"}
-                        />
-                      ))}
-                    </Bar>
+                      onClick={(data) => selectChartRow(typeof data?.id === "string" ? data.id : undefined)}
+                    />
+                    <Bar
+                      dataKey="rest"
+                      name="대상"
+                      stackId="part"
+                      fill={ROSTER_BAR}
+                      maxBarSize={28}
+                      cursor="pointer"
+                      isAnimationActive={false}
+                      radius={[4, 4, 0, 0]}
+                      onClick={(data) => selectChartRow(typeof data?.id === "string" ? data.id : undefined)}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -223,7 +272,7 @@ export function HomeView() {
               <h2 className="text-[15px] font-semibold">분류별 참여 인원</h2>
               <span className="text-[12px] text-faint">
                 {selectedEvent
-                  ? `${formatDateKo(selectedEvent.date)} (${formatWeekday(selectedEvent.date)}) · ${selectedPresent.length}명`
+                  ? `${formatDateKo(selectedEvent.date)} (${formatWeekday(selectedEvent.date)}) · ${selectedJoined.length}명`
                   : "날짜를 골라 주세요"}
               </span>
             </div>
@@ -234,7 +283,7 @@ export function HomeView() {
                     <p className="text-center text-[12px] text-faint">
                       이 날짜에
                       <br />
-                      출석한 인원이 없어요
+                      참여 인원이 없어요
                     </p>
                   ) : (
                     <PieChart width={168} height={168}>
