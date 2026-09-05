@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { GENDER_OPTIONS } from "@/lib/constants";
-import { todayISO } from "@/lib/format";
+import { ageFromBirthDate, collegeFromMajor, inferredBirthDate, todayISO } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import type { Gender, PracticeDay } from "@/lib/types";
 import { useState } from "react";
@@ -19,8 +19,10 @@ export function AddMemberModal() {
   const [role, setRole] = useState(roles.includes("회원") ? "회원" : roles[0] ?? "회원");
   const [gender, setGender] = useState<Gender>("여");
   const [age, setAge] = useState("21");
+  const [birthDate, setBirthDate] = useState("");
   const [studentId, setStudentId] = useState("");
   const [major, setMajor] = useState("");
+  const [college, setCollege] = useState("");
   const [phone, setPhone] = useState("");
   const [practiceDays, setPracticeDays] = useState<PracticeDay[]>(["화", "목", "토"]);
 
@@ -29,8 +31,10 @@ export function AddMemberModal() {
   const reset = () => {
     setName("");
     setAge("21");
+    setBirthDate("");
     setStudentId("");
     setMajor("");
+    setCollege("");
     setPhone("");
     setPracticeDays(["화", "목", "토"]);
   };
@@ -67,16 +71,41 @@ export function AddMemberModal() {
           </SelectInput>
         </div>
         <div>
-          <FieldLabel>나이</FieldLabel>
-          <TextInput inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, ""))} />
-        </div>
-        <div>
           <FieldLabel>학번</FieldLabel>
           <TextInput value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="202512345" />
         </div>
         <div>
+          <FieldLabel>나이</FieldLabel>
+          <TextInput inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, ""))} />
+        </div>
+        <div>
+          <FieldLabel>생년월일</FieldLabel>
+          <TextInput
+            type="date"
+            className="tabular-nums"
+            value={birthDate}
+            onChange={(e) => {
+              const next = e.target.value;
+              setBirthDate(next);
+              if (next) setAge(String(ageFromBirthDate(next)));
+            }}
+          />
+        </div>
+        <div>
           <FieldLabel>전공</FieldLabel>
-          <TextInput value={major} onChange={(e) => setMajor(e.target.value)} />
+          <TextInput
+            value={major}
+            onChange={(e) => {
+              const next = e.target.value;
+              setMajor(next);
+              const inferred = collegeFromMajor(next);
+              if (inferred) setCollege(inferred);
+            }}
+          />
+        </div>
+        <div>
+          <FieldLabel>단과대학</FieldLabel>
+          <TextInput value={college} onChange={(e) => setCollege(e.target.value)} placeholder="음악대학" />
         </div>
         <div className="col-span-2">
           <FieldLabel>연락처</FieldLabel>
@@ -98,9 +127,11 @@ export function AddMemberModal() {
               role,
               name: name.trim(),
               gender,
-              age: Number(age) || 20,
+              age: birthDate ? ageFromBirthDate(birthDate) : Number(age) || 20,
+              birthDate: birthDate || inferredBirthDate(Number(age) || 20, name.trim()),
               studentId: studentId || `${new Date().getFullYear()}00000`,
               major: major || "-",
+              college: college.trim() || collegeFromMajor(major) || "-",
               joinedAt: todayISO(),
               phone,
               unpaidFee: 0,

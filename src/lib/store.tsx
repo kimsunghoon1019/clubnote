@@ -9,7 +9,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_CATEGORIES, DEFAULT_ROLES, OPERATOR_NAME, STORAGE_KEY, normalizeAttendanceStatus } from "./constants";
+import {
+  DEFAULT_CATEGORIES,
+  DEFAULT_PLACES,
+  DEFAULT_ROLES,
+  EVENT_TYPES,
+  OPERATOR_NAME,
+  STORAGE_KEY,
+  normalizeAttendanceStatus,
+} from "./constants";
+import { collegeFromMajor, inferredBirthDate } from "./format";
 import {
   attendance as seedAttendance,
   chartNotes as seedNotes,
@@ -40,6 +49,8 @@ type Persisted = {
   transactions: Transaction[];
   categories: string[];
   roles: string[];
+  eventTypes: string[];
+  places: string[];
 };
 
 type ClubContextValue = {
@@ -51,6 +62,8 @@ type ClubContextValue = {
   transactions: Transaction[];
   categories: string[];
   roles: string[];
+  eventTypes: string[];
+  places: string[];
   selectedMemberIds: string[];
   inspectedMemberId: string | null;
   toasts: ToastItem[];
@@ -72,6 +85,10 @@ type ClubContextValue = {
   removeCategory: (name: string) => void;
   addRole: (name: string) => void;
   removeRole: (name: string) => void;
+  addEventType: (name: string) => void;
+  removeEventType: (name: string) => void;
+  addPlace: (name: string) => void;
+  removePlace: (name: string) => void;
   assignCategory: (ids: string[], category: string) => void;
   addTransaction: (input: Omit<Transaction, "id" | "balanceAfter"> & { balanceAfter?: number }) => void;
   importBankTransactions: (incoming: ParsedBankTx[]) => number;
@@ -89,6 +106,27 @@ const ClubContext = createContext<ClubContextValue | null>(null);
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function uniqueNames(...groups: Array<string[] | readonly string[]>) {
+  const out: string[] = [];
+  for (const group of groups) {
+    for (const value of group) {
+      const trimmed = value.trim();
+      if (trimmed && !out.includes(trimmed)) out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+function normalizeMember(member: Member): Member {
+  return {
+    ...member,
+    active: member.active !== false,
+    practiceDays: member.practiceDays ?? ["화", "목", "토"],
+    college: typeof member.college === "string" ? member.college : collegeFromMajor(member.major),
+    birthDate: typeof member.birthDate === "string" ? member.birthDate : inferredBirthDate(member.age, member.id || member.name),
+  };
 }
 
 function loadPersisted(): Persisted | null {
@@ -112,6 +150,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [roles, setRoles] = useState<string[]>(DEFAULT_ROLES);
+  const [eventTypes, setEventTypes] = useState<string[]>([...EVENT_TYPES]);
+  const [places, setPlaces] = useState<string[]>(DEFAULT_PLACES);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [inspectedMemberId, setInspectedMemberId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -122,13 +162,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const data = loadPersisted();
     if (data) {
-      setMembers(
-        data.members.map((member) => ({
-          ...member,
-          active: member.active !== false,
-          practiceDays: member.practiceDays ?? ["화", "목", "토"],
-        })),
-      );
+      setMembers(data.members.map(normalizeMember));
       setEvents(data.events);
       setAttendance(
         data.attendance.flatMap((row) => {
@@ -141,15 +175,39 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       setTransactions(data.transactions ?? seedTransactions);
       setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
       setRoles(data.roles?.length ? data.roles : DEFAULT_ROLES);
+      setEventTypes(
+        uniqueNames(
+          EVENT_TYPES,
+          data.eventTypes ?? [],
+          (data.events ?? []).map((event) => event.type),
+        ),
+      );
+      setPlaces(
+        uniqueNames(
+          DEFAULT_PLACES,
+          data.places ?? [],
+          (data.events ?? []).map((event) => event.place),
+        ),
+      );
     }
     setReady(true);
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    const payload: Persisted = { members, events, attendance, notes, transactions, categories, roles };
+    const payload: Persisted = {
+      members,
+      events,
+      attendance,
+      notes,
+      transactions,
+      categories,
+      roles,
+      eventTypes,
+      places,
+    };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [ready, members, events, attendance, notes, transactions, categories, roles]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places]);
 
   const toast = useCallback((message: string) => {
     const id = uid("toast");
@@ -196,7 +254,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addMember = useCallback((input: Omit<Member, "id">) => {
-    setMembers((prev) => [...prev, { ...input, id: uid("m") }]);
+    setMembers((prev) => [...prev, normalizeMember({ ...input, id: uid("m") })]);
   }, []);
 
   const removeMembers = useCallback((ids: string[]) => {
@@ -251,6 +309,26 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setRoles((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
   }, []);
 
+  const addEventType = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setEventTypes((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }, []);
+
+  const removeEventType = useCallback((name: string) => {
+    setEventTypes((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
+  }, []);
+
+  const addPlace = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setPlaces((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }, []);
+
+  const removePlace = useCallback((name: string) => {
+    setPlaces((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
+  }, []);
+
   const assignCategory = useCallback((ids: string[], category: string) => {
     setMembers((prev) => prev.map((member) => (ids.includes(member.id) ? { ...member, category } : member)));
   }, []);
@@ -284,6 +362,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const addEvent = useCallback((input: Omit<ClubEvent, "id">) => {
     const created: ClubEvent = { ...input, id: uid("e") };
     setEvents((prev) => [...prev, created].sort((a, b) => a.date.localeCompare(b.date)));
+    if (input.type) setEventTypes((prev) => (prev.includes(input.type) ? prev : [...prev, input.type]));
+    if (input.place) setPlaces((prev) => (prev.includes(input.place) ? prev : [...prev, input.place]));
     return created;
   }, []);
 

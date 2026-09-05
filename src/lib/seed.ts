@@ -1,5 +1,5 @@
 import { OPERATOR_NAME, PLACE } from "./constants";
-import { toISODate, todayISO, weekdayToPracticeDay } from "./format";
+import { collegeFromMajor, inferredBirthDate, toISODate, todayISO, weekdayToPracticeDay } from "./format";
 import { isPracticeEvent } from "./stats";
 import type {
   Attendance,
@@ -23,23 +23,33 @@ export const groups: Group[] = [
 
 type SeedMember = Omit<Member, "id" | "active"> & { active?: boolean };
 
+function withProfile(
+  member: Omit<SeedMember, "college" | "birthDate"> & Partial<Pick<SeedMember, "college" | "birthDate">>,
+): SeedMember {
+  return {
+    ...member,
+    college: member.college ?? collegeFromMajor(member.major),
+    birthDate: member.birthDate ?? inferredBirthDate(member.age, member.name),
+  };
+}
+
 const featured: SeedMember[] = [
-  { groupId: "g1", category: "기악", role: "회장", name: "김서연", gender: "여", age: 23, studentId: "202312045", major: "음악학과", joinedAt: "2023-03-02", phone: "010-5120-3311", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g2", category: "기악", role: "부회장", name: "박준혁", gender: "남", age: 24, studentId: "202211088", major: "경영학과", joinedAt: "2022-03-04", phone: "010-6234-1098", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g4", category: "스태프", role: "총무", name: "이하늘", gender: "여", age: 22, studentId: "202408021", major: "회계학과", joinedAt: "2024-03-08", phone: "010-7741-2203", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g1", category: "기악", role: "파트장", name: "최민지", gender: "여", age: 23, studentId: "202309112", major: "기악과", joinedAt: "2023-03-02", phone: "010-4412-7780", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g2", category: "기악", role: "파트장", name: "정우성", gender: "남", age: 25, studentId: "202118334", major: "관현악과", joinedAt: "2021-03-05", phone: "010-3901-5542", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g3", category: "기악", role: "파트장", name: "한소희", gender: "여", age: 22, studentId: "202405067", major: "피아노과", joinedAt: "2024-03-08", phone: "010-8821-0194", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g1", category: "기악", role: "회원", name: "오세훈", gender: "남", age: 21, studentId: "202512201", major: "컴퓨터공학과", joinedAt: "2025-03-07", phone: "010-2290-4415", unpaidFee: 30000, practiceDays: ["화"] },
-  { groupId: "g1", category: "기악", role: "회원", name: "윤지아", gender: "여", age: 21, studentId: "202510088", major: "사회학과", joinedAt: "2025-03-07", phone: "010-6612-3387", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g2", category: "기악", role: "회원", name: "강태민", gender: "남", age: 22, studentId: "202407155", major: "경제학과", joinedAt: "2024-03-08", phone: "010-1184-7720", unpaidFee: 30000, practiceDays: ["화", "목"] },
-  { groupId: "g2", category: "보컬", role: "회원", name: "신예린", gender: "여", age: 20, studentId: "202521043", major: "국어국문학과", joinedAt: "2025-03-07", phone: "010-9055-2146", unpaidFee: 0, practiceDays: ["목", "토"] },
-  { groupId: "g3", category: "기악", role: "회원", name: "임도윤", gender: "남", age: 23, studentId: "202316090", major: "기계공학과", joinedAt: "2023-03-02", phone: "010-3340-6671", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g3", category: "기악", role: "회원", name: "배서아", gender: "여", age: 22, studentId: "202411278", major: "디자인학과", joinedAt: "2024-03-08", phone: "010-2781-4409", unpaidFee: 0, practiceDays: ["화", "토"] },
-  { groupId: "g1", category: "기악", role: "회원", name: "조하준", gender: "남", age: 24, studentId: "202209044", major: "철학과", joinedAt: "2022-03-04", phone: "010-5502-1193", unpaidFee: 30000, practiceDays: ["화", "목", "토"] },
-  { groupId: "g4", category: "스태프", role: "스태프", name: "문채원", gender: "여", age: 21, studentId: "202518332", major: "신문방송학과", joinedAt: "2025-03-07", phone: "010-7723-8801", unpaidFee: 0, practiceDays: ["토"] },
-  { groupId: "g2", category: "기악", role: "회원", name: "서준호", gender: "남", age: 23, studentId: "202314201", major: "전자공학과", joinedAt: "2023-03-02", phone: "010-4419-2208", unpaidFee: 0, practiceDays: ["화", "목", "토"] },
-  { groupId: "g4", category: "스태프", role: "스태프", name: "권나연", gender: "여", age: 22, studentId: "202406119", major: "행정학과", joinedAt: "2024-03-08", phone: "010-9901-3344", unpaidFee: 0, practiceDays: ["토"] },
+  withProfile({ groupId: "g1", category: "기악", role: "회장", name: "김서연", gender: "여", age: 23, birthDate: "2003-04-18", studentId: "202312045", major: "음악학과", joinedAt: "2023-03-02", phone: "010-5120-3311", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g2", category: "기악", role: "부회장", name: "박준혁", gender: "남", age: 24, birthDate: "2002-07-09", studentId: "202211088", major: "경영학과", joinedAt: "2022-03-04", phone: "010-6234-1098", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g4", category: "스태프", role: "총무", name: "이하늘", gender: "여", age: 22, birthDate: "2004-02-21", studentId: "202408021", major: "회계학과", joinedAt: "2024-03-08", phone: "010-7741-2203", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g1", category: "기악", role: "파트장", name: "최민지", gender: "여", age: 23, birthDate: "2003-03-11", studentId: "202309112", major: "기악과", joinedAt: "2023-03-02", phone: "010-4412-7780", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g2", category: "기악", role: "파트장", name: "정우성", gender: "남", age: 25, birthDate: "2001-06-02", studentId: "202118334", major: "관현악과", joinedAt: "2021-03-05", phone: "010-3901-5542", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g3", category: "기악", role: "파트장", name: "한소희", gender: "여", age: 22, birthDate: "2004-05-30", studentId: "202405067", major: "피아노과", joinedAt: "2024-03-08", phone: "010-8821-0194", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g1", category: "기악", role: "회원", name: "오세훈", gender: "남", age: 21, birthDate: "2005-08-14", studentId: "202512201", major: "컴퓨터공학과", joinedAt: "2025-03-07", phone: "010-2290-4415", unpaidFee: 30000, practiceDays: ["화"] }),
+  withProfile({ groupId: "g1", category: "기악", role: "회원", name: "윤지아", gender: "여", age: 21, birthDate: "2005-01-07", studentId: "202510088", major: "사회학과", joinedAt: "2025-03-07", phone: "010-6612-3387", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g2", category: "기악", role: "회원", name: "강태민", gender: "남", age: 22, birthDate: "2004-03-19", studentId: "202407155", major: "경제학과", joinedAt: "2024-03-08", phone: "010-1184-7720", unpaidFee: 30000, practiceDays: ["화", "목"] }),
+  withProfile({ groupId: "g2", category: "보컬", role: "회원", name: "신예린", gender: "여", age: 20, birthDate: "2006-06-25", studentId: "202521043", major: "국어국문학과", joinedAt: "2025-03-07", phone: "010-9055-2146", unpaidFee: 0, practiceDays: ["목", "토"] }),
+  withProfile({ groupId: "g3", category: "기악", role: "회원", name: "임도윤", gender: "남", age: 23, birthDate: "2003-08-08", studentId: "202316090", major: "기계공학과", joinedAt: "2023-03-02", phone: "010-3340-6671", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g3", category: "기악", role: "회원", name: "배서아", gender: "여", age: 22, birthDate: "2004-04-16", studentId: "202411278", major: "디자인학과", joinedAt: "2024-03-08", phone: "010-2781-4409", unpaidFee: 0, practiceDays: ["화", "토"] }),
+  withProfile({ groupId: "g1", category: "기악", role: "회원", name: "조하준", gender: "남", age: 24, birthDate: "2002-02-28", studentId: "202209044", major: "철학과", joinedAt: "2022-03-04", phone: "010-5502-1193", unpaidFee: 30000, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g4", category: "스태프", role: "스태프", name: "문채원", gender: "여", age: 21, birthDate: "2005-03-03", studentId: "202518332", major: "신문방송학과", joinedAt: "2025-03-07", phone: "010-7723-8801", unpaidFee: 0, practiceDays: ["토"] }),
+  withProfile({ groupId: "g2", category: "기악", role: "회원", name: "서준호", gender: "남", age: 23, birthDate: "2003-01-19", studentId: "202314201", major: "전자공학과", joinedAt: "2023-03-02", phone: "010-4419-2208", unpaidFee: 0, practiceDays: ["화", "목", "토"] }),
+  withProfile({ groupId: "g4", category: "스태프", role: "스태프", name: "권나연", gender: "여", age: 22, birthDate: "2004-07-12", studentId: "202406119", major: "행정학과", joinedAt: "2024-03-08", phone: "010-9901-3344", unpaidFee: 0, practiceDays: ["토"] }),
 ];
 
 const extraNames: { name: string; gender: Gender }[] = [
@@ -115,6 +125,8 @@ function extraMembers(): SeedMember[] {
       age,
       studentId: `${year}${pad(10 + index, 3)}${pad(index % 9, 2)}`,
       major: majors[index % majors.length],
+      college: collegeFromMajor(majors[index % majors.length]),
+      birthDate: inferredBirthDate(age, item.name),
       joinedAt: `${joinedYear}-03-0${(index % 5) + 2}`,
       phone: `010-${pad(2000 + index * 17, 4)}-${pad(1000 + index * 31, 4)}`,
       unpaidFee: 0,

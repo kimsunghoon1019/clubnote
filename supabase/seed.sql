@@ -26,6 +26,47 @@ insert into public.members (id, group_id, category, role, name, gender, age, stu
   ('a0000000-0000-0000-0000-000000000016', '44444444-4444-4444-4444-444444444444', '스태프', '스태프', '권나연', '여', 22, '202406119', '행정학과', '2024-03-08', 83, '010-9901-3344', '대관 신청', 0, false)
 on conflict (id) do nothing;
 
+update public.members set
+  birth_date = case name
+    when '김서연' then '2003-04-18'
+    when '박준혁' then '2002-07-09'
+    when '이하늘' then '2004-02-21'
+    when '최민지' then '2003-03-11'
+    when '정우성' then '2001-06-02'
+    when '한소희' then '2004-05-30'
+    when '오세훈' then '2005-08-14'
+    when '윤지아' then '2005-01-07'
+    when '강태민' then '2004-03-19'
+    when '신예린' then '2006-06-25'
+    when '임도윤' then '2003-08-08'
+    when '배서아' then '2004-04-16'
+    when '조하준' then '2002-02-28'
+    when '문채원' then '2005-03-03'
+    when '서준호' then '2003-01-19'
+    when '권나연' then '2004-07-12'
+    else birth_date
+  end,
+  college = case major
+    when '음악학과' then '음악대학'
+    when '기악과' then '음악대학'
+    when '관현악과' then '음악대학'
+    when '피아노과' then '음악대학'
+    when '경영학과' then '경영대학'
+    when '회계학과' then '경영대학'
+    when '컴퓨터공학과' then '공과대학'
+    when '기계공학과' then '공과대학'
+    when '전자공학과' then '공과대학'
+    when '사회학과' then '사회과학대학'
+    when '행정학과' then '사회과학대학'
+    when '신문방송학과' then '사회과학대학'
+    when '경제학과' then '사회과학대학'
+    when '철학과' then '인문대학'
+    when '국어국문학과' then '인문대학'
+    when '디자인학과' then '예술대학'
+    else college
+  end
+where birth_date is null or college is null;
+
 insert into public.events (id, date, title, type, place, preview, attachment_path) values
   ('e0000000-0000-0000-0000-000000000007', '2026-04-18', '정기연습', '정기연습', '학생회관 404호', '관악 합주', null),
   ('e0000000-0000-0000-0000-000000000008', '2026-04-25', '정기연습', '정기연습', '학생회관 404호', '전곡 런스루', null),

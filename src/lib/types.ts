@@ -1,7 +1,7 @@
 export type Gender = "여" | "남";
 export type AttendanceStatus = "출석" | "미통보지각" | "통보지각" | "통보결석" | "미통보결석";
 export type TxType = "입금" | "출금" | "이체";
-export type EventType = "연습" | "정기연습" | "공연" | "회식" | "오디션" | "회의";
+export type EventType = string;
 export type TxCategory = "회비" | "대관료" | "야식" | "교통" | "의상" | "기타";
 export type PracticeDay = "화" | "목" | "토";
 
@@ -21,8 +21,10 @@ export type Member = {
   name: string;
   gender: Gender;
   age: number;
+  birthDate: string;
   studentId: string;
   major: string;
+  college: string;
   joinedAt: string;
   phone: string;
   unpaidFee: number;

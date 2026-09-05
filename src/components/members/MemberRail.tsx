@@ -9,7 +9,7 @@ import { FieldLabel, SelectInput, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { GENDER_OPTIONS } from "@/lib/constants";
-import { formatDateDot, tenureLabel } from "@/lib/format";
+import { ageFromBirthDate, collegeFromMajor, formatDateDot, tenureLabel } from "@/lib/format";
 import { diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { Gender } from "@/lib/types";
@@ -19,18 +19,31 @@ import { useEffect, useState } from "react";
 type MemberDraft = {
   name: string;
   age: string;
+  birthDate: string;
   studentId: string;
   major: string;
+  college: string;
   phone: string;
   gender: Gender;
 };
 
-function draftFrom(member: { name: string; age: number; studentId: string; major: string; phone: string; gender: Gender }): MemberDraft {
+function draftFrom(member: {
+  name: string;
+  age: number;
+  birthDate: string;
+  studentId: string;
+  major: string;
+  college: string;
+  phone: string;
+  gender: Gender;
+}): MemberDraft {
   return {
     name: member.name,
     age: String(member.age),
+    birthDate: member.birthDate,
     studentId: member.studentId,
     major: member.major,
+    college: member.college,
     phone: member.phone,
     gender: member.gender,
   };
@@ -114,6 +127,22 @@ export function MemberRail({ memberId }: { memberId: string }) {
             />
           </div>
           <div>
+            <FieldLabel>생년월일</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px] tabular-nums"
+              type="date"
+              value={draft.birthDate}
+              onChange={(e) => {
+                const birthDate = e.target.value;
+                setDraft({
+                  ...draft,
+                  birthDate,
+                  age: birthDate ? String(ageFromBirthDate(birthDate)) : draft.age,
+                });
+              }}
+            />
+          </div>
+          <div>
             <FieldLabel>성별</FieldLabel>
             <SelectInput
               className="h-8 text-[13px]"
@@ -125,7 +154,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
               ))}
             </SelectInput>
           </div>
-          <div className="col-span-2">
+          <div>
             <FieldLabel>학번</FieldLabel>
             <TextInput
               className="h-8 text-[13px] tabular-nums"
@@ -135,12 +164,28 @@ export function MemberRail({ memberId }: { memberId: string }) {
               onChange={(e) => setDraft({ ...draft, studentId: e.target.value.replace(/[^\d]/g, "").slice(0, 10) })}
             />
           </div>
-          <div className="col-span-2">
+          <div>
             <FieldLabel>전공</FieldLabel>
             <TextInput
               className="h-8 text-[13px]"
               value={draft.major}
-              onChange={(e) => setDraft({ ...draft, major: e.target.value })}
+              onChange={(e) => {
+                const major = e.target.value;
+                const inferred = collegeFromMajor(major);
+                setDraft({
+                  ...draft,
+                  major,
+                  college: inferred || draft.college,
+                });
+              }}
+            />
+          </div>
+          <div>
+            <FieldLabel>단과대학</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px]"
+              value={draft.college}
+              onChange={(e) => setDraft({ ...draft, college: e.target.value })}
             />
           </div>
           <div className="col-span-2">
@@ -155,9 +200,11 @@ export function MemberRail({ memberId }: { memberId: string }) {
       ) : (
         <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
           <Info label="전공" value={member.major} />
+          <Info label="단과대학" value={member.college || "-"} />
           <Info label="분류" value={member.category} />
           <Info label="성별" value={member.gender} />
           <Info label="나이" value={`${member.age}세`} />
+          <Info label="생년월일" value={member.birthDate ? formatDateDot(member.birthDate) : "-"} />
           <Info label="근속" value={tenureLabel(member.joinedAt)} />
           <Info label="학번" value={member.studentId} />
           <Info label="가입" value={formatDateDot(member.joinedAt)} />
@@ -233,9 +280,11 @@ export function MemberRail({ memberId }: { memberId: string }) {
                 if (!draft) return;
                 updateMember(member.id, {
                   name: draft.name.trim(),
-                  age: Number(draft.age) || member.age,
+                  age: draft.birthDate ? ageFromBirthDate(draft.birthDate) : Number(draft.age) || member.age,
+                  birthDate: draft.birthDate,
                   studentId: draft.studentId.trim() || member.studentId,
                   major: draft.major.trim() || member.major,
+                  college: draft.college.trim() || collegeFromMajor(draft.major) || member.college,
                   phone: draft.phone.trim(),
                   gender: draft.gender,
                 });

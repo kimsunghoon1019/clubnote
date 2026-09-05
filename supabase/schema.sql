@@ -23,8 +23,10 @@ create table if not exists public.members (
   name text not null,
   gender text,
   age int,
+  birth_date date,
   student_id text,
   major text,
+  college text,
   joined_at date,
   phone text,
   unpaid_fee int default 0,
@@ -32,6 +34,9 @@ create table if not exists public.members (
   active boolean default true,
   created_at timestamptz default now()
 );
+
+alter table public.members add column if not exists birth_date date;
+alter table public.members add column if not exists college text;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

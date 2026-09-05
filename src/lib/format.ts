@@ -126,6 +126,57 @@ export function studentYear(studentId: string) {
   return `${studentId.slice(2, 4)}학번`;
 }
 
+const COLLEGE_BY_MAJOR: Record<string, string> = {
+  음악학과: "음악대학",
+  기악과: "음악대학",
+  관현악과: "음악대학",
+  피아노과: "음악대학",
+  경영학과: "경영대학",
+  회계학과: "경영대학",
+  컴퓨터공학과: "공과대학",
+  기계공학과: "공과대학",
+  전자공학과: "공과대학",
+  사회학과: "사회과학대학",
+  행정학과: "사회과학대학",
+  신문방송학과: "사회과학대학",
+  심리학과: "사회과학대학",
+  경제학과: "사회과학대학",
+  철학과: "인문대학",
+  국어국문학과: "인문대학",
+  영어영문학과: "인문대학",
+  사학과: "인문대학",
+  디자인학과: "예술대학",
+  화학과: "자연과학대학",
+  수학과: "자연과학대학",
+};
+
+export function collegeFromMajor(major: string) {
+  return COLLEGE_BY_MAJOR[major] ?? "";
+}
+
+export function ageFromBirthDate(iso: string, today = todayISO()) {
+  if (!iso) return 0;
+  const birth = parseISODate(iso);
+  const now = parseISODate(today);
+  let age = now.getFullYear() - birth.getFullYear();
+  if (
+    now.getMonth() < birth.getMonth() ||
+    (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())
+  ) {
+    age -= 1;
+  }
+  return Math.max(0, age);
+}
+
+export function inferredBirthDate(age: number, seed = "0") {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  const year = new Date().getFullYear() - Math.max(0, age);
+  const month = (hash % 8) + 1;
+  const day = (hash % 27) + 1;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 export function initials(name: string) {
   return name.slice(0, 1);
 }
