@@ -16,13 +16,12 @@ export function AttendanceToggle({
   return (
     <div
       role="radiogroup"
-      aria-label={`${name} 개별출결`}
+      aria-label={`${name} 출결`}
       className="inline-flex h-8 overflow-hidden rounded-[10px] border border-line bg-white"
     >
       {ATTENDANCE_STATUSES.map((status, index) => {
         const meta = ATTENDANCE_STATUS_META[status];
         const active = value === status;
-        const idle = !value;
         return (
           <button
             key={status}
@@ -34,14 +33,12 @@ export function AttendanceToggle({
             className={cn(
               "flex h-8 w-[3.35rem] flex-col items-center justify-center text-[10px] font-semibold leading-[11px] transition-colors",
               index > 0 && "border-l border-line",
-              !active && !idle && "text-faint hover:bg-muted",
+              !active && "text-faint hover:bg-muted",
             )}
             style={
               active
-                ? { background: meta.color, color: "#fff" }
-                : idle
-                  ? { background: `color-mix(in srgb, ${meta.color} 16%, white)`, color: meta.color }
-                  : undefined
+                ? { backgroundColor: meta.color, color: "#fff" }
+                : { backgroundColor: "transparent" }
             }
           >
             {meta.lines.map((line) => (

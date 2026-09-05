@@ -124,7 +124,7 @@ export function AttendanceView() {
     },
     {
       key: "status",
-      header: "개별출결",
+      header: "출결",
       render: (row) => (
         <div onClick={(e) => e.stopPropagation()}>
           <AttendanceToggle
