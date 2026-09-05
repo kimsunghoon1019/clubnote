@@ -42,6 +42,7 @@ export function InlineTaxonomySelect({
   onRemove,
   placeholder = "선택",
   addLabel,
+  readOnly = false,
 }: {
   value: string;
   items: string[];
@@ -50,6 +51,7 @@ export function InlineTaxonomySelect({
   onRemove: (name: string) => void;
   placeholder?: string;
   addLabel: string;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -138,13 +140,15 @@ export function InlineTaxonomySelect({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-disabled={readOnly || undefined}
         onClick={() => {
+          if (readOnly) return;
           if (!open) placeMenu();
           setOpen((current) => !current);
         }}
         className={cn(
           "flex h-10 w-full items-center rounded-btn border bg-white px-2.5 text-left transition-colors",
-          open ? "border-brand" : "border-line hover:border-[#d1d6db]",
+          readOnly ? "cursor-default border-line" : open ? "border-brand" : "border-line hover:border-[#d1d6db]",
         )}
       >
         {value && selectedColor ? (

@@ -137,7 +137,8 @@ type ClubContextValue = {
   deleteEvent: (id: string) => void;
   toast: (message: string) => void;
   dismissToast: (id: string) => void;
-  openModal: (key: Exclude<ModalKey, null>) => void;
+  eventModalDate: string | null;
+  openModal: (key: Exclude<ModalKey, null>, payload?: { date?: string }) => void;
   closeModal: () => void;
 };
 
@@ -264,6 +265,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [inspectedMemberId, setInspectedMemberId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [modal, setModal] = useState<ModalKey>(null);
+  const [eventModalDate, setEventModalDate] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
@@ -658,8 +660,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setAttendance((prev) => prev.filter((row) => row.eventId !== id));
   }, []);
 
-  const openModal = useCallback((key: Exclude<ModalKey, null>) => setModal(key), []);
-  const closeModal = useCallback(() => setModal(null), []);
+  const openModal = useCallback((key: Exclude<ModalKey, null>, payload?: { date?: string }) => {
+    setModal(key);
+    setEventModalDate(key === "event" ? payload?.date ?? null : null);
+  }, []);
+  const closeModal = useCallback(() => {
+    setModal(null);
+    setEventModalDate(null);
+  }, []);
 
   const value = useMemo<ClubContextValue>(
     () => ({
@@ -719,6 +727,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       deleteEvent,
       toast,
       dismissToast,
+      eventModalDate,
       openModal,
       closeModal,
     }),
@@ -777,6 +786,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       deleteEvent,
       toast,
       dismissToast,
+      eventModalDate,
       openModal,
       closeModal,
     ],

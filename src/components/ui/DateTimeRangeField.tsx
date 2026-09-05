@@ -35,9 +35,11 @@ const WHEEL_H = 120;
 export function DateTimeRangeField({
   value,
   onChange,
+  readOnly = false,
 }: {
   value: DateTimeRangeValue;
   onChange: (next: DateTimeRangeValue) => void;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState<FieldKey | null>(null);
   const [shown, setShown] = useState<"date" | "time" | null>(null);
@@ -47,6 +49,7 @@ export function DateTimeRangeField({
   };
 
   const toggle = (key: FieldKey) => {
+    if (readOnly) return;
     if (open === key) {
       setOpen(null);
       return;
@@ -56,6 +59,7 @@ export function DateTimeRangeField({
   };
 
   const setAllDay = (allDay: boolean) => {
+    if (readOnly) return;
     emit({ allDay });
     if (allDay && (open === "start-time" || open === "end-time")) setOpen(null);
   };
@@ -82,8 +86,12 @@ export function DateTimeRangeField({
         role="switch"
         aria-checked={value.allDay}
         aria-label="하루 종일"
+        aria-disabled={readOnly || undefined}
         onClick={() => setAllDay(!value.allDay)}
-        className="flex w-full items-center justify-between rounded-btn px-1 py-1 hover:bg-white/70"
+        className={cn(
+          "flex w-full items-center justify-between rounded-btn px-1 py-1",
+          readOnly ? "cursor-default" : "hover:bg-white/70",
+        )}
       >
         <span className="inline-flex items-center gap-2 text-[14px] text-ink">
           <Clock className="h-4 w-4 text-faint" />
@@ -113,6 +121,7 @@ export function DateTimeRangeField({
           timeOpen={open === "start-time"}
           dateLabel="시작 날짜"
           timeLabel="시작 시간"
+          readOnly={readOnly}
           onDate={() => toggle("start-date")}
           onTime={() => toggle("start-time")}
         />
@@ -127,6 +136,7 @@ export function DateTimeRangeField({
           timeOpen={open === "end-time"}
           dateLabel="종료 날짜"
           timeLabel="종료 시간"
+          readOnly={readOnly}
           onDate={() => toggle("end-date")}
           onTime={() => toggle("end-time")}
         />
@@ -181,6 +191,7 @@ function DateTimeColumn({
   timeOpen,
   dateLabel,
   timeLabel,
+  readOnly,
   onDate,
   onTime,
 }: {
@@ -191,6 +202,7 @@ function DateTimeColumn({
   timeOpen: boolean;
   dateLabel: string;
   timeLabel: string;
+  readOnly?: boolean;
   onDate: () => void;
   onTime: () => void;
 }) {
@@ -200,10 +212,11 @@ function DateTimeColumn({
         type="button"
         aria-label={`${dateLabel} ${formatDateWeekday(date)}`}
         aria-pressed={dateOpen}
+        aria-disabled={readOnly || undefined}
         onClick={onDate}
         className={cn(
           "rounded-chip px-2.5 py-1 text-[15px] font-medium tracking-tight text-ink transition-colors",
-          dateOpen ? "bg-[#ebedf0] text-ink" : "hover:bg-white",
+          dateOpen ? "bg-[#ebedf0] text-ink" : readOnly ? "cursor-default" : "hover:bg-white",
         )}
       >
         {formatDateWeekday(date)}
@@ -213,10 +226,11 @@ function DateTimeColumn({
           type="button"
           aria-label={`${timeLabel} ${formatTimeKo(time)}`}
           aria-pressed={timeOpen}
+          aria-disabled={readOnly || undefined}
           onClick={onTime}
           className={cn(
             "rounded-chip px-2.5 py-1 text-[15px] tabular-nums tracking-tight transition-colors",
-            timeOpen ? "bg-[#ebedf0] font-semibold text-ink" : "text-ink hover:bg-white",
+            timeOpen ? "bg-[#ebedf0] font-semibold text-ink" : readOnly ? "cursor-default text-ink" : "text-ink hover:bg-white",
           )}
         >
           {formatTimeKo(time)}

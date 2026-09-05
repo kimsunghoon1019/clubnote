@@ -1,10 +1,9 @@
 "use client";
 
 import { DateTimeRangeField, type DateTimeRangeValue } from "@/components/ui/DateTimeRangeField";
-import { FieldLabel } from "@/components/ui/Field";
+import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { InlineTaxonomySelect } from "@/components/ui/InlineTaxonomySelect";
-import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { WeatherMark } from "@/components/ui/WeatherMark";
 import {
@@ -24,9 +23,9 @@ import {
   eachISODate,
   eventEndDate,
   formatDateKo,
-  formatEventWhen,
   formatWeekday,
   parseISODate,
+  toISODate,
   todayISO,
 } from "@/lib/format";
 import { practiceNoticeText } from "@/lib/notice";
@@ -34,23 +33,10 @@ import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
-import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, ClipboardPaste, Copy, Paperclip, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-const TYPE_TONE: Record<string, "brand" | "warn" | "muted" | "up" | "default"> = {
-  연습: "default",
-  정기연습: "brand",
-  공연: "up",
-  회식: "warn",
-  오디션: "brand",
-  회의: "muted",
-};
-
-function typeTone(type: string) {
-  return TYPE_TONE[type] ?? "default";
-}
 
 function barClass(type: string) {
   if (type === "공연") return "bg-[#FFF1F1] text-up";
@@ -65,13 +51,50 @@ function barLabel(event: ClubEvent) {
   return `${event.startTime} ${title}`;
 }
 
+function addDaysISO(iso: string, days: number) {
+  const date = parseISODate(iso);
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+}
+
+function eventSpanDays(event: ClubEvent) {
+  return Math.max(0, eachISODate(event.date, eventEndDate(event)).length - 1);
+}
+
+function cloneEventOntoDate(event: ClubEvent, date: string): Omit<ClubEvent, "id"> {
+  const span = eventSpanDays(event);
+  return {
+    date,
+    endDate: span > 0 ? addDaysISO(date, span) : undefined,
+    title: event.title,
+    type: event.type,
+    place: event.place,
+    preview: event.preview,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    allDay: event.allDay,
+    attachmentName: event.attachmentName,
+  };
+}
+
+function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
+  return {
+    startDate: event.date,
+    endDate: event.endDate ?? event.date,
+    startTime: event.startTime || "19:00",
+    endTime: event.endTime || "21:00",
+    allDay: Boolean(event.allDay),
+  };
+}
+
 export function CalendarView() {
-  const { events, weatherDays, updateEvent, deleteEvent, openModal, toast } = useClub();
+  const { events, weatherDays, addEvent, updateEvent, deleteEvent, openModal, toast } = useClub();
   const today = todayISO();
   const [cursor, setCursor] = useState(() => parseISODate(today));
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [clipboard, setClipboard] = useState<ClubEvent | null>(null);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -124,6 +147,55 @@ export function CalendarView() {
     }
   };
 
+  const openCreate = (date?: string | null) => {
+    openModal("event", date ? { date } : undefined);
+  };
+
+  const copyEvent = () => {
+    if (!active) return;
+    setClipboard(active);
+    toast("일정을 복사했어요");
+  };
+
+  const pasteEvent = () => {
+    if (!clipboard) {
+      toast("복사한 일정이 없어요");
+      return;
+    }
+    if (!selected) {
+      toast("붙여넣을 날짜를 선택해 주세요");
+      return;
+    }
+    const created = addEvent(cloneEventOntoDate(clipboard, selected));
+    setActiveId(created.id);
+    setEditing(false);
+    toast("일정을 붙여넣었어요");
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      const key = event.key.toLowerCase();
+      if (key === "c") {
+        if (!active || !selected) return;
+        event.preventDefault();
+        setClipboard(active);
+        toast("일정을 복사했어요");
+      } else if (key === "v") {
+        if (!clipboard || !selected) return;
+        event.preventDefault();
+        const created = addEvent(cloneEventOntoDate(clipboard, selected));
+        setActiveId(created.id);
+        setEditing(false);
+        toast("일정을 붙여넣었어요");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, selected, clipboard, addEvent, toast]);
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <main
@@ -146,7 +218,7 @@ export function CalendarView() {
             </GhostButton>
             {forecast.size > 0 ? <span className="ml-2 text-[12px] text-faint">신촌 예보</span> : null}
           </div>
-          <PrimaryButton onClick={() => openModal("event")}>일정 생성</PrimaryButton>
+          <PrimaryButton onClick={() => openCreate(selected)}>일정 생성</PrimaryButton>
         </div>
 
         <div className="border-l border-t border-line-soft" onClick={(e) => e.stopPropagation()}>
@@ -175,6 +247,12 @@ export function CalendarView() {
                 setSelected(iso);
                 setActiveId(id);
                 setEditing(false);
+              }}
+              onCreateDay={(iso) => {
+                setSelected(iso);
+                setActiveId((byDate.get(iso) ?? [])[0]?.id ?? null);
+                setEditing(false);
+                openCreate(iso);
               }}
             />
           ))}
@@ -210,6 +288,7 @@ export function CalendarView() {
                 <div className="mt-5">
                   {editing ? (
                     <EditEvent
+                      key={active.id}
                       event={active}
                       onSave={(patch) => {
                         updateEvent(active.id, patch);
@@ -217,39 +296,47 @@ export function CalendarView() {
                         toast("일정을 수정했어요");
                       }}
                       onCancel={() => setEditing(false)}
+                      onAttach={(name) => {
+                        updateEvent(active.id, { attachmentName: name });
+                        toast("첨부파일을 추가했어요");
+                      }}
                     />
                   ) : (
-                    <>
-                      <h2 className="text-[18px] font-semibold">{active.title}</h2>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {active.preview ? <Pill tone="muted">메모</Pill> : null}
-                        <Pill tone={typeTone(active.type)}>{active.type}</Pill>
-                        {isPracticeEvent(active) ? <Pill tone="brand">출석대상</Pill> : null}
-                      </div>
-                      <p className="mt-3 text-[13px] text-sub">
-                        {formatEventWhen(active)} · {active.place}
-                      </p>
-                      {active.preview ? <p className="mt-2 text-[14px] leading-6 text-ink">{active.preview}</p> : null}
-                      <div className="mt-5 rounded-btn border border-dashed border-line px-3 py-3">
-                        <p className="text-[12px] text-faint">첨부파일</p>
-                        {active.attachmentName ? (
-                          <p className="mt-1 inline-flex items-center gap-1 text-[13px]">
-                            <Paperclip className="h-3.5 w-3.5" />
-                            {active.attachmentName}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-[13px] text-faint">첨부된 파일이 없어요</p>
-                        )}
-                      </div>
-                    </>
+                    <EventFields
+                      key={active.id}
+                      title={active.title}
+                      type={active.type}
+                      place={active.place}
+                      preview={active.preview}
+                      range={eventRangeOf(active)}
+                      attachmentName={active.attachmentName}
+                      readOnly
+                      onTitle={() => undefined}
+                      onType={() => undefined}
+                      onPlace={() => undefined}
+                      onPreview={() => undefined}
+                      onRange={() => undefined}
+                      onAttach={(name) => {
+                        updateEvent(active.id, { attachmentName: name });
+                        toast("첨부파일을 추가했어요");
+                      }}
+                    />
                   )}
                 </div>
               ) : (
                 <p className="mt-8 text-[13px] text-faint">
                   이 날짜에 일정이 없어요.{" "}
-                  <button type="button" className="text-brand-text" onClick={() => openModal("event")}>
+                  <button type="button" className="text-brand-text" onClick={() => openCreate(selected)}>
                     추가하기
                   </button>
+                  {clipboard ? (
+                    <>
+                      {" · "}
+                      <button type="button" className="text-brand-text" onClick={pasteEvent}>
+                        붙여넣기
+                      </button>
+                    </>
+                  ) : null}
                 </p>
               )}
             </>
@@ -258,14 +345,25 @@ export function CalendarView() {
           )}
         </div>
         <div className="flex gap-2 border-t border-line-soft px-5 py-3">
-          <PrimaryButton className="flex-1" onClick={() => openModal("event")}>
+          <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
             일정 생성
           </PrimaryButton>
           <GhostButton className="flex-1" disabled={!active || !selected} onClick={() => setEditing(true)}>
             수정
           </GhostButton>
+          <GhostButton className="w-9 shrink-0 px-0" disabled={!active || !selected} onClick={copyEvent} aria-label="일정 복사">
+            <Copy className="h-3.5 w-3.5" />
+          </GhostButton>
           <GhostButton
-            className="px-3"
+            className="w-9 shrink-0 px-0"
+            disabled={!clipboard || !selected}
+            onClick={pasteEvent}
+            aria-label="일정 붙여넣기"
+          >
+            <ClipboardPaste className="h-3.5 w-3.5" />
+          </GhostButton>
+          <GhostButton
+            className="w-9 shrink-0 px-0"
             disabled={!active || !selected}
             onClick={() => {
               if (!active) return;
@@ -300,6 +398,7 @@ function WeekRow({
   forecast,
   onSelectDay,
   onSelectEvent,
+  onCreateDay,
 }: {
   week: CalendarCell[];
   events: ClubEvent[];
@@ -309,6 +408,7 @@ function WeekRow({
   forecast: Map<string, WeatherDay>;
   onSelectDay: (iso: string) => void;
   onSelectEvent: (iso: string, id: string) => void;
+  onCreateDay: (iso: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const weekIsos = week.map((cell) => cell.iso);
@@ -344,6 +444,10 @@ function WeekRow({
             data-iso={cell.iso}
             aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
             onClick={() => onSelectDay(cell.iso)}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              onCreateDay(cell.iso);
+            }}
             style={{ gridColumn: index + 1, gridRow: "1 / 3" }}
             className={cn(
               "relative flex flex-col border-r border-line-soft text-left hover:bg-muted",
@@ -416,6 +520,7 @@ function EventBar({
         e.stopPropagation();
         onPick(e.clientX);
       }}
+      onDoubleClick={(e) => e.stopPropagation()}
       className={cn(
         "pointer-events-auto h-[18px] truncate px-1.5 text-left text-[11px] leading-[18px]",
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
@@ -452,34 +557,48 @@ function NoticePanel({ text, onCopy }: { text: string; onCopy: () => void }) {
   );
 }
 
-function EditEvent({
-  event,
-  onSave,
-  onCancel,
+function EventFields({
+  title,
+  type,
+  place,
+  preview,
+  range,
+  attachmentName,
+  readOnly,
+  onTitle,
+  onType,
+  onPlace,
+  onPreview,
+  onRange,
+  onAttach,
 }: {
-  event: ClubEvent;
-  onSave: (patch: Partial<ClubEvent>) => void;
-  onCancel: () => void;
+  title: string;
+  type: string;
+  place: string;
+  preview: string;
+  range: DateTimeRangeValue;
+  attachmentName?: string;
+  readOnly?: boolean;
+  onTitle: (value: string) => void;
+  onType: (value: string) => void;
+  onPlace: (value: string) => void;
+  onPreview: (value: string) => void;
+  onRange: (value: DateTimeRangeValue) => void;
+  onAttach: (name: string) => void;
 }) {
   const { eventTypes, places, addEventType, removeEventType, addPlace, removePlace } = useClub();
-  const [title, setTitle] = useState(event.title);
-  const [type, setType] = useState(event.type);
-  const [place, setPlace] = useState(event.place);
-  const [preview, setPreview] = useState(event.preview);
-  const [range, setRange] = useState<DateTimeRangeValue>({
-    startDate: event.date,
-    endDate: event.endDate ?? event.date,
-    startTime: event.startTime || "19:00",
-    endTime: event.endTime || "21:00",
-    allDay: Boolean(event.allDay),
-  });
   const typeItems = eventTypes.includes(type) ? eventTypes : [...eventTypes, type];
   const placeItems = places.includes(place) ? places : [...places, place];
+  const pickFile = (file: File | undefined) => {
+    if (!file) return;
+    onAttach(file.name);
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-event-fields={readOnly ? "readonly" : "edit"}>
       <div>
         <FieldLabel>제목</FieldLabel>
-        <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <TextInput readOnly={readOnly} value={title} onChange={(e) => onTitle(e.target.value)} />
       </div>
       <div>
         <FieldLabel>유형</FieldLabel>
@@ -488,12 +607,16 @@ function EditEvent({
           items={typeItems}
           addLabel="유형 추가"
           placeholder="유형 선택"
-          onChange={setType}
+          readOnly={readOnly}
+          onChange={onType}
           onAdd={addEventType}
           onRemove={removeEventType}
         />
       </div>
-      <DateTimeRangeField value={range} onChange={setRange} />
+      <div>
+        <FieldLabel>일시</FieldLabel>
+        <DateTimeRangeField value={range} onChange={onRange} readOnly={readOnly} />
+      </div>
       <div>
         <FieldLabel>장소</FieldLabel>
         <InlineTaxonomySelect
@@ -501,20 +624,81 @@ function EditEvent({
           items={placeItems}
           addLabel="장소 추가"
           placeholder="장소 선택"
-          onChange={setPlace}
+          readOnly={readOnly}
+          onChange={onPlace}
           onAdd={addPlace}
           onRemove={removePlace}
         />
       </div>
       <div>
         <FieldLabel>메모</FieldLabel>
-        <textarea
-          className="min-h-[72px] w-full rounded-btn border border-line px-3 py-2 text-[14px]"
+        <TextArea
+          readOnly={readOnly}
           value={preview}
-          onChange={(e) => setPreview(e.target.value)}
+          onChange={(e) => onPreview(e.target.value)}
           placeholder="한 줄 메모"
         />
       </div>
+      <div>
+        <FieldLabel>첨부파일</FieldLabel>
+        {readOnly && !attachmentName ? (
+          <label
+            data-attach-add
+            className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-dashed border-line px-3 text-[13px] text-brand-text hover:bg-muted"
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+            첨부파일 추가하기
+            <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
+          </label>
+        ) : readOnly ? (
+          <p className="inline-flex h-10 items-center gap-2 rounded-btn border border-line px-3 text-[13px]">
+            <Paperclip className="h-3.5 w-3.5" />
+            {attachmentName}
+          </p>
+        ) : (
+          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
+            <Paperclip className="h-3.5 w-3.5" />
+            {attachmentName || "파일첨부"}
+            <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditEvent({
+  event,
+  onSave,
+  onCancel,
+  onAttach,
+}: {
+  event: ClubEvent;
+  onSave: (patch: Partial<ClubEvent>) => void;
+  onCancel: () => void;
+  onAttach: (name: string) => void;
+}) {
+  const [title, setTitle] = useState(event.title);
+  const [type, setType] = useState(event.type);
+  const [place, setPlace] = useState(event.place);
+  const [preview, setPreview] = useState(event.preview);
+  const [range, setRange] = useState<DateTimeRangeValue>(eventRangeOf(event));
+  return (
+    <div className="space-y-3">
+      <EventFields
+        title={title}
+        type={type}
+        place={place}
+        preview={preview}
+        range={range}
+        attachmentName={event.attachmentName}
+        onTitle={setTitle}
+        onType={setType}
+        onPlace={setPlace}
+        onPreview={setPreview}
+        onRange={setRange}
+        onAttach={onAttach}
+      />
       <div className="flex gap-2">
         <PrimaryButton
           onClick={() =>

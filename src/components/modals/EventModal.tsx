@@ -12,8 +12,7 @@ import { useClub } from "@/lib/store";
 import { Paperclip } from "lucide-react";
 import { useEffect, useState } from "react";
 
-function defaultRange(): DateTimeRangeValue {
-  const date = todayISO();
+function defaultRange(date = todayISO()): DateTimeRangeValue {
   return {
     startDate: date,
     endDate: date,
@@ -35,6 +34,7 @@ export function EventModal() {
     removeEventType,
     addPlace,
     removePlace,
+    eventModalDate,
   } = useClub();
   const open = modal === "event";
   const [title, setTitle] = useState("정기연습");
@@ -46,13 +46,14 @@ export function EventModal() {
 
   useEffect(() => {
     if (!open) return;
+    const date = eventModalDate || todayISO();
     setTitle("정기연습");
     setType("정기연습");
-    setRange(defaultRange());
+    setRange(defaultRange(date));
     setPlace(PLACE);
     setPreview("");
     setFileName("");
-  }, [open]);
+  }, [open, eventModalDate]);
 
   if (!open) return null;
 
