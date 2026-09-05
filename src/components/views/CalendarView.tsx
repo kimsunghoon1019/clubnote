@@ -39,6 +39,7 @@ import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
 import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -118,6 +119,30 @@ function swallowNextClick() {
   window.setTimeout(() => window.removeEventListener("click", onClick, true), 400);
 }
 
+type DragGhost = {
+  event: ClubEvent;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type EventMenu = {
+  event: ClubEvent;
+  x: number;
+  y: number;
+};
+
+function EventBarFace({ event }: { event: ClubEvent }) {
+  const hasAttach = eventAttachments(event).length > 0;
+  return (
+    <>
+      <span className="min-w-0 truncate">{barLabel(event)}</span>
+      {hasAttach ? <Paperclip className="h-2.5 w-2.5 shrink-0 opacity-80" aria-hidden /> : null}
+    </>
+  );
+}
+
 function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
   return {
     startDate: event.date,
@@ -138,6 +163,8 @@ export function CalendarView() {
   const [clipboard, setClipboard] = useState<ClubEvent | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropIsos, setDropIsos] = useState<string[]>([]);
+  const [dragGhost, setDragGhost] = useState<DragGhost | null>(null);
+  const [eventMenu, setEventMenu] = useState<EventMenu | null>(null);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -215,6 +242,15 @@ export function CalendarView() {
     toast("일정을 붙여넣었어요");
   };
 
+  const confirmDelete = (event: ClubEvent) => {
+    setEventMenu(null);
+    if (!window.confirm(`「${event.title}」 일정을 삭제할까요?`)) return;
+    deleteEvent(event.id);
+    toast("일정을 삭제했어요");
+    setEditing(false);
+    setActiveId((id) => (id === event.id ? null : id));
+  };
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
@@ -246,13 +282,51 @@ export function CalendarView() {
     };
   }, [draggingId]);
 
+  useEffect(() => {
+    if (!eventMenu) return;
+    const close = () => setEventMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-event-menu]")) return;
+      close();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [eventMenu]);
+
   const onEventPointerDown = (pointer: ReactPointerEvent, event: ClubEvent) => {
     if (pointer.button !== 0) return;
+    setEventMenu(null);
     const grabIso = isoFromPoint(pointer.clientX, pointer.clientY) ?? event.date;
     const pointerId = pointer.pointerId;
     const startX = pointer.clientX;
     const startY = pointer.clientY;
+    const bar = pointer.currentTarget as HTMLElement;
+    const rect = bar.getBoundingClientRect();
+    const offsetX = pointer.clientX - rect.left;
+    const offsetY = pointer.clientY - rect.top;
+    const width = rect.width;
+    const height = rect.height;
     let moved = false;
+
+    const placeGhost = (clientX: number, clientY: number) => {
+      setDragGhost({
+        event,
+        x: clientX - offsetX,
+        y: clientY - offsetY,
+        width,
+        height,
+      });
+    };
 
     const onMove = (next: PointerEvent) => {
       if (next.pointerId !== pointerId) return;
@@ -260,6 +334,9 @@ export function CalendarView() {
         if (Math.hypot(next.clientX - startX, next.clientY - startY) < 6) return;
         moved = true;
         setDraggingId(event.id);
+        placeGhost(next.clientX, next.clientY);
+      } else {
+        placeGhost(next.clientX, next.clientY);
       }
       next.preventDefault();
       const drop = isoFromPoint(next.clientX, next.clientY);
@@ -278,6 +355,7 @@ export function CalendarView() {
       window.removeEventListener("pointercancel", finish);
       setDraggingId(null);
       setDropIsos([]);
+      setDragGhost(null);
       if (!moved) return;
       swallowNextClick();
       const drop = isoFromPoint(next.clientX, next.clientY);
@@ -294,6 +372,20 @@ export function CalendarView() {
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
+  };
+
+  const onEventContextMenu = (clientX: number, clientY: number, event: ClubEvent) => {
+    const iso = isoFromPoint(clientX, clientY) ?? event.date;
+    setSelected(iso);
+    setActiveId(event.id);
+    setEditing(false);
+    const menuW = 128;
+    const menuH = 40;
+    setEventMenu({
+      event,
+      x: Math.max(8, Math.min(clientX, window.innerWidth - menuW - 8)),
+      y: Math.max(8, Math.min(clientY, window.innerHeight - menuH - 8)),
+    });
   };
 
   return (
@@ -361,6 +453,7 @@ export function CalendarView() {
                 openCreate(iso);
               }}
               onEventPointerDown={onEventPointerDown}
+              onEventContextMenu={onEventContextMenu}
             />
           ))}
         </div>
@@ -433,11 +526,7 @@ export function CalendarView() {
             disabled={!active || !selected}
             onClick={() => {
               if (!active) return;
-              if (!window.confirm(`「${active.title}」 일정을 삭제할까요?`)) return;
-              deleteEvent(active.id);
-              toast("일정을 삭제했어요");
-              setEditing(false);
-              setActiveId(null);
+              confirmDelete(active);
             }}
             aria-label="일정 삭제"
           >
@@ -445,6 +534,13 @@ export function CalendarView() {
           </GhostButton>
         </div>
       </aside>
+      {dragGhost ? <EventDragGhost ghost={dragGhost} /> : null}
+      {eventMenu ? (
+        <EventContextMenu
+          menu={eventMenu}
+          onDelete={() => confirmDelete(eventMenu.event)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -469,6 +565,7 @@ function WeekRow({
   onSelectEvent,
   onCreateDay,
   onEventPointerDown,
+  onEventContextMenu,
 }: {
   week: CalendarCell[];
   events: ClubEvent[];
@@ -482,6 +579,7 @@ function WeekRow({
   onSelectEvent: (iso: string, id: string) => void;
   onCreateDay: (iso: string) => void;
   onEventPointerDown: (pointer: ReactPointerEvent, event: ClubEvent) => void;
+  onEventContextMenu: (clientX: number, clientY: number, event: ClubEvent) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const weekIsos = week.map((cell) => cell.iso);
@@ -571,6 +669,7 @@ function WeekRow({
               onSelectEvent(iso, seg.event.id);
             }}
             onMoveStart={onEventPointerDown}
+            onContextMenu={onEventContextMenu}
           />
         ))}
       </div>
@@ -584,12 +683,14 @@ function EventBar({
   dragging,
   onPick,
   onMoveStart,
+  onContextMenu,
 }: {
   segment: WeekSegment;
   active: boolean;
   dragging: boolean;
   onPick: (clientX: number) => void;
   onMoveStart: (pointer: ReactPointerEvent, event: ClubEvent) => void;
+  onContextMenu: (clientX: number, clientY: number, event: ClubEvent) => void;
 }) {
   const { event, lane, colStart, colSpan, continuesLeft, continuesRight } = segment;
   const hasAttach = eventAttachments(event).length > 0;
@@ -610,25 +711,75 @@ function EventBar({
         onPick(e.clientX);
       }}
       onDoubleClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(e.clientX, e.clientY, event);
+      }}
       className={cn(
         "pointer-events-auto flex h-[18px] cursor-grab items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px] touch-none active:cursor-grabbing",
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
         continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
         barClass(event.type),
         active && "ring-1 ring-inset ring-brand",
-        dragging && "opacity-50",
+        dragging && "opacity-40",
       )}
       style={{
         gridColumn: `${colStart} / span ${colSpan}`,
         gridRow: lane + 1,
       }}
     >
-      <span className="min-w-0 truncate">
-        {continuesLeft ? "·· " : ""}
-        {barLabel(event)}
-      </span>
-      {hasAttach ? <Paperclip className="h-2.5 w-2.5 shrink-0 opacity-80" aria-hidden /> : null}
+      {continuesLeft ? <span className="shrink-0">·· </span> : null}
+      <EventBarFace event={event} />
     </button>
+  );
+}
+
+function EventDragGhost({ ghost }: { ghost: DragGhost }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      data-event-drag-ghost
+      className={cn(
+        "pointer-events-none fixed left-0 top-0 z-[80] flex items-center gap-0.5 rounded-[6px] px-1.5 text-[11px] leading-[18px] shadow-toast",
+        barClass(ghost.event.type),
+      )}
+      style={{
+        width: ghost.width,
+        height: ghost.height,
+        transform: `translate(${ghost.x}px, ${ghost.y}px)`,
+      }}
+    >
+      <EventBarFace event={ghost.event} />
+    </div>,
+    document.body,
+  );
+}
+
+function EventContextMenu({ menu, onDelete }: { menu: EventMenu; onDelete: () => void }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      data-event-menu
+      role="menu"
+      className="fixed z-[90] min-w-[128px] overflow-hidden rounded-[12px] border border-line-soft bg-white py-1 shadow-toast"
+      style={{ left: menu.x, top: menu.y }}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-event-menu-delete
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-medium text-up hover:bg-[#FFF1F1]"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        삭제
+      </button>
+    </div>,
+    document.body,
   );
 }
 
