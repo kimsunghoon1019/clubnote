@@ -21,8 +21,9 @@ import {
   emptyFineTally,
   normalizeAttendanceStatus,
 } from "./constants";
-import { withFineTallies } from "./attendanceSheet";
-import { collegeFromMajor, inferredBirthDate } from "./format";
+import { closePastPracticeEvents, withFineTallies } from "./attendanceSheet";
+import { collegeFromMajor, inferredBirthDate, msUntilNextLocalMidnight, todayISO } from "./format";
+import { isPracticeEvent } from "./stats";
 import {
   attendance as seedAttendance,
   chartNotes as seedNotes,
@@ -104,6 +105,7 @@ type ClubContextValue = {
   clearSelection: () => void;
   inspectMember: (id: string | null) => void;
   setAttendanceStatus: (eventId: string, memberId: string, status: AttendanceStatus | null) => void;
+  closeAttendance: (eventId: string) => boolean;
   updateMember: (id: string, patch: Partial<Member>) => void;
   addMember: (input: Omit<Member, "id" | "fineTally">) => void;
   removeMembers: (ids: string[]) => void;
@@ -377,6 +379,31 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setMembers((prev) => withFineTallies(prev, events, attendance));
   }, [ready, events, attendance, practiceDaysKey]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const run = () => setEvents((prev) => closePastPracticeEvents(prev));
+    run();
+    let timer = 0;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        run();
+        schedule();
+      }, Math.min(msUntilNextLocalMidnight(), 86_400_000));
+    };
+    schedule();
+    const onWake = () => {
+      if (document.visibilityState === "visible") run();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
+  }, [ready]);
+
   const weatherDaysRef = useRef(weatherDays);
   weatherDaysRef.current = weatherDays;
   const weatherFetchedAtRef = useRef(weatherFetchedAt);
@@ -478,6 +505,18 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const closeAttendance = useCallback((eventId: string) => {
+    let didClose = false;
+    setEvents((prev) => {
+      const event = prev.find((item) => item.id === eventId);
+      if (!event || !isPracticeEvent(event) || event.attendanceClosedAt) return prev;
+      didClose = true;
+      const at = new Date().toISOString();
+      return prev.map((item) => (item.id === eventId ? { ...item, attendanceClosedAt: at } : item));
+    });
+    return didClose;
+  }, []);
 
   const updateMember = useCallback((id: string, patch: Partial<Member>) => {
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, ...patch } : member)));
@@ -643,6 +682,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const addEvent = useCallback((input: Omit<ClubEvent, "id">) => {
     const created: ClubEvent = { ...input, id: uid("e") };
+    if (isPracticeEvent(created) && created.date < todayISO() && !created.attendanceClosedAt) {
+      created.attendanceClosedAt = new Date().toISOString();
+    }
     setEvents((prev) => [...prev, created].sort((a, b) => a.date.localeCompare(b.date)));
     if (input.type) setEventTypes((prev) => (prev.includes(input.type) ? prev : [...prev, input.type]));
     if (input.place) setPlaces((prev) => (prev.includes(input.place) ? prev : [...prev, input.place]));
@@ -650,7 +692,16 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateEvent = useCallback((id: string, patch: Partial<ClubEvent>) => {
-    setEvents((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setEvents((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const next = { ...row, ...patch };
+        if (isPracticeEvent(next) && next.date < todayISO() && !next.attendanceClosedAt) {
+          next.attendanceClosedAt = new Date().toISOString();
+        }
+        return next;
+      }),
+    );
     if (patch.type) setEventTypes((prev) => (prev.includes(patch.type!) ? prev : [...prev, patch.type!]));
     if (patch.place) setPlaces((prev) => (prev.includes(patch.place!) ? prev : [...prev, patch.place!]));
   }, []);
@@ -694,6 +745,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       clearSelection,
       inspectMember,
       setAttendanceStatus,
+      closeAttendance,
       updateMember,
       addMember,
       removeMembers,
@@ -753,6 +805,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       clearSelection,
       inspectMember,
       setAttendanceStatus,
+      closeAttendance,
       updateMember,
       addMember,
       removeMembers,

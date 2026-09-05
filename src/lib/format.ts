@@ -32,6 +32,11 @@ export function todayISO() {
   return toISODate(new Date());
 }
 
+export function msUntilNextLocalMidnight(now = new Date()) {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return Math.max(1, next.getTime() - now.getTime());
+}
+
 export function formatDateKo(iso: string) {
   const date = parseISODate(iso);
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;

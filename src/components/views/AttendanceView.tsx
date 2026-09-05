@@ -12,6 +12,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { RolePill } from "@/components/ui/Pill";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { cn } from "@/lib/cn";
+import { isAttendanceClosed } from "@/lib/attendanceSheet";
 import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_META, isPresentStatus } from "@/lib/constants";
 import { formatDateKo, formatEventTime, formatWeekday, todayISO } from "@/lib/format";
 import {
@@ -21,6 +22,7 @@ import {
   latestPractice,
   membersForEvent,
   sortMembersByCategory,
+  upcomingPractice,
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
@@ -37,6 +39,7 @@ export function AttendanceView() {
     events,
     attendance,
     setAttendanceStatus,
+    closeAttendance,
     inspectMember,
     inspectedMemberId,
     openModal,
@@ -55,7 +58,8 @@ export function AttendanceView() {
     return [...upcoming, ...past];
   }, [events]);
 
-  const fallback = latestPractice(events, todayISO()) ?? practiceList[practiceList.length - 1];
+  const fallback =
+    latestPractice(events, todayISO()) ?? upcomingPractice(events, todayISO()) ?? practiceList[0];
   const [eventId, setEventId] = useState(fallback?.id ?? "");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "전체" | "미체크">("전체");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -194,6 +198,7 @@ export function AttendanceView() {
                 </p>
                 <p className="text-[11px] text-faint">
                   {formatWeekday(item.date)} {formatEventTime(item)}
+                  {isAttendanceClosed(item) ? " · 마감" : ""}
                 </p>
               </button>
             );
@@ -242,7 +247,15 @@ export function AttendanceView() {
         </div>
         <div className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-5 py-2.5">
           <GhostButton onClick={() => toast("출석이 저장되었어요")}>임시저장</GhostButton>
-          <PrimaryButton onClick={() => toast("출석을 마감했어요")}>출석 마감</PrimaryButton>
+          <PrimaryButton
+            disabled={isAttendanceClosed(event)}
+            onClick={() => {
+              if (closeAttendance(event.id)) toast("출석을 마감했어요. 출석표에 반영됐어요");
+              else toast("이미 마감된 출석이에요");
+            }}
+          >
+            {isAttendanceClosed(event) ? "마감됨" : "출석 마감"}
+          </PrimaryButton>
         </div>
       </main>
 
@@ -281,7 +294,7 @@ export function AttendanceView() {
         )}
       </RightRail>
 
-      <AttendanceSheetModal open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <AttendanceSheetModal open={sheetOpen} onClose={() => setSheetOpen(false)} focusEventId={event.id} />
     </>
   );
 }

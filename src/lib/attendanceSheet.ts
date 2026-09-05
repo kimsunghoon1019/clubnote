@@ -5,6 +5,25 @@ import type { Attendance, AttendanceStatus, ClubEvent, FineTally, Member } from 
 
 export { emptyFineTally };
 
+export function isAttendanceClosed(event: ClubEvent, today = todayISO()) {
+  if (event.attendanceClosedAt) return true;
+  return event.date < today;
+}
+
+export function closePastPracticeEvents(
+  events: ClubEvent[],
+  today = todayISO(),
+  closedAt = new Date().toISOString(),
+) {
+  let changed = false;
+  const next = events.map((event) => {
+    if (!isPracticeEvent(event) || event.attendanceClosedAt || event.date >= today) return event;
+    changed = true;
+    return { ...event, attendanceClosedAt: closedAt };
+  });
+  return changed ? next : events;
+}
+
 function sameFineTally(a: FineTally | undefined, b: FineTally) {
   if (!a) return false;
   return FINE_STATUSES.every((status) => a[status] === b[status]);
@@ -25,7 +44,7 @@ export function tallyMemberFines(
   const map = attendanceRecordMap(attendance);
   const tally = emptyFineTally();
   for (const event of practiceSheetEvents(events)) {
-    if (!isFineSheetCell(member, event)) continue;
+    if (!isAttendanceClosed(event) || !isFineSheetCell(member, event)) continue;
     const status = map.get(`${event.id}:${member.id}`);
     if (status && isFineStatus(status)) tally[status] += 1;
   }
@@ -43,7 +62,7 @@ export function withFineTallies(
   const next = members.map((member) => {
     const fineTally = emptyFineTally();
     for (const event of practices) {
-      if (!isFineSheetCell(member, event)) continue;
+      if (!isAttendanceClosed(event) || !isFineSheetCell(member, event)) continue;
       const status = map.get(`${event.id}:${member.id}`);
       if (status && isFineStatus(status)) fineTally[status] += 1;
     }
@@ -79,6 +98,7 @@ export function sheetCellValue(
   status?: AttendanceStatus,
 ): string | null {
   if (!isScheduledFor(member, event)) return null;
+  if (!isAttendanceClosed(event)) return "미마감";
   return status ?? "미체크";
 }
 

@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import {
   attendanceRecordMap,
   downloadAttendanceSheetXlsx,
+  isAttendanceClosed,
   practiceMonthGroups,
   practiceSheetEvents,
   sheetMembers,
@@ -31,14 +32,17 @@ type EditCell = {
 export function AttendanceSheetModal({
   open,
   onClose,
+  focusEventId,
 }: {
   open: boolean;
   onClose: () => void;
+  focusEventId?: string;
 }) {
   const { members, categories, events, attendance, setAttendanceStatus, toast } = useClub();
   const [edit, setEdit] = useState<EditCell | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const todayColRef = useRef<HTMLTableCellElement>(null);
+  const focusColRef = useRef<HTMLTableCellElement>(null);
 
   const practiceList = useMemo(() => practiceSheetEvents(events), [events]);
   const people = useMemo(() => sheetMembers(members, categories), [members, categories]);
@@ -65,8 +69,8 @@ export function AttendanceSheetModal({
 
   useLayoutEffect(() => {
     if (!open) return;
-    todayColRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
-  }, [open, practiceList.length]);
+    (focusColRef.current ?? todayColRef.current)?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [open, practiceList.length, focusEventId]);
 
   if (!open) return null;
 
@@ -91,7 +95,7 @@ export function AttendanceSheetModal({
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-line-soft px-5 py-3.5">
           <h2 className="text-[16px] font-semibold text-ink">출석표</h2>
-          <p className="text-[12px] text-faint">행이 회원, 열이 연습 날짜 · 칸을 눌러 수정</p>
+          <p className="text-[12px] text-faint">행이 회원, 열이 연습 날짜 · 마감한 연습만 표시</p>
           <ul className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-sub">
             {ATTENDANCE_STATUSES.map((status) => (
               <li key={status} className="inline-flex items-center gap-1">
@@ -103,6 +107,7 @@ export function AttendanceSheetModal({
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#D1D6DB]" />
               미체크
             </li>
+            <li className="text-faint">미마감</li>
           </ul>
           <GhostButton className="h-8 shrink-0 px-3 text-[12px]" onClick={() => void exportSheet()}>
             <Download className="h-3.5 w-3.5" />
@@ -153,7 +158,11 @@ export function AttendanceSheetModal({
                     return (
                       <th
                         key={event.id}
-                        ref={isToday ? todayColRef : undefined}
+                        ref={(el) => {
+                          if (!el) return;
+                          if (focusEventId && event.id === focusEventId) focusColRef.current = el;
+                          if (isToday) todayColRef.current = el;
+                        }}
                         data-today-practice={isToday ? "true" : undefined}
                         className={cn(
                           "sticky top-8 z-20 w-12 border-b border-l border-line-soft px-0.5 py-1.5 text-center font-medium",
@@ -180,6 +189,7 @@ export function AttendanceSheetModal({
                         event={event}
                         member={member}
                         status={recordMap.get(`${event.id}:${member.id}`)}
+                        closed={isAttendanceClosed(event, today)}
                         today={event.date === today}
                         editing={edit?.eventId === event.id && edit.memberId === member.id}
                         onEdit={(rect) =>
@@ -224,6 +234,7 @@ function SheetCell({
   event,
   member,
   status,
+  closed,
   today,
   editing,
   onEdit,
@@ -231,6 +242,7 @@ function SheetCell({
   event: ClubEvent;
   member: Member;
   status?: AttendanceStatus;
+  closed: boolean;
   today: boolean;
   editing: boolean;
   onEdit: (rect: DOMRect) => void;
@@ -241,25 +253,34 @@ function SheetCell({
   return (
     <td className={cn("border-b border-l border-line-soft p-0.5", today && "bg-brand-soft")}>
       {scheduled ? (
-        <button
-          type="button"
-          aria-label={`${formatDateKo(event.date)} ${member.name} ${status ?? "미체크"}`}
-          aria-haspopup="dialog"
-          aria-expanded={editing}
-          data-sheet-cell
-          onClick={(e) => onEdit(e.currentTarget.getBoundingClientRect())}
-          className={cn(
-            "flex h-8 w-full items-center justify-center rounded-[8px] text-[10px] font-semibold",
-            editing && "ring-1 ring-brand",
-          )}
-          style={
-            meta
-              ? { background: meta.color, color: "#fff" }
-              : { background: "#F2F4F6", color: "#8B95A1" }
-          }
-        >
-          {meta ? meta.short : "미체크"}
-        </button>
+        closed ? (
+          <button
+            type="button"
+            aria-label={`${formatDateKo(event.date)} ${member.name} ${status ?? "미체크"}`}
+            aria-haspopup="dialog"
+            aria-expanded={editing}
+            data-sheet-cell
+            onClick={(e) => onEdit(e.currentTarget.getBoundingClientRect())}
+            className={cn(
+              "flex h-8 w-full items-center justify-center rounded-[8px] text-[10px] font-semibold",
+              editing && "ring-1 ring-brand",
+            )}
+            style={
+              meta
+                ? { background: meta.color, color: "#fff" }
+                : { background: "#F2F4F6", color: "#8B95A1" }
+            }
+          >
+            {meta ? meta.short : "미체크"}
+          </button>
+        ) : (
+          <span
+            className="flex h-8 items-center justify-center text-[10px] text-faint"
+            aria-label={`${formatDateKo(event.date)} ${member.name} 미마감`}
+          >
+            미마감
+          </span>
+        )
       ) : (
         <span className="flex h-8 items-center justify-center text-faint" aria-hidden>
           ·

@@ -56,6 +56,8 @@ export type ClubEvent = {
   endTime: string;
   allDay?: boolean;
   attachmentName?: string;
+  /** 출석 마감 시각. 있으면 출석표에 반영. 연습일 자정 이후 자동 설정. */
+  attendanceClosedAt?: string;
 };
 
 export type Attendance = {
