@@ -4,6 +4,10 @@ export const SINCHON = {
   longitude: 126.9369,
 };
 
+export const WEATHER_PAST_DAYS = 92;
+const SEOUL = "Asia/Seoul";
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export type WeatherDay = {
   date: string;
   code: number;
@@ -42,15 +46,104 @@ export function parseOpenMeteoDaily(data: {
       code: Number(codes[i] ?? 0),
       tmax: Number(tmax[i] ?? 0),
     }))
-    .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date));
+    .filter((day) => ISO_DATE.test(day.date));
 }
 
-export function openMeteoForecastUrl() {
+export function openMeteoForecastUrl(opts?: { pastDays?: number }) {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(SINCHON.latitude));
   url.searchParams.set("longitude", String(SINCHON.longitude));
   url.searchParams.set("daily", "weather_code,temperature_2m_max");
-  url.searchParams.set("timezone", "Asia/Seoul");
+  url.searchParams.set("timezone", SEOUL);
   url.searchParams.set("forecast_days", "16");
+  const past = Math.min(WEATHER_PAST_DAYS, Math.max(0, Math.floor(opts?.pastDays ?? 0)));
+  if (past > 0) url.searchParams.set("past_days", String(past));
   return url.toString();
+}
+
+export function clampWeatherPastDays(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(WEATHER_PAST_DAYS, Math.max(0, Math.floor(n)));
+}
+
+export function normalizeWeatherDays(raw: unknown): WeatherDay[] {
+  if (!Array.isArray(raw)) return [];
+  const map = new Map<string, WeatherDay>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Partial<WeatherDay>;
+    const date = String(row.date ?? "");
+    if (!ISO_DATE.test(date)) continue;
+    map.set(date, { date, code: Number(row.code ?? 0), tmax: Number(row.tmax ?? 0) });
+  }
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function mergeWeatherDays(stored: WeatherDay[], incoming: WeatherDay[], today: string): WeatherDay[] {
+  const map = new Map<string, WeatherDay>();
+  for (const day of normalizeWeatherDays(stored)) map.set(day.date, day);
+  for (const day of normalizeWeatherDays(incoming)) {
+    const existing = map.get(day.date);
+    if (existing && day.date < today) continue;
+    map.set(day.date, day);
+  }
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function seoulISODate(now = new Date()) {
+  return now.toLocaleDateString("en-CA", { timeZone: SEOUL });
+}
+
+function addCalendarDays(iso: string, days: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) + days));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+function sixAMSeoul(iso: string) {
+  return new Date(`${iso}T06:00:00+09:00`);
+}
+
+export function lastSixAMSeoul(now = new Date()) {
+  const today = seoulISODate(now);
+  const todaySix = sixAMSeoul(today);
+  if (now.getTime() >= todaySix.getTime()) return todaySix;
+  return sixAMSeoul(addCalendarDays(today, -1));
+}
+
+export function nextSixAMSeoul(now = new Date()) {
+  const today = seoulISODate(now);
+  const todaySix = sixAMSeoul(today);
+  if (now.getTime() < todaySix.getTime()) return todaySix;
+  return sixAMSeoul(addCalendarDays(today, 1));
+}
+
+export function needsMorningWeatherFetch(fetchedAt: string | null | undefined, now = new Date()) {
+  if (!fetchedAt) return true;
+  const t = Date.parse(fetchedAt);
+  if (!Number.isFinite(t)) return true;
+  return t < lastSixAMSeoul(now).getTime();
+}
+
+export async function loadSinchonWeather(signal: AbortSignal, pastDays = 0): Promise<WeatherDay[]> {
+  const past = clampWeatherPastDays(pastDays);
+  try {
+    const res = await fetch(`/api/weather?past=${past}`, { signal, cache: "no-store" });
+    if (res.ok) {
+      const data = (await res.json()) as { days?: WeatherDay[] };
+      const days = normalizeWeatherDays(data.days);
+      if (days.length > 0) return days;
+    }
+  } catch {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  }
+  try {
+    const res = await fetch(openMeteoForecastUrl({ pastDays: past }), { signal, cache: "no-store" });
+    if (!res.ok) return [];
+    return parseOpenMeteoDaily(await res.json());
+  } catch {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    return [];
+  }
 }

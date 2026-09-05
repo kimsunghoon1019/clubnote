@@ -1,5 +1,5 @@
 import { OPERATOR_NAME, PLACE } from "./constants";
-import { collegeFromMajor, inferredBirthDate, toISODate, todayISO } from "./format";
+import { collegeFromMajor, inferredBirthDate, parseISODate, toISODate, todayISO } from "./format";
 import { placeholderImageDataUrl } from "./proof";
 import type {
   Attendance,
@@ -140,8 +140,10 @@ export const members: Member[] = [...featured, ...extraMembers()].map((member, i
   active: member.active !== false,
 }));
 
+export const EVENTS_KEEP_FROM = "2026-09-08";
+
 function generatePracticeEvents(): ClubEvent[] {
-  const start = new Date(2026, 2, 1);
+  const start = parseISODate(EVENTS_KEEP_FROM);
   const end = new Date(2026, 11, 31);
   const list: ClubEvent[] = [];
   const cursor = new Date(start);
@@ -169,8 +171,6 @@ function generatePracticeEvents(): ClubEvent[] {
 }
 
 const extraEvents: ClubEvent[] = [
-  { id: "e-aud", date: "2026-03-07", title: "신입 오디션", type: "오디션", place: PLACE, preview: "1지망 자유곡 1곡", startTime: "18:00", endTime: "21:00" },
-  { id: "e-meet", date: "2026-03-14", title: "운영진 회의", type: "회의", place: "학생회관 301호", preview: "학기 운영 계획", startTime: "19:00", endTime: "20:30" },
   {
     id: "e-show",
     date: "2026-09-18",
@@ -187,6 +187,13 @@ const extraEvents: ClubEvent[] = [
 export const events: ClubEvent[] = [...extraEvents, ...generatePracticeEvents()].sort((a, b) =>
   a.date.localeCompare(b.date),
 );
+
+export function dropEventsBefore(events: ClubEvent[], attendance: Attendance[], cutoff: string) {
+  const kept = events.filter((event) => event.date >= cutoff);
+  if (kept.length === events.length) return { events, attendance };
+  const ids = new Set(kept.map((event) => event.id));
+  return { events: kept, attendance: attendance.filter((row) => ids.has(row.eventId)) };
+}
 
 export const attendance: Attendance[] = [];
 

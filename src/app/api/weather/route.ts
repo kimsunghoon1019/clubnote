@@ -1,9 +1,10 @@
-import { openMeteoForecastUrl, parseOpenMeteoDaily, SINCHON } from "@/lib/weather";
+import { clampWeatherPastDays, openMeteoForecastUrl, parseOpenMeteoDaily, SINCHON } from "@/lib/weather";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const pastDays = clampWeatherPastDays(new URL(req.url).searchParams.get("past"));
   try {
-    const res = await fetch(openMeteoForecastUrl(), { next: { revalidate: 1800 } });
+    const res = await fetch(openMeteoForecastUrl({ pastDays }), { cache: "no-store" });
     if (!res.ok) {
       return NextResponse.json({ place: SINCHON.name, days: [] });
     }

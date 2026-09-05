@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -23,12 +24,26 @@ import { collegeFromMajor, inferredBirthDate } from "./format";
 import {
   attendance as seedAttendance,
   chartNotes as seedNotes,
+  dropEventsBefore,
+  EVENTS_KEEP_FROM,
   events as seedEvents,
   groups as seedGroups,
   members as seedMembers,
   transactions as seedTransactions,
 } from "./seed";
+import {
+  loadSinchonWeather,
+  mergeWeatherDays,
+  needsMorningWeatherFetch,
+  nextSixAMSeoul,
+  normalizeWeatherDays,
+  seoulISODate,
+  WEATHER_PAST_DAYS,
+  type WeatherDay,
+} from "./weather";
 import { compareTxAsc, newBankRows, type ParsedBankTx } from "./bankExcel";
+import { dataUrlToBlob, fileToProof, persistableTransaction, txProofs } from "./proof";
+import { deleteProofBlob, getProofBlob, putProofBlob } from "./proofDb";
 import { createClient } from "./supabase/client";
 import type {
   Attendance,
@@ -58,12 +73,16 @@ type Persisted = {
   places: string[];
   txCategories?: string[];
   chartSeenByAccount?: ChartSeenByAccount;
+  weatherDays?: WeatherDay[];
+  weatherFetchedAt?: string;
+  eventsClearedBefore?: string;
 };
 
 type ClubContextValue = {
   groups: typeof seedGroups;
   members: Member[];
   events: ClubEvent[];
+  weatherDays: WeatherDay[];
   attendance: Attendance[];
   notes: ChartNote[];
   transactions: Transaction[];
@@ -109,6 +128,8 @@ type ClubContextValue = {
   addTransaction: (input: Omit<Transaction, "id" | "balanceAfter"> & { balanceAfter?: number }) => void;
   importBankTransactions: (incoming: ParsedBankTx[]) => number;
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
+  addTransactionProof: (id: string, file: File) => Promise<void>;
+  removeTransactionProof: (id: string, proofId: string) => Promise<void>;
   addEvent: (input: Omit<ClubEvent, "id">) => ClubEvent;
   updateEvent: (id: string, patch: Partial<ClubEvent>) => void;
   deleteEvent: (id: string) => void;
@@ -124,14 +145,27 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function withSeedProof(row: Transaction): Transaction {
-  if (!row.proofName) return row;
-  const usable =
-    row.proofDataUrl?.startsWith("data:image/") || row.proofDataUrl?.startsWith("data:application/");
-  if (usable) return row;
-  const seed = seedTransactions.find((item) => item.id === row.id && item.proofName === row.proofName);
-  if (!seed?.proofDataUrl) return row;
-  return { ...row, proofMime: row.proofMime ?? seed.proofMime, proofDataUrl: seed.proofDataUrl };
+async function hydrateTransactionProofs(rows: Transaction[]): Promise<Transaction[]> {
+  const out: Transaction[] = [];
+  for (const row of rows) {
+    const proofs = txProofs(row);
+    for (let i = 0; i < proofs.length; i += 1) {
+      const proof = proofs[i];
+      if (await getProofBlob(proof.id)) continue;
+      if (i === 0 && row.proofDataUrl) {
+        await putProofBlob(proof.id, dataUrlToBlob(row.proofDataUrl));
+        continue;
+      }
+      const seed = seedTransactions.find((item) => item.id === row.id);
+      if (!seed?.proofDataUrl) continue;
+      const seedProofs = txProofs(seed);
+      const seedMatch = seedProofs.find((item) => item.id === proof.id) ?? (i === 0 ? seedProofs[0] : undefined);
+      if (seedMatch) await putProofBlob(proof.id, dataUrlToBlob(seed.proofDataUrl));
+    }
+    const { proofName: _name, proofMime: _mime, proofDataUrl: _data, ...rest } = row;
+    out.push({ ...rest, proofs });
+  }
+  return out;
 }
 
 function normalizeChartSeen(raw: unknown): ChartSeenByAccount {
@@ -201,6 +235,9 @@ function loadPersisted(): Persisted | null {
 export function ClubProvider({ children }: { children: ReactNode }) {
   const [members, setMembers] = useState<Member[]>(seedMembers);
   const [events, setEvents] = useState<ClubEvent[]>(seedEvents);
+  const [weatherDays, setWeatherDays] = useState<WeatherDay[]>([]);
+  const [weatherFetchedAt, setWeatherFetchedAt] = useState("");
+  const [eventsClearedBefore, setEventsClearedBefore] = useState(EVENTS_KEEP_FROM);
   const [attendance, setAttendance] = useState<Attendance[]>(seedAttendance);
   const [notes, setNotes] = useState<ChartNote[]>(seedNotes);
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
@@ -222,14 +259,23 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     const data = loadPersisted();
     if (data) {
       setMembers(data.members.map(normalizeMember));
-      setEvents(data.events);
-      setAttendance(
-        data.attendance.flatMap((row) => {
-          const status = normalizeAttendanceStatus(String(row.status));
-          if (!status) return [];
-          return [{ ...row, status }];
-        }),
-      );
+      const attendanceRows = data.attendance.flatMap((row) => {
+        const status = normalizeAttendanceStatus(String(row.status));
+        if (!status) return [];
+        return [{ ...row, status }];
+      });
+      const cutoff = data.eventsClearedBefore ?? "";
+      if (cutoff < EVENTS_KEEP_FROM) {
+        const pruned = dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM);
+        setEvents(pruned.events);
+        setAttendance(pruned.attendance);
+      } else {
+        setEvents(data.events);
+        setAttendance(attendanceRows);
+      }
+      setEventsClearedBefore(EVENTS_KEEP_FROM);
+      setWeatherDays(normalizeWeatherDays(data.weatherDays));
+      setWeatherFetchedAt(typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "");
       setNotes(data.notes ?? []);
       setTransactions((data.transactions ?? seedTransactions).map(withSeedProof));
       setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
@@ -292,13 +338,78 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       places,
       txCategories,
       chartSeenByAccount,
+      weatherDays,
+      weatherFetchedAt,
+      eventsClearedBefore,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       /* quota: keep in-memory state */
     }
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore]);
+
+  const weatherDaysRef = useRef(weatherDays);
+  weatherDaysRef.current = weatherDays;
+  const weatherFetchedAtRef = useRef(weatherFetchedAt);
+  weatherFetchedAtRef.current = weatherFetchedAt;
+
+  useEffect(() => {
+    if (!ready) return;
+    let timer = 0;
+    const ac = new AbortController();
+    let alive = true;
+
+    const schedule = () => {
+      window.clearTimeout(timer);
+      if (!alive) return;
+      const delay = Math.max(1_000, nextSixAMSeoul().getTime() - Date.now());
+      timer = window.setTimeout(() => {
+        void run();
+      }, Math.min(delay, 86_400_000));
+    };
+
+    const run = async () => {
+      if (!alive) return;
+      if (!needsMorningWeatherFetch(weatherFetchedAtRef.current)) {
+        schedule();
+        return;
+      }
+      try {
+        const pastDays = weatherDaysRef.current.length === 0 ? WEATHER_PAST_DAYS : 0;
+        const days = await loadSinchonWeather(ac.signal, pastDays);
+        if (!alive || ac.signal.aborted) return;
+        if (days.length === 0) {
+          timer = window.setTimeout(() => {
+            void run();
+          }, 30 * 60 * 1000);
+          return;
+        }
+        setWeatherDays((prev) => mergeWeatherDays(prev, days, seoulISODate()));
+        setWeatherFetchedAt(new Date().toISOString());
+        schedule();
+      } catch {
+        if (!alive || ac.signal.aborted) return;
+        timer = window.setTimeout(() => {
+          void run();
+        }, 30 * 60 * 1000);
+      }
+    };
+
+    void run();
+    const onWake = () => {
+      if (document.visibilityState === "visible") void run();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      alive = false;
+      ac.abort();
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
+  }, [ready]);
 
   const toast = useCallback((message: string) => {
     const id = uid("toast");
@@ -464,7 +575,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       setTransactions((prev) => {
         const last = prev[prev.length - 1];
         const balanceAfter = input.balanceAfter ?? (last?.balanceAfter ?? 0) + input.amount;
-        return [...prev, { ...input, id: uid("t"), balanceAfter }].sort(compareTxAsc);
+        return [...prev, { ...input, id: uid("t"), balanceAfter, proofs: input.proofs ?? [] }].sort(compareTxAsc);
       });
     },
     [],
@@ -476,13 +587,30 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setTransactions((prev) => {
       const next = newBankRows(prev, incoming);
       if (next.length === 0) return prev;
-      return [...prev, ...next.map((row) => ({ ...row, id: uid("t"), category: "" as const }))].sort(compareTxAsc);
+      return [...prev, ...next.map((row) => ({ ...row, id: uid("t"), category: "" as const, proofs: [] }))].sort(
+        compareTxAsc,
+      );
     });
     return fresh.length;
   }, [transactions]);
 
   const updateTransaction = useCallback((id: string, patch: Partial<Transaction>) => {
     setTransactions((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }, []);
+
+  const addTransactionProof = useCallback(async (id: string, file: File) => {
+    const { meta, blob } = await fileToProof(file);
+    await putProofBlob(meta.id, blob);
+    setTransactions((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, proofs: [...txProofs(row), meta] } : row)),
+    );
+  }, []);
+
+  const removeTransactionProof = useCallback(async (id: string, proofId: string) => {
+    await deleteProofBlob(proofId);
+    setTransactions((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, proofs: txProofs(row).filter((item) => item.id !== proofId) } : row)),
+    );
   }, []);
 
   const addEvent = useCallback((input: Omit<ClubEvent, "id">) => {
@@ -512,6 +640,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       groups: seedGroups,
       members,
       events,
+      weatherDays,
       attendance,
       notes,
       transactions,
@@ -557,6 +686,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       addTransaction,
       importBankTransactions,
       updateTransaction,
+      addTransactionProof,
+      removeTransactionProof,
       addEvent,
       updateEvent,
       deleteEvent,
@@ -568,6 +699,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     [
       members,
       events,
+      weatherDays,
       attendance,
       notes,
       transactions,
@@ -612,6 +744,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       addTransaction,
       importBankTransactions,
       updateTransaction,
+      addTransactionProof,
+      removeTransactionProof,
       addEvent,
       updateEvent,
       deleteEvent,

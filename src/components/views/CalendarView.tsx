@@ -6,7 +6,7 @@ import { GhostButton } from "@/components/ui/GhostButton";
 import { InlineTaxonomySelect } from "@/components/ui/InlineTaxonomySelect";
 import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { useSinchonForecast, WeatherMark } from "@/components/ui/WeatherMark";
+import { WeatherMark } from "@/components/ui/WeatherMark";
 import {
   CALENDAR_DAY_HEAD,
   CALENDAR_MAX_LANES,
@@ -33,6 +33,7 @@ import { practiceNoticeText } from "@/lib/notice";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
+import type { WeatherDay } from "@/lib/weather";
 import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
@@ -65,8 +66,7 @@ function barLabel(event: ClubEvent) {
 }
 
 export function CalendarView() {
-  const { events, updateEvent, deleteEvent, openModal, toast } = useClub();
-  const forecast = useSinchonForecast();
+  const { events, weatherDays, updateEvent, deleteEvent, openModal, toast } = useClub();
   const today = todayISO();
   const [cursor, setCursor] = useState(() => parseISODate(today));
   const [selected, setSelected] = useState<string | null>(null);
@@ -76,6 +76,11 @@ export function CalendarView() {
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
   const weeks = useMemo(() => chunkWeeks(monthCells(year, monthIndex)), [year, monthIndex]);
+  const forecast = useMemo(() => {
+    const map = new Map<string, WeatherDay>();
+    for (const day of weatherDays) map.set(day.date, day);
+    return map;
+  }, [weatherDays]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, ClubEvent[]>();
@@ -301,7 +306,7 @@ function WeekRow({
   today: string;
   selected: string | null;
   activeId: string | null;
-  forecast: Map<string, { date: string; code: number; tmax: number }>;
+  forecast: Map<string, WeatherDay>;
   onSelectDay: (iso: string) => void;
   onSelectEvent: (iso: string, id: string) => void;
 }) {

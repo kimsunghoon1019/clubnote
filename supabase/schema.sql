@@ -52,6 +52,13 @@ create table if not exists public.events (
   attachment_path text
 );
 
+create table if not exists public.weather_days (
+  date date primary key,
+  code int not null,
+  tmax numeric not null,
+  fetched_at timestamptz default now()
+);
+
 create table if not exists public.chart_notes (
   id uuid primary key default gen_random_uuid(),
   member_id uuid references public.members(id) on delete cascade,
@@ -94,6 +101,7 @@ alter table public.profiles enable row level security;
 alter table public.groups enable row level security;
 alter table public.members enable row level security;
 alter table public.events enable row level security;
+alter table public.weather_days enable row level security;
 alter table public.attendance enable row level security;
 alter table public.transactions enable row level security;
 alter table public.chart_notes enable row level security;
@@ -102,6 +110,7 @@ alter table public.taxonomies enable row level security;
 create policy "로그인 사용자 읽기" on public.groups for select to authenticated using (true);
 create policy "로그인 사용자 읽기" on public.members for select to authenticated using (true);
 create policy "로그인 사용자 읽기" on public.events for select to authenticated using (true);
+create policy "로그인 사용자 읽기" on public.weather_days for select to authenticated using (true);
 create policy "로그인 사용자 읽기" on public.attendance for select to authenticated using (true);
 create policy "로그인 사용자 읽기" on public.transactions for select to authenticated using (true);
 create policy "로그인 사용자 읽기" on public.chart_notes for select to authenticated using (true);
@@ -115,6 +124,9 @@ create policy "운영진 쓰기" on public.members for all to authenticated
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
   with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 create policy "운영진 쓰기" on public.events for all to authenticated
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+  with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+create policy "운영진 쓰기" on public.weather_days for all to authenticated
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
   with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 create policy "운영진 쓰기" on public.attendance for all to authenticated
