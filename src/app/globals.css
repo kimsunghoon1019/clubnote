@@ -1,0 +1,66 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --bg-muted: #f9fafb;
+  --line: #e5e8eb;
+  --line-soft: #f2f4f6;
+  --text: #191f28;
+  --text-sub: #4e5968;
+  --text-muted: #8b95a1;
+  --brand: #3182f6;
+  --brand-soft: #e8f3ff;
+  --brand-text: #1b64da;
+  --up: #f04452;
+  --down: #3182f6;
+  --warn: #ffb800;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Pretendard, Pretendard Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 45%, white);
+  outline-offset: 2px;
+}
+
+.hairline {
+  box-shadow: inset 0 -1px 0 var(--line-soft);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #d1d6db;
+  border-radius: 999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}

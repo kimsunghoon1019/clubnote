@@ -1,0 +1,32 @@
+{
+  "name": "clubnote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "클럽노트 — 한빛 오케스트라 동아리 운영 콘솔",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.4",
+    "lucide-react": "^0.503.0",
+    "next": "^15.3.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "recharts": "^2.15.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.25.1",
+    "eslint-config-next": "^15.3.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3"
+  }
+}
