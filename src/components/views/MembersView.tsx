@@ -42,8 +42,10 @@ export function MembersView() {
     updateMember,
     addCategory,
     removeCategory,
+    moveCategory,
     addRole,
     removeRole,
+    moveRole,
     assignCategory,
     removeMembers,
     roles,
@@ -168,7 +170,13 @@ export function MembersView() {
     {
       key: "category",
       header: (
-        <TaxonomyEditor label="분류" items={categories} onAdd={addCategory} onRemove={removeCategory} />
+        <TaxonomyEditor
+          label="분류"
+          items={categories}
+          onAdd={addCategory}
+          onRemove={removeCategory}
+          onMove={moveCategory}
+        />
       ),
       render: (row) => (
         <PropertySelect value={row.category} options={categories} onChange={(value) => updateMember(row.id, { category: value })}>
@@ -178,7 +186,9 @@ export function MembersView() {
     },
     {
       key: "role",
-      header: <TaxonomyEditor label="직책" items={roles} onAdd={addRole} onRemove={removeRole} />,
+      header: (
+        <TaxonomyEditor label="직책" items={roles} onAdd={addRole} onRemove={removeRole} onMove={moveRole} />
+      ),
       render: (row) => (
         <PropertySelect value={row.role} options={roles} onChange={(value) => updateMember(row.id, { role: value })}>
           <RolePill role={row.role} />

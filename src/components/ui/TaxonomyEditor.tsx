@@ -5,20 +5,12 @@ import { GripVertical, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-function moveItems(list: string[], from: number, to: number) {
-  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
-  const next = [...list];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item);
-  return next;
-}
-
 function indexFromY(list: HTMLElement, y: number) {
   const rows = [...list.querySelectorAll<HTMLElement>("[data-tax-index]")];
   if (rows.length === 0) return 0;
   for (let i = 0; i < rows.length; i += 1) {
     const rect = rows[i].getBoundingClientRect();
-    if (y < rect.top + rect.height / 2) return i;
+    if (y < rect.bottom) return i;
   }
   return rows.length - 1;
 }
@@ -40,15 +32,14 @@ export function TaxonomyEditor({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [working, setWorking] = useState<string[] | null>(null);
-  const [draggedName, setDraggedName] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const onMoveRef = useRef(onMove);
-  const originalFromRef = useRef<number | null>(null);
-  const currentIndexRef = useRef<number | null>(null);
-  const workingRef = useRef<string[] | null>(null);
+  const dragFromRef = useRef<number | null>(null);
+  const overRef = useRef<number | null>(null);
   const listenersRef = useRef<{ move: (event: PointerEvent) => void; up: () => void } | null>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
@@ -70,24 +61,23 @@ export function TaxonomyEditor({
     }
     document.body.style.removeProperty("cursor");
     document.body.style.removeProperty("user-select");
-    originalFromRef.current = null;
-    currentIndexRef.current = null;
-    workingRef.current = null;
-    setWorking(null);
-    setDraggedName(null);
+    dragFromRef.current = null;
+    overRef.current = null;
+    setDragIndex(null);
+    setOverIndex(null);
   };
 
   useEffect(() => {
     if (!open) return;
     place();
     const onDoc = (e: MouseEvent) => {
-      if (currentIndexRef.current !== null) return;
+      if (dragFromRef.current !== null) return;
       const target = e.target as Node;
       if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
     };
     const onScroll = (e: Event) => {
-      if (currentIndexRef.current !== null) return;
+      if (dragFromRef.current !== null) return;
       const target = e.target;
       if (target instanceof Node && menuRef.current?.contains(target)) return;
       setOpen(false);
@@ -114,30 +104,24 @@ export function TaxonomyEditor({
     if (!onMoveRef.current || items.length < 2) return;
     event.preventDefault();
     event.stopPropagation();
-    const next = [...items];
-    workingRef.current = next;
-    originalFromRef.current = from;
-    currentIndexRef.current = from;
-    setWorking(next);
-    setDraggedName(items[from] ?? null);
+    dragFromRef.current = from;
+    overRef.current = from;
+    setDragIndex(from);
+    setOverIndex(from);
     document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       const list = listRef.current;
-      const current = workingRef.current;
-      const fromIndex = currentIndexRef.current;
-      if (!list || !current || fromIndex === null) return;
-      const toIndex = indexFromY(list, moveEvent.clientY);
-      if (toIndex === fromIndex) return;
-      const reordered = moveItems(current, fromIndex, toIndex);
-      workingRef.current = reordered;
-      currentIndexRef.current = toIndex;
-      setWorking(reordered);
+      if (!list) return;
+      const next = indexFromY(list, moveEvent.clientY);
+      if (overRef.current === next) return;
+      overRef.current = next;
+      setOverIndex(next);
     };
     const onPointerUp = () => {
-      const fromIndex = originalFromRef.current;
-      const toIndex = currentIndexRef.current;
+      const fromIndex = dragFromRef.current;
+      const toIndex = overRef.current;
       stopDrag();
       if (fromIndex !== null && toIndex !== null) onMoveRef.current?.(fromIndex, toIndex);
     };
@@ -146,14 +130,10 @@ export function TaxonomyEditor({
     window.addEventListener("pointerup", onPointerUp);
   };
 
-  const shown = working ?? items;
-  const dragging = draggedName !== null;
-
   return (
     <div className="relative inline-flex" ref={rootRef}>
       <button
         type="button"
-        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={(e) => {
@@ -169,9 +149,7 @@ export function TaxonomyEditor({
         )}
       >
         {label}
-        <span className="text-[10px]" aria-hidden>
-          ▾
-        </span>
+        <span className="text-[10px]">▾</span>
       </button>
       {open
         ? createPortal(
@@ -185,22 +163,23 @@ export function TaxonomyEditor({
                 {onMove ? "끌어 순서를 바꾸거나 항목을 추가·삭제할 수 있어요" : "항목을 추가하거나 지울 수 있어요"}
               </p>
               <ul ref={listRef} className="max-h-52 overflow-auto">
-                {shown.map((item, index) => (
+                {items.map((item, index) => (
                   <li
                     key={item}
                     data-tax-index={index}
                     onPointerDown={(event) => {
-                      if (!onMove || currentIndexRef.current !== null) return;
+                      if (!onMove || dragFromRef.current !== null) return;
                       if (event.button !== 0) return;
                       if ((event.target as HTMLElement).closest("[data-tax-remove]")) return;
-                      startDrag(items.indexOf(item), event);
+                      startDrag(index, event);
                     }}
                     className={cn(
                       "flex items-center gap-1 rounded-btn px-1.5 py-1.5",
                       onMove && items.length > 1 && "cursor-grab",
-                      dragging && "cursor-grabbing",
-                      draggedName === item && "bg-brand-soft opacity-70",
-                      !dragging && "hover:bg-muted",
+                      dragIndex !== null && "cursor-grabbing",
+                      dragIndex === index && "opacity-40",
+                      overIndex === index && dragIndex !== null && dragIndex !== index && "bg-brand-soft",
+                      dragIndex === null && "hover:bg-muted",
                     )}
                   >
                     {onMove ? (

@@ -86,8 +86,10 @@ type ClubContextValue = {
   deleteChartNote: (id: string) => void;
   addCategory: (name: string) => void;
   removeCategory: (name: string) => void;
+  moveCategory: (from: number, to: number) => void;
   addRole: (name: string) => void;
   removeRole: (name: string) => void;
+  moveRole: (from: number, to: number) => void;
   addEventType: (name: string) => void;
   removeEventType: (name: string) => void;
   addPlace: (name: string) => void;
@@ -331,6 +333,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setRoles((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
   }, []);
 
+  const moveCategory = useCallback((from: number, to: number) => {
+    setCategories((prev) => moveName(prev, from, to));
+  }, []);
+
+  const moveRole = useCallback((from: number, to: number) => {
+    setRoles((prev) => moveName(prev, from, to));
+  }, []);
+
   const addEventType = useCallback((name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -449,8 +459,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       deleteChartNote,
       addCategory,
       removeCategory,
+      moveCategory,
       addRole,
       removeRole,
+      moveRole,
       addEventType,
       removeEventType,
       addPlace,
@@ -499,8 +511,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       deleteChartNote,
       addCategory,
       removeCategory,
+      moveCategory,
       addRole,
       removeRole,
+      moveRole,
       addEventType,
       removeEventType,
       addPlace,
