@@ -14,11 +14,11 @@ import { SelectInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
-import { tenureLabel, tenureMonths } from "@/lib/format";
+import { formatChartStamp, formatDateDot, formatRatio, tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
-import type { Member } from "@/lib/types";
+import type { ChartNote, Member } from "@/lib/types";
 import { Download, UserPlus } from "lucide-react";
 import { useMemo, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
@@ -26,12 +26,76 @@ import { Cell, Pie, PieChart } from "recharts";
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
 
 type SortKey = "이름" | "나이" | "성실도" | "참여도" | "근속기간" | "학번";
+type MemberScores = Map<string, { diligence: number; participation: number }>;
+
+const MEMBER_CSV_HEADER = [
+  "분류",
+  "직책",
+  "이름",
+  "나이",
+  "성별",
+  "생년월일",
+  "단과대학",
+  "전공",
+  "학번",
+  "가입일",
+  "근속기간",
+  "연락처",
+  "연습요일",
+  "활동여부",
+  "성실도",
+  "참여도",
+  "차트",
+] as const;
+
+function csvCell(value: string | number) {
+  const text = String(value ?? "");
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function chartCsvText(memberId: string, notes: ChartNote[]) {
+  return notes
+    .filter((note) => note.memberId === memberId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((note) => `${formatChartStamp(note.createdAt)} · ${note.author}\n${note.body}`)
+    .join("\n\n");
+}
+
+function buildMemberCsv(members: Member[], notes: ChartNote[], scores: MemberScores) {
+  const rows = members.map((member) => {
+    const score = scores.get(member.id);
+    return [
+      member.category,
+      member.role,
+      member.name,
+      member.age,
+      member.gender,
+      member.birthDate ? formatDateDot(member.birthDate) : "",
+      member.college || "",
+      member.major,
+      member.studentId,
+      formatDateDot(member.joinedAt),
+      tenureLabel(member.joinedAt),
+      member.phone || "",
+      member.practiceDays.join("/"),
+      member.active !== false ? "활동" : "비활동",
+      formatRatio(score?.diligence ?? 0),
+      formatRatio(score?.participation ?? 0),
+      chartCsvText(member.id, notes),
+    ]
+      .map(csvCell)
+      .join(",");
+  });
+  return [MEMBER_CSV_HEADER.join(","), ...rows].join("\n");
+}
 
 export function MembersView() {
   const {
     members,
     events,
     attendance,
+    notes,
     categories,
     selectedMemberIds,
     inspectedMemberId,
@@ -140,24 +204,9 @@ export function MembersView() {
   };
 
   const exportCsv = () => {
-    const rows = (selectedEnabled ? selectedMembers : sorted).map((m) => {
-      const score = scores.get(m.id);
-      return [
-        m.category,
-        m.role,
-        m.name,
-        m.age,
-        m.gender,
-        m.practiceDays.join("/"),
-        (score?.diligence ?? 0).toFixed(2),
-        (score?.participation ?? 0).toFixed(2),
-        tenureLabel(m.joinedAt),
-        m.major,
-        m.studentId,
-      ].join(",");
-    });
-    const header = "분류,직책,이름,나이,성별,연습요일,성실도,참여도,근속기간,전공,학번";
-    const blob = new Blob(["\uFEFF" + [header, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const targets = selectedEnabled ? selectedMembers : sorted;
+    const csv = buildMemberCsv(targets, notes, scores);
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
