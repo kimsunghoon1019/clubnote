@@ -38,7 +38,7 @@ import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
 import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -81,6 +81,43 @@ function cloneEventOntoDate(event: ClubEvent, date: string): Omit<ClubEvent, "id
   };
 }
 
+function daysBetweenISO(from: string, to: string) {
+  const start = parseISODate(from).getTime();
+  const end = parseISODate(to).getTime();
+  return Math.round((end - start) / 86_400_000);
+}
+
+function shiftEventDates(event: ClubEvent, grabIso: string, dropIso: string) {
+  const delta = daysBetweenISO(grabIso, dropIso);
+  if (delta === 0) return null;
+  const date = addDaysISO(event.date, delta);
+  const span = eventSpanDays(event);
+  return {
+    date,
+    endDate: span > 0 ? addDaysISO(date, span) : undefined,
+  };
+}
+
+function isoFromPoint(clientX: number, clientY: number) {
+  const nodes = document.querySelectorAll<HTMLElement>("[data-iso]");
+  for (const node of nodes) {
+    const rect = node.getBoundingClientRect();
+    if (clientX >= rect.left && clientX < rect.right && clientY >= rect.top && clientY < rect.bottom) {
+      return node.dataset.iso ?? null;
+    }
+  }
+  return null;
+}
+
+function swallowNextClick() {
+  const onClick = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  window.addEventListener("click", onClick, true);
+  window.setTimeout(() => window.removeEventListener("click", onClick, true), 400);
+}
+
 function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
   return {
     startDate: event.date,
@@ -99,6 +136,8 @@ export function CalendarView() {
   const [editing, setEditing] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [clipboard, setClipboard] = useState<ClubEvent | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropIsos, setDropIsos] = useState<string[]>([]);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -195,6 +234,68 @@ export function CalendarView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [active, selected, clipboard, addEvent, toast]);
 
+  useEffect(() => {
+    if (!draggingId) return;
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+    return () => {
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+    };
+  }, [draggingId]);
+
+  const onEventPointerDown = (pointer: ReactPointerEvent, event: ClubEvent) => {
+    if (pointer.button !== 0) return;
+    const grabIso = isoFromPoint(pointer.clientX, pointer.clientY) ?? event.date;
+    const pointerId = pointer.pointerId;
+    const startX = pointer.clientX;
+    const startY = pointer.clientY;
+    let moved = false;
+
+    const onMove = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
+      if (!moved) {
+        if (Math.hypot(next.clientX - startX, next.clientY - startY) < 6) return;
+        moved = true;
+        setDraggingId(event.id);
+      }
+      next.preventDefault();
+      const drop = isoFromPoint(next.clientX, next.clientY);
+      if (!drop) {
+        setDropIsos([]);
+        return;
+      }
+      const shifted = shiftEventDates(event, grabIso, drop);
+      setDropIsos(shifted ? eachISODate(shifted.date, shifted.endDate ?? shifted.date) : []);
+    };
+
+    const finish = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      setDraggingId(null);
+      setDropIsos([]);
+      if (!moved) return;
+      swallowNextClick();
+      const drop = isoFromPoint(next.clientX, next.clientY);
+      if (!drop) return;
+      const shifted = shiftEventDates(event, grabIso, drop);
+      if (!shifted) return;
+      updateEvent(event.id, shifted);
+      setSelected(drop);
+      setActiveId(event.id);
+      setEditing(false);
+      toast("일정을 옮겼어요");
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  };
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <main
@@ -220,7 +321,11 @@ export function CalendarView() {
           <PrimaryButton onClick={() => openCreate(selected)}>일정 생성</PrimaryButton>
         </div>
 
-        <div className="border-l border-t border-line-soft" onClick={(e) => e.stopPropagation()}>
+        <div
+          className={cn("border-l border-t border-line-soft", draggingId && "select-none")}
+          data-calendar-dragging={draggingId ? "true" : undefined}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="grid grid-cols-7">
             {WEEKDAYS.map((d) => (
               <div key={d} className="border-b border-r border-line-soft bg-muted px-2 py-2 text-[12px] text-faint">
@@ -236,6 +341,8 @@ export function CalendarView() {
               today={today}
               selected={selected}
               activeId={activeId}
+              draggingId={draggingId}
+              dropIsos={dropIsos}
               forecast={forecast}
               onSelectDay={(iso) => {
                 setSelected(iso);
@@ -253,6 +360,7 @@ export function CalendarView() {
                 setEditing(false);
                 openCreate(iso);
               }}
+              onEventPointerDown={onEventPointerDown}
             />
           ))}
         </div>
@@ -354,20 +462,26 @@ function WeekRow({
   today,
   selected,
   activeId,
+  draggingId,
+  dropIsos,
   forecast,
   onSelectDay,
   onSelectEvent,
   onCreateDay,
+  onEventPointerDown,
 }: {
   week: CalendarCell[];
   events: ClubEvent[];
   today: string;
   selected: string | null;
   activeId: string | null;
+  draggingId: string | null;
+  dropIsos: string[];
   forecast: Map<string, WeatherDay>;
   onSelectDay: (iso: string) => void;
   onSelectEvent: (iso: string, id: string) => void;
   onCreateDay: (iso: string) => void;
+  onEventPointerDown: (pointer: ReactPointerEvent, event: ClubEvent) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const weekIsos = week.map((cell) => cell.iso);
@@ -391,6 +505,7 @@ function WeekRow({
       {week.map((cell, index) => {
         const isToday = cell.iso === today;
         const isSelected = cell.iso === selected;
+        const isDrop = dropIsos.includes(cell.iso);
         const weather = forecast.get(cell.iso);
         const hasPractice = events.some(
           (event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso && isPracticeEvent(event),
@@ -401,6 +516,7 @@ function WeekRow({
             key={cell.iso}
             type="button"
             data-iso={cell.iso}
+            data-drop-hover={isDrop ? "true" : undefined}
             aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
             onClick={() => onSelectDay(cell.iso)}
             onDoubleClick={(event) => {
@@ -412,6 +528,7 @@ function WeekRow({
               "relative flex flex-col border-r border-line-soft text-left hover:bg-muted",
               !cell.inMonth && "bg-[#fcfcfd]",
               isSelected && "bg-[#F7FBFF]",
+              isDrop && "bg-brand-soft",
             )}
           >
             <span
@@ -447,11 +564,13 @@ function WeekRow({
             key={`${seg.event.id}-${seg.colStart}`}
             segment={seg}
             active={activeId === seg.event.id}
+            dragging={draggingId === seg.event.id}
             onPick={(clientX) => {
               const weekEl = ref.current;
               const iso = weekEl ? isoAtClientX(weekEl, clientX, weekIsos) : weekIsos[seg.colStart - 1];
               onSelectEvent(iso, seg.event.id);
             }}
+            onMoveStart={onEventPointerDown}
           />
         ))}
       </div>
@@ -462,32 +581,42 @@ function WeekRow({
 function EventBar({
   segment,
   active,
+  dragging,
   onPick,
+  onMoveStart,
 }: {
   segment: WeekSegment;
   active: boolean;
+  dragging: boolean;
   onPick: (clientX: number) => void;
+  onMoveStart: (pointer: ReactPointerEvent, event: ClubEvent) => void;
 }) {
   const { event, lane, colStart, colSpan, continuesLeft, continuesRight } = segment;
   const hasAttach = eventAttachments(event).length > 0;
   return (
     <button
       type="button"
+      draggable={false}
       data-event-id={event.id}
       data-col-span={colSpan}
       data-event-has-attach={hasAttach ? "true" : undefined}
+      data-event-dragging={dragging ? "true" : undefined}
+      aria-grabbed={dragging || undefined}
       title={event.title}
+      onPointerDown={(e) => onMoveStart(e, event)}
+      onDragStart={(e) => e.preventDefault()}
       onClick={(e) => {
         e.stopPropagation();
         onPick(e.clientX);
       }}
       onDoubleClick={(e) => e.stopPropagation()}
       className={cn(
-        "pointer-events-auto flex h-[18px] items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px]",
+        "pointer-events-auto flex h-[18px] cursor-grab items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px] touch-none active:cursor-grabbing",
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
         continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
         barClass(event.type),
         active && "ring-1 ring-inset ring-brand",
+        dragging && "opacity-50",
       )}
       style={{
         gridColumn: `${colStart} / span ${colSpan}`,
