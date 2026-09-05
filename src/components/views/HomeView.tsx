@@ -7,15 +7,16 @@ import { MiniCalendar } from "@/components/ui/MiniCalendar";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction, transactionBalanceSpark } from "@/lib/bankExcel";
+import { duesStatus } from "@/lib/dues";
 import { formatDateKo, formatWeekday, formatWon, todayISO } from "@/lib/format";
 import { todayMemoItems, type TodayMemo } from "@/lib/notice";
-import { eventSpark, memberSpark, unpaidSpark } from "@/lib/seed";
 import {
   attendanceStatusMap,
   categoryPresentCounts,
   centeredPracticeParticipation,
   heldPracticeEvents,
   joinedMembersForEvent,
+  memberCountSpark,
   membersForEvent,
   monthlyHeldPracticeSpark,
   pooledRosterRate,
@@ -48,7 +49,17 @@ const ROSTER_BAR = "#B4C8E8";
 const RECENT_PRACTICE_COUNT = 12;
 
 export function HomeView() {
-  const { members, categories, events, attendance, transactions, inspectMember, inspectedMemberId, toast } = useClub();
+  const {
+    members,
+    categories,
+    events,
+    attendance,
+    transactions,
+    duesOverrides,
+    inspectMember,
+    inspectedMemberId,
+    toast,
+  } = useClub();
   const router = useRouter();
   const today = todayISO();
   const recordMap = useMemo(() => attendanceStatusMap(attendance), [attendance]);
@@ -84,11 +95,16 @@ export function HomeView() {
     if (!selectableRows.some((row) => row.id === id)) return;
     setSelectedEventId(id);
   };
-  const unpaidMembers = members.filter((m) => m.unpaidFee > 0);
-  const unpaidSum = unpaidMembers.reduce((sum, m) => sum + m.unpaidFee, 0);
   const nextEvent = upcomingPractice(events, today) ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
   const balance = latestTransaction(transactions)?.balanceAfter ?? 0;
   const balanceSpark = useMemo(() => transactionBalanceSpark(transactions), [transactions]);
+  const memberSpark = useMemo(() => memberCountSpark(members, today), [members, today]);
+  const dues = useMemo(
+    () => duesStatus(members, transactions, categories, { today, overrides: duesOverrides }),
+    [members, transactions, categories, today, duesOverrides],
+  );
+  const unpaidCount = dues.rows.filter((row) => !row.paid).length;
+  const paidCount = dues.rows.length - unpaidCount;
 
   const memos = useMemo(
     () => todayMemoItems(events, members, categories, recordMap, today),
@@ -114,7 +130,7 @@ export function HomeView() {
     <>
       <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
         <section className="grid grid-cols-2 border-b border-line-soft xl:grid-cols-6">
-          <KpiCard label="전체 회원수" value={`${members.length}명`} delta={`전주 대비 +2`} deltaUp spark={memberSpark} />
+          <KpiCard label="전체 회원수" value={`${members.length}명`} spark={memberSpark} sparkColor="auto" />
           <KpiCard
             label="이번 주 출석률"
             value={weekHeld.length === 0 ? "—" : `${weekRate.toFixed(1)}%`}
@@ -131,15 +147,13 @@ export function HomeView() {
           <KpiCard label="통장 잔액" value={formatWon(balance)} spark={balanceSpark} sparkColor="auto" />
           <KpiCard
             label="미납 회비"
-            value={`${unpaidMembers.length}명 · ${formatWon(unpaidSum)}`}
-            spark={unpaidSpark}
-            sparkColor="var(--down)"
+            value={`${unpaidCount}명`}
+            caption={`${dues.semester.label} · 납부 ${paidCount}명`}
           />
           <KpiCard
             label="다가오는 일정"
             value={nextEvent ? formatDateKo(nextEvent.date) : "-"}
             caption={nextEvent ? nextEvent.title : ""}
-            spark={eventSpark}
           />
         </section>
 

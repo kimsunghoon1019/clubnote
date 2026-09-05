@@ -242,18 +242,8 @@ export const transactions: Transaction[] = [
   { id: "t10", occurredOn: "2026-05-02", title: "현수막·포스터", type: "출금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: -39800, balanceAfter: 1_284_000, memo: "정문 현수막 1, 포스터 40", category: "기타", proofs: [{ id: "pf-t10", name: "현수막_견적.pdf", mime: "application/pdf" }], proofDataUrl: placeholderImageDataUrl("현수막 견적", "정문 현수막 1, 포스터 40") },
 ];
 
-export const memberTrend = [
-  { month: "6월", value: 44 },
-  { month: "7월", value: 46 },
-  { month: "8월", value: 47 },
-  { month: "9월", value: 48 },
-];
-
-export const memberSpark = [42, 43, 44, 44, 45, 46, 46, 47, 47, 48];
 export const attendanceSpark = [86.2, 88.0, 87.4, 90.1, 91.6, 89.8, 93.1, 92.4];
 export const practiceSpark = [4, 5, 5, 6, 5, 6];
-export const unpaidSpark = [5, 4, 4, 3, 3];
-export const eventSpark = [2, 3, 3, 4, 5];
 
 export const notifications = [
   { id: "n1", title: "오늘 연습 출석을 아직 마감하지 않았어요", time: "12분 전" },

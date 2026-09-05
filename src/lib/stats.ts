@@ -357,6 +357,20 @@ export function monthlyHeldPracticeSpark(events: ClubEvent[], today = todayISO()
   return counts;
 }
 
+/** 가입일 기준 월별 누적 회원수. */
+export function memberCountSpark(members: Member[], today = todayISO(), months = 12): number[] {
+  const now = parseISODate(today);
+  const counts: number[] = [];
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const cutoff = i === 0 ? today : toISODate(end);
+    counts.push(members.filter((member) => member.joinedAt && member.joinedAt <= cutoff).length);
+  }
+  if (counts.length > 0) counts[counts.length - 1] = members.length;
+  if (counts.length === 1) return [counts[0], counts[0]];
+  return counts;
+}
+
 export function categoryPresentCounts(present: Member[], categories: string[]) {
   const extra = [
     ...new Set(present.map((member) => member.category).filter((name) => !categories.includes(name))),
