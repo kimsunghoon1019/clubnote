@@ -8,7 +8,7 @@ import { ScoreBar } from "@/components/ui/ScoreBar";
 import { FieldLabel, SelectInput, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { ATTENDANCE_STATUS_META, FINE_STATUSES, GENDER_OPTIONS, emptyFineTally } from "@/lib/constants";
+import { FINE_STATUSES, GENDER_OPTIONS, emptyFineTally } from "@/lib/constants";
 import { ageFromBirthDate, collegeFromMajor, formatDateDot, tenureLabel } from "@/lib/format";
 import { diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
@@ -255,7 +255,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
         <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]">
           {FINE_STATUSES.map((status) => (
             <li key={status} className="flex items-center justify-between gap-2">
-              <span className="text-faint">{ATTENDANCE_STATUS_META[status].short}</span>
+              <span className="whitespace-nowrap text-faint">{status}</span>
               <span className="font-medium tabular-nums text-ink">{(member.fineTally ?? emptyFineTally())[status]}회</span>
             </li>
           ))}
