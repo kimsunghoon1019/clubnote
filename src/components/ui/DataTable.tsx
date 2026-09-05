@@ -78,9 +78,14 @@ export function DataTable<T extends { id: string }>({
                     onClick={() => onSort(col.key)}
                   >
                     {col.header}
-                    {sortKey === col.key ? (
-                      <span className="text-[10px] text-brand">{sortDir === "asc" ? "▲" : "▼"}</span>
-                    ) : null}
+                    <span
+                      className={cn(
+                        "inline-block w-3 text-center text-[10px] leading-none text-brand",
+                        sortKey === col.key ? "visible" : "invisible",
+                      )}
+                    >
+                      {sortDir === "asc" ? "▲" : "▼"}
+                    </span>
                   </button>
                 ) : (
                   col.header

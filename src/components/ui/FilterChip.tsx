@@ -5,11 +5,13 @@ export function FilterChip({
   children,
   onClick,
   plus,
+  className,
 }: {
   active?: boolean;
   children: React.ReactNode;
   onClick?: () => void;
   plus?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -21,6 +23,7 @@ export function FilterChip({
         active
           ? "bg-brand-soft font-semibold text-brand-text"
           : "bg-transparent text-sub hover:bg-muted",
+        className,
       )}
     >
       {children}

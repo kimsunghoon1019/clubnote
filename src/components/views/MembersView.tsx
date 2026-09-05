@@ -14,6 +14,7 @@ import { SelectInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
+import { cn } from "@/lib/cn";
 import { formatChartStamp, formatDateDot, formatRatio, tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
@@ -58,6 +59,47 @@ function compareMembers(a: Member, b: Member, key: SortKey, scores: MemberScores
 
 function sortColumnKey(columnKey: string): SortKey | undefined {
   return SORT_KEYS.find((key) => SORT_COLUMN[key] === columnKey);
+}
+
+function SortChip({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: SortKey;
+  active: boolean;
+  dir: SortDir | null;
+  onClick: () => void;
+}) {
+  const open = dir !== null;
+  return (
+    <span className="relative inline-flex items-center">
+      <span
+        aria-hidden
+        className="pointer-events-none invisible inline-flex h-8 items-center gap-1 px-3 text-[13px] font-semibold"
+      >
+        {label}
+        <span className="inline-block w-3 text-center text-[10px] leading-none">▼</span>
+      </span>
+      <FilterChip active={active} onClick={onClick} className="absolute inset-y-0 left-0 overflow-hidden">
+        <span className="inline-flex items-center">
+          {label}
+          <span
+            aria-hidden={!open}
+            className={cn(
+              "inline-flex overflow-hidden transition-[max-width,margin,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              open ? "ml-1 max-w-3 opacity-100" : "max-w-0 opacity-0",
+            )}
+          >
+            <span className="inline-block w-3 shrink-0 text-center text-[10px] leading-none">
+              {dir === "asc" ? "▲" : "▼"}
+            </span>
+          </span>
+        </span>
+      </FilterChip>
+    </span>
+  );
 }
 
 const MEMBER_CSV_HEADER = [
@@ -388,18 +430,15 @@ export function MembersView() {
           ))}
           <div className="ml-auto flex flex-wrap items-center gap-1">
             <span className="mr-1 text-[12px] text-faint">정렬</span>
-            {SORT_KEYS.map((key) => {
-              const active = sort ? sort.key === key : key === DEFAULT_SORT_KEY;
-              const dirMark = sort?.key === key ? (sort.dir === "asc" ? "▲" : "▼") : null;
-              return (
-                <FilterChip key={key} active={active} onClick={() => setSort((current) => cycleSort(current, key))}>
-                  <span className="inline-flex items-center gap-1">
-                    {key}
-                    {dirMark ? <span className="text-[10px]">{dirMark}</span> : null}
-                  </span>
-                </FilterChip>
-              );
-            })}
+            {SORT_KEYS.map((key) => (
+              <SortChip
+                key={key}
+                label={key}
+                active={sort ? sort.key === key : key === DEFAULT_SORT_KEY}
+                dir={sort?.key === key ? sort.dir : null}
+                onClick={() => setSort((current) => cycleSort(current, key))}
+              />
+            ))}
           </div>
         </div>
 
