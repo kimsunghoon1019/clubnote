@@ -1,5 +1,6 @@
 "use client";
 
+import { DuesStatusModal } from "@/components/finance/DuesStatusModal";
 import { ProofThumbs } from "@/components/finance/ProofPreview";
 import { TransactionRail } from "@/components/finance/TransactionRail";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
@@ -18,7 +19,7 @@ import { isInspectDismissClick } from "@/lib/inspect";
 import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { Transaction, TxType } from "@/lib/types";
-import { Upload } from "lucide-react";
+import { Upload, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
@@ -45,6 +46,7 @@ export function FinanceView() {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [unlocking, setUnlocking] = useState(false);
+  const [duesOpen, setDuesOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const ordered = useMemo(() => [...transactions].sort(compareTxDesc), [transactions]);
@@ -221,7 +223,7 @@ export function FinanceView() {
           <Kpi label="지출 (이번 달)" value={formatSignedWon(expense)} />
         </section>
 
-        <div className="flex h-12 items-center gap-2 border-b border-line-soft px-5">
+        <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line-soft px-5 py-1.5">
           {["전체", "이번 달", "지난 달"].map((item) => (
             <FilterChip key={item} active={period === item} onClick={() => setPeriod(item)}>
               {item}
@@ -239,7 +241,7 @@ export function FinanceView() {
               {item}
             </FilterChip>
           ))}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <input
               ref={fileRef}
               type="file"
@@ -251,11 +253,17 @@ export function FinanceView() {
                 if (file) void importExcel(file);
               }}
             />
-            <GhostButton disabled={uploading} onClick={() => fileRef.current?.click()}>
+            <GhostButton className="whitespace-nowrap" disabled={uploading} onClick={() => fileRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
               {uploading ? "읽는 중" : "엑셀 업로드"}
             </GhostButton>
-            <PrimaryButton onClick={() => openModal("transaction")}>거래 추가</PrimaryButton>
+            <GhostButton className="whitespace-nowrap" onClick={() => setDuesOpen(true)}>
+              <Wallet className="h-3.5 w-3.5" />
+              단비 납부 여부
+            </GhostButton>
+            <PrimaryButton className="whitespace-nowrap" onClick={() => openModal("transaction")}>
+              거래 추가
+            </PrimaryButton>
           </div>
         </div>
 
@@ -315,6 +323,8 @@ export function FinanceView() {
           </RailSection>
         )}
       </RightRail>
+
+      <DuesStatusModal open={duesOpen} onClose={() => setDuesOpen(false)} />
 
       <Modal open={Boolean(pendingFile)} title="엑셀 비밀번호" onClose={clearPendingExcel} width={400}>
         <p className="text-[14px] leading-6 text-ink">비밀번호가 걸려있나요? 걸려있다면 알려주세요.</p>
