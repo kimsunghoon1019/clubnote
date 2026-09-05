@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 export type Column<T> = {
   key: string;
@@ -29,7 +29,7 @@ export function DataTable<T extends { id: string }>({
   sortKey?: string;
   sortDir?: "asc" | "desc";
   onSort?: (key: string) => void;
-  onRowClick?: (row: T) => void;
+  onRowClick?: (row: T, event: MouseEvent<HTMLTableRowElement>) => void;
   selectedIds?: string[];
   onToggle?: (id: string) => void;
   onToggleAll?: () => void;
@@ -105,7 +105,10 @@ export function DataTable<T extends { id: string }>({
                     selected && "bg-[#F7FBFF]",
                     onRowClick && "cursor-pointer",
                   )}
-                  onClick={() => onRowClick?.(row)}
+                  onMouseDown={(event) => {
+                    if (event.shiftKey || event.ctrlKey || event.metaKey) event.preventDefault();
+                  }}
+                  onClick={(event) => onRowClick?.(row, event)}
                 >
                   {onToggle ? (
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>

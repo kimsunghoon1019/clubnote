@@ -18,7 +18,7 @@ import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats"
 import { useClub } from "@/lib/store";
 import type { Member } from "@/lib/types";
 import { Download, UserPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
@@ -51,8 +51,9 @@ export function MembersView() {
   } = useClub();
 
   const [categoryTab, setCategoryTab] = useState("전체");
-  const [sortKey, setSortKey] = useState<SortKey>("성실도");
+  const [sortKey, setSortKey] = useState<SortKey>("이름");
   const [assignTo, setAssignTo] = useState(categories[0] ?? "");
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
 
   const counts = categoryCounts(members, categories);
   const scores = useMemo(() => {
@@ -86,6 +87,42 @@ export function MembersView() {
 
   const selectedEnabled = selectedMemberIds.length > 0;
   const selectedMembers = members.filter((m) => selectedMemberIds.includes(m.id));
+
+  const dismissInspected = (event: MouseEvent<HTMLElement>) => {
+    if (!inspectedMemberId) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("tr, button, a, input, select, textarea, label, [role='dialog']")) return;
+    inspectMember(null);
+  };
+
+  const handleRowClick = (row: Member, event: MouseEvent<HTMLTableRowElement>) => {
+    const additive = event.ctrlKey || event.metaKey;
+    const ranged = event.shiftKey;
+    const ids = sorted.map((item) => item.id);
+
+    if (ranged) {
+      const end = ids.indexOf(row.id);
+      const startId = selectionAnchorId && ids.includes(selectionAnchorId) ? selectionAnchorId : row.id;
+      const start = ids.indexOf(startId);
+      const from = Math.min(start, end);
+      const to = Math.max(start, end);
+      const rangeIds = ids.slice(from, to + 1);
+      selectAll(additive ? [...new Set([...selectedMemberIds, ...rangeIds])] : rangeIds);
+      inspectMember(null);
+      return;
+    }
+
+    if (additive) {
+      toggleSelect(row.id);
+      setSelectionAnchorId(row.id);
+      inspectMember(null);
+      return;
+    }
+
+    setSelectionAnchorId(row.id);
+    inspectMember(row.id);
+  };
 
   const exportCsv = () => {
     const rows = (selectedEnabled ? selectedMembers : sorted).map((m) => {
@@ -176,7 +213,7 @@ export function MembersView() {
 
   return (
     <>
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin">
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
         <section className="grid grid-cols-2 border-b border-line-soft md:grid-cols-3">
           <div className="row-span-2 flex flex-col justify-between border-b border-r border-line-soft p-4 md:border-b-0">
             <div>
@@ -264,7 +301,7 @@ export function MembersView() {
               if (sorted.every((row) => selectedMemberIds.includes(row.id))) clearSelection();
               else selectAll(sorted.map((row) => row.id));
             }}
-            onRowClick={(row) => inspectMember(row.id)}
+            onRowClick={handleRowClick}
             empty={
               <span>
                 이 분류에 회원이 없어요.{" "}
