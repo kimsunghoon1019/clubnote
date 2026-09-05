@@ -5,12 +5,36 @@ import { Avatar } from "@/components/ui/Avatar";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
 import { RolePill } from "@/components/ui/Pill";
 import { ScoreBar } from "@/components/ui/ScoreBar";
-import { SelectInput } from "@/components/ui/Field";
+import { FieldLabel, SelectInput, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
-import { formatDateDot, studentYear, tenureLabel } from "@/lib/format";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { GENDER_OPTIONS } from "@/lib/constants";
+import { formatDateDot, tenureLabel } from "@/lib/format";
 import { diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
-import { UserMinus } from "lucide-react";
+import type { Gender } from "@/lib/types";
+import { Pencil, UserMinus } from "lucide-react";
+import { useEffect, useState } from "react";
+
+type MemberDraft = {
+  name: string;
+  age: string;
+  studentId: string;
+  major: string;
+  phone: string;
+  gender: Gender;
+};
+
+function draftFrom(member: { name: string; age: number; studentId: string; major: string; phone: string; gender: Gender }): MemberDraft {
+  return {
+    name: member.name,
+    age: String(member.age),
+    studentId: member.studentId,
+    major: member.major,
+    phone: member.phone,
+    gender: member.gender,
+  };
+}
 
 export function MemberRail({ memberId }: { memberId: string }) {
   const {
@@ -30,6 +54,14 @@ export function MemberRail({ memberId }: { memberId: string }) {
     toast,
   } = useClub();
   const member = members.find((item) => item.id === memberId);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<MemberDraft | null>(null);
+
+  useEffect(() => {
+    setEditing(false);
+    setDraft(null);
+  }, [memberId]);
+
   if (!member) return null;
 
   const diligence = diligenceScore(member, events, attendance);
@@ -44,7 +76,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
           <div>
             <p className="text-[15px] font-semibold">{member.name}</p>
             <p className="text-[12px] text-faint">
-              {studentYear(member.studentId)} · {member.major}
+              <span className="tabular-nums">{member.studentId}</span> · {member.major}
             </p>
           </div>
         </div>
@@ -62,17 +94,77 @@ export function MemberRail({ memberId }: { memberId: string }) {
         ) : null}
       </div>
 
-      <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-        <Info label="분류" value={member.category} />
-        <Info label="성별" value={member.gender} />
-        <Info label="나이" value={`${member.age}세`} />
-        <Info label="근속" value={tenureLabel(member.joinedAt)} />
-        <Info label="학번" value={member.studentId} />
-        <Info label="가입" value={formatDateDot(member.joinedAt)} />
-        <div className="col-span-2">
-          <Info label="연락처" value={member.phone || "-"} />
+      {editing && draft ? (
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="col-span-2">
+            <FieldLabel>이름</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px]"
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
+          </div>
+          <div>
+            <FieldLabel>나이</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px]"
+              inputMode="numeric"
+              value={draft.age}
+              onChange={(e) => setDraft({ ...draft, age: e.target.value.replace(/[^\d]/g, "") })}
+            />
+          </div>
+          <div>
+            <FieldLabel>성별</FieldLabel>
+            <SelectInput
+              className="h-8 text-[13px]"
+              value={draft.gender}
+              onChange={(e) => setDraft({ ...draft, gender: e.target.value as Gender })}
+            >
+              {GENDER_OPTIONS.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </SelectInput>
+          </div>
+          <div className="col-span-2">
+            <FieldLabel>학번</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px] tabular-nums"
+              inputMode="numeric"
+              maxLength={10}
+              value={draft.studentId}
+              onChange={(e) => setDraft({ ...draft, studentId: e.target.value.replace(/[^\d]/g, "").slice(0, 10) })}
+            />
+          </div>
+          <div className="col-span-2">
+            <FieldLabel>전공</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px]"
+              value={draft.major}
+              onChange={(e) => setDraft({ ...draft, major: e.target.value })}
+            />
+          </div>
+          <div className="col-span-2">
+            <FieldLabel>연락처</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px]"
+              value={draft.phone}
+              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+            />
+          </div>
         </div>
-      </dl>
+      ) : (
+        <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+          <Info label="분류" value={member.category} />
+          <Info label="성별" value={member.gender} />
+          <Info label="나이" value={`${member.age}세`} />
+          <Info label="근속" value={tenureLabel(member.joinedAt)} />
+          <Info label="학번" value={member.studentId} />
+          <Info label="가입" value={formatDateDot(member.joinedAt)} />
+          <div className="col-span-2">
+            <Info label="연락처" value={member.phone || "-"} />
+          </div>
+        </dl>
+      )}
 
       <div className="mb-4 space-y-2">
         <ScoreBar label="성실도" value={diligence} />
@@ -129,21 +221,61 @@ export function MemberRail({ memberId }: { memberId: string }) {
         onDelete={deleteChartNote}
       />
 
-      <div className="mt-5 border-t border-line-soft pt-4">
-        <GhostButton
-          className="w-full text-up hover:bg-[#FFF1F1]"
-          onClick={() => {
-            const ids = selectedMemberIds.length > 0 ? selectedMemberIds : [member.id];
-            const names = members.filter((item) => ids.includes(item.id)).map((item) => item.name);
-            const label = ids.length === 1 ? `${names[0]} 님` : `선택한 ${ids.length}명`;
-            if (!window.confirm(`${label}을 동아리에서 내보낼까요? 출석·차트 기록도 함께 삭제돼요.`)) return;
-            removeMembers(ids);
-            toast(`${label}을 내보냈어요`);
-          }}
-        >
-          <UserMinus className="h-3.5 w-3.5" />
-          {selectedMemberIds.length > 1 ? `선택 ${selectedMemberIds.length}명 내보내기` : "동아리에서 내보내기"}
-        </GhostButton>
+      <div className="mt-5 flex gap-2 border-t border-line-soft pt-4">
+        {editing ? (
+          <>
+            <GhostButton className="flex-1" onClick={() => { setEditing(false); setDraft(null); }}>
+              취소
+            </GhostButton>
+            <PrimaryButton
+              className="flex-1"
+              disabled={!draft?.name.trim()}
+              onClick={() => {
+                if (!draft) return;
+                updateMember(member.id, {
+                  name: draft.name.trim(),
+                  age: Number(draft.age) || member.age,
+                  studentId: draft.studentId.trim() || member.studentId,
+                  major: draft.major.trim() || member.major,
+                  phone: draft.phone.trim(),
+                  gender: draft.gender,
+                });
+                setEditing(false);
+                setDraft(null);
+                toast("회원 정보를 수정했어요");
+              }}
+            >
+              저장
+            </PrimaryButton>
+          </>
+        ) : (
+          <>
+            <GhostButton
+              className="flex-1"
+              onClick={() => {
+                setDraft(draftFrom(member));
+                setEditing(true);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              수정
+            </GhostButton>
+            <GhostButton
+              className="flex-1 text-up hover:bg-[#FFF1F1]"
+              onClick={() => {
+                const ids = selectedMemberIds.length > 0 ? selectedMemberIds : [member.id];
+                const names = members.filter((item) => ids.includes(item.id)).map((item) => item.name);
+                const label = ids.length === 1 ? `${names[0]} 님` : `선택한 ${ids.length}명`;
+                if (!window.confirm(`${label}을 동아리에서 내보낼까요? 출석·차트 기록도 함께 삭제돼요.`)) return;
+                removeMembers(ids);
+                toast(`${label}을 내보냈어요`);
+              }}
+            >
+              <UserMinus className="h-3.5 w-3.5" />
+              {selectedMemberIds.length > 1 ? `선택 ${selectedMemberIds.length}명` : "내보내기"}
+            </GhostButton>
+          </>
+        )}
       </div>
     </div>
   );

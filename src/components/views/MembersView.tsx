@@ -13,7 +13,7 @@ import { ScoreBar } from "@/components/ui/ScoreBar";
 import { SelectInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
-import { studentYear, tenureLabel, tenureMonths, todayISO } from "@/lib/format";
+import { tenureLabel, tenureMonths, todayISO } from "@/lib/format";
 import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { Member } from "@/lib/types";
@@ -124,6 +124,7 @@ export function MembersView() {
 
     setSelectionAnchorId(row.id);
     inspectMember(row.id);
+    clearSelection();
   };
 
   const exportCsv = () => {
@@ -210,7 +211,7 @@ export function MembersView() {
     },
     { key: "tenure", header: "근속기간", render: (row) => tenureLabel(row.joinedAt) },
     { key: "major", header: "전공", render: (row) => <span className="text-sub">{row.major}</span> },
-    { key: "sid", header: "학번", render: (row) => studentYear(row.studentId) },
+    { key: "sid", header: "학번", render: (row) => <span className="tabular-nums">{row.studentId}</span> },
   ];
 
   return (
