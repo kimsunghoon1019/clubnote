@@ -1,6 +1,6 @@
 import { CLUB_NAME } from "./constants";
 import { formatWeekday, todayISO } from "./format";
-import { isActive, isPracticeEvent, isScheduledFor } from "./stats";
+import { isActive, isPracticeEvent, isScheduledFor, sortMembersByCategory } from "./stats";
 import type { Attendance, AttendanceStatus, ClubEvent, Member } from "./types";
 
 export function practiceSheetEvents(events: ClubEvent[]) {
@@ -11,14 +11,7 @@ export function practiceSheetEvents(events: ClubEvent[]) {
 }
 
 export function sheetMembers(members: Member[], categories: string[]) {
-  const catIndex = (category: string) => {
-    const index = categories.indexOf(category);
-    return index === -1 ? 99 : index;
-  };
-  return members
-    .filter(isActive)
-    .slice()
-    .sort((a, b) => catIndex(a.category) - catIndex(b.category) || a.name.localeCompare(b.name, "ko"));
+  return sortMembersByCategory(members.filter(isActive), categories);
 }
 
 export function attendanceRecordMap(attendance: Attendance[]) {

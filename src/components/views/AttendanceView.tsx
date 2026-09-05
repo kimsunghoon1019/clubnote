@@ -14,7 +14,14 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { cn } from "@/lib/cn";
 import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_META, isPresentStatus } from "@/lib/constants";
 import { formatDateKo, formatEventTime, formatWeekday, todayISO } from "@/lib/format";
-import { categoryAttendance, countByStatus, isPracticeEvent, latestPractice, membersForEvent } from "@/lib/stats";
+import {
+  categoryAttendance,
+  countByStatus,
+  isPracticeEvent,
+  latestPractice,
+  membersForEvent,
+  sortMembersByCategory,
+} from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
@@ -62,7 +69,10 @@ export function AttendanceView() {
   const event = events.find((item) => item.id === eventId) ?? fallback;
   const eventIndex = practiceList.findIndex((item) => item.id === event?.id);
 
-  const roster = useMemo(() => (event ? membersForEvent(members, event) : []), [members, event]);
+  const roster = useMemo(
+    () => (event ? sortMembersByCategory(membersForEvent(members, event), categories) : []),
+    [members, event, categories],
+  );
   const records = attendance.filter((row) => event && row.eventId === event.id);
   const recordMap = new Map(records.map((row) => [row.memberId, row.status]));
 

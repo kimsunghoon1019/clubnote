@@ -25,6 +25,16 @@ export function membersForEvent(members: Member[], event: ClubEvent) {
   return members.filter((member) => isScheduledFor(member, event));
 }
 
+export function sortMembersByCategory(members: Member[], categories: string[]) {
+  const catIndex = (category: string) => {
+    const index = categories.indexOf(category);
+    return index === -1 ? categories.length : index;
+  };
+  return members
+    .slice()
+    .sort((a, b) => catIndex(a.category) - catIndex(b.category) || a.name.localeCompare(b.name, "ko"));
+}
+
 export function emptyStatusCounts(): Record<AttendanceStatus, number> {
   return Object.fromEntries(ATTENDANCE_STATUSES.map((status) => [status, 0])) as Record<AttendanceStatus, number>;
 }
