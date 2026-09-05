@@ -26,7 +26,39 @@ import { Cell, Pie, PieChart } from "recharts";
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
 
 type SortKey = "이름" | "나이" | "성실도" | "참여도" | "근속기간" | "학번";
+type SortDir = "asc" | "desc";
+type SortState = { key: SortKey; dir: SortDir } | null;
 type MemberScores = Map<string, { diligence: number; participation: number }>;
+
+const SORT_KEYS: SortKey[] = ["이름", "나이", "성실도", "참여도", "근속기간", "학번"];
+const DEFAULT_SORT_KEY: SortKey = "이름";
+const SORT_COLUMN: Record<SortKey, string> = {
+  이름: "name",
+  나이: "age",
+  성실도: "diligence",
+  참여도: "participation",
+  근속기간: "tenure",
+  학번: "sid",
+};
+
+function cycleSort(current: SortState, key: SortKey): SortState {
+  if (current?.key !== key) return { key, dir: "desc" };
+  if (current.dir === "desc") return { key, dir: "asc" };
+  return null;
+}
+
+function compareMembers(a: Member, b: Member, key: SortKey, scores: MemberScores) {
+  if (key === "이름") return a.name.localeCompare(b.name, "ko");
+  if (key === "나이") return a.age - b.age;
+  if (key === "성실도") return (scores.get(a.id)?.diligence ?? 0) - (scores.get(b.id)?.diligence ?? 0);
+  if (key === "참여도") return (scores.get(a.id)?.participation ?? 0) - (scores.get(b.id)?.participation ?? 0);
+  if (key === "근속기간") return tenureMonths(a.joinedAt) - tenureMonths(b.joinedAt);
+  return a.studentId.localeCompare(b.studentId);
+}
+
+function sortColumnKey(columnKey: string): SortKey | undefined {
+  return SORT_KEYS.find((key) => SORT_COLUMN[key] === columnKey);
+}
 
 const MEMBER_CSV_HEADER = [
   "분류",
@@ -119,7 +151,7 @@ export function MembersView() {
   } = useClub();
 
   const [categoryTab, setCategoryTab] = useState("전체");
-  const [sortKey, setSortKey] = useState<SortKey>("이름");
+  const [sort, setSort] = useState<SortState>(null);
   const [assignTo, setAssignTo] = useState(categories[0] ?? "");
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
 
@@ -141,17 +173,16 @@ export function MembersView() {
   }, [members, categoryTab]);
 
   const sorted = useMemo(() => {
+    const key = sort?.key ?? DEFAULT_SORT_KEY;
+    const dir = sort?.dir ?? "asc";
     const copy = [...filtered];
     copy.sort((a, b) => {
-      if (sortKey === "이름") return a.name.localeCompare(b.name, "ko");
-      if (sortKey === "나이") return b.age - a.age;
-      if (sortKey === "성실도") return (scores.get(b.id)?.diligence ?? 0) - (scores.get(a.id)?.diligence ?? 0);
-      if (sortKey === "참여도") return (scores.get(b.id)?.participation ?? 0) - (scores.get(a.id)?.participation ?? 0);
-      if (sortKey === "근속기간") return tenureMonths(b.joinedAt) - tenureMonths(a.joinedAt);
-      return a.studentId.localeCompare(b.studentId);
+      const raw = compareMembers(a, b, key, scores);
+      const signed = dir === "desc" ? -raw : raw;
+      return signed || a.name.localeCompare(b.name, "ko") || a.id.localeCompare(b.id);
     });
     return copy;
-  }, [filtered, sortKey, scores]);
+  }, [filtered, sort, scores]);
 
   const selectedEnabled = selectedMemberIds.length > 0;
   const selectedMembers = members.filter((m) => selectedMemberIds.includes(m.id));
@@ -259,7 +290,7 @@ export function MembersView() {
         </span>
       ),
     },
-    { key: "age", header: "나이", render: (row) => `${row.age}` },
+    { key: "age", header: "나이", sortable: true, render: (row) => `${row.age}` },
     { key: "gender", header: "성별", render: (row) => row.gender },
     {
       key: "days",
@@ -271,16 +302,18 @@ export function MembersView() {
     {
       key: "diligence",
       header: "성실도",
+      sortable: true,
       render: (row) => <ScoreBar value={scores.get(row.id)?.diligence ?? 0} />,
     },
     {
       key: "participation",
       header: "참여도",
+      sortable: true,
       render: (row) => <ScoreBar value={scores.get(row.id)?.participation ?? 0} color="var(--brand)" />,
     },
-    { key: "tenure", header: "근속기간", render: (row) => tenureLabel(row.joinedAt) },
+    { key: "tenure", header: "근속기간", sortable: true, render: (row) => tenureLabel(row.joinedAt) },
     { key: "major", header: "전공", render: (row) => <span className="text-sub">{row.major}</span> },
-    { key: "sid", header: "학번", render: (row) => <span className="tabular-nums">{row.studentId}</span> },
+    { key: "sid", header: "학번", sortable: true, render: (row) => <span className="tabular-nums">{row.studentId}</span> },
   ];
 
   return (
@@ -355,11 +388,18 @@ export function MembersView() {
           ))}
           <div className="ml-auto flex flex-wrap items-center gap-1">
             <span className="mr-1 text-[12px] text-faint">정렬</span>
-            {(["이름", "나이", "성실도", "참여도", "근속기간", "학번"] as SortKey[]).map((key) => (
-              <FilterChip key={key} active={sortKey === key} onClick={() => setSortKey(key)}>
-                {key}
-              </FilterChip>
-            ))}
+            {SORT_KEYS.map((key) => {
+              const active = sort ? sort.key === key : key === DEFAULT_SORT_KEY;
+              const dirMark = sort?.key === key ? (sort.dir === "asc" ? "▲" : "▼") : null;
+              return (
+                <FilterChip key={key} active={active} onClick={() => setSort((current) => cycleSort(current, key))}>
+                  <span className="inline-flex items-center gap-1">
+                    {key}
+                    {dirMark ? <span className="text-[10px]">{dirMark}</span> : null}
+                  </span>
+                </FilterChip>
+              );
+            })}
           </div>
         </div>
 
@@ -367,6 +407,12 @@ export function MembersView() {
           <DataTable
             columns={columns}
             rows={sorted}
+            sortKey={sort ? SORT_COLUMN[sort.key] : undefined}
+            sortDir={sort?.dir}
+            onSort={(columnKey) => {
+              const key = sortColumnKey(columnKey);
+              if (key) setSort((current) => cycleSort(current, key));
+            }}
             selectedIds={selectedMemberIds}
             onToggle={toggleSelect}
             onToggleAll={() => {
