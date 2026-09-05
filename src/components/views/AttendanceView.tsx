@@ -27,8 +27,8 @@ import {
 import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 const STATUS_FILTERS: Array<AttendanceStatus | "전체" | "미체크"> = ["전체", ...ATTENDANCE_STATUSES, "미체크"];
 
@@ -63,12 +63,24 @@ export function AttendanceView() {
   const [eventId, setEventId] = useState(fallback?.id ?? "");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "전체" | "미체크">("전체");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
+  const [saveFlash, setSaveFlash] = useState(false);
+  const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | 0>(0);
 
   useEffect(() => {
     if (!practiceList.some((item) => item.id === eventId) && fallback) {
       setEventId(fallback.id);
     }
   }, [practiceList, eventId, fallback]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+    setSelectionAnchorId(null);
+    inspectMember(null);
+  }, [eventId, inspectMember]);
+
+  useEffect(() => () => window.clearTimeout(saveFlashTimer.current), []);
 
   const event = events.find((item) => item.id === eventId) ?? fallback;
   const eventIndex = practiceList.findIndex((item) => item.id === event?.id);
@@ -103,9 +115,73 @@ export function AttendanceView() {
   const unchecked = roster.filter((m) => !recordMap.has(m.id)).length;
 
   const dismissInspected = (event: MouseEvent<HTMLElement>) => {
-    if (!inspectedMemberId) return;
+    if (!inspectedMemberId && selectedIds.length === 0) return;
     if (!isInspectDismissClick(event.target)) return;
     inspectMember(null);
+    setSelectedIds([]);
+    setSelectionAnchorId(null);
+  };
+
+  const handleRowClick = (row: Member, click: MouseEvent<HTMLTableRowElement>) => {
+    const additive = click.ctrlKey || click.metaKey;
+    const ranged = click.shiftKey;
+    const ids = rows.map((item) => item.id);
+
+    if (ranged) {
+      const end = ids.indexOf(row.id);
+      const startId = selectionAnchorId && ids.includes(selectionAnchorId) ? selectionAnchorId : row.id;
+      const start = ids.indexOf(startId);
+      const from = Math.min(start, end);
+      const to = Math.max(start, end);
+      const rangeIds = ids.slice(from, to + 1);
+      setSelectedIds(additive ? [...new Set([...selectedIds, ...rangeIds])] : rangeIds);
+      inspectMember(null);
+      return;
+    }
+
+    if (additive) {
+      setSelectedIds((prev) =>
+        prev.includes(row.id) ? prev.filter((id) => id !== row.id) : [...prev, row.id],
+      );
+      setSelectionAnchorId(row.id);
+      inspectMember(null);
+      return;
+    }
+
+    if (
+      inspectedMemberId === row.id &&
+      (selectedIds.length === 0 || (selectedIds.length === 1 && selectedIds[0] === row.id))
+    ) {
+      inspectMember(null);
+      setSelectedIds([]);
+      setSelectionAnchorId(null);
+      return;
+    }
+
+    setSelectionAnchorId(row.id);
+    inspectMember(row.id);
+    setSelectedIds([row.id]);
+  };
+
+  const applyAttendance = (memberId: string, status: AttendanceStatus | null) => {
+    if (!event) return;
+    const rosterIds = new Set(roster.map((member) => member.id));
+    const targets =
+      selectedIds.includes(memberId) && selectedIds.length > 1
+        ? selectedIds.filter((id) => rosterIds.has(id))
+        : [memberId];
+    for (const id of targets) {
+      setAttendanceStatus(event.id, id, status);
+    }
+  };
+
+  const handleSave = () => {
+    if (!event) return;
+    closeAttendance(event.id);
+    setSaveFlash(true);
+    window.clearTimeout(saveFlashTimer.current);
+    saveFlashTimer.current = window.setTimeout(() => setSaveFlash(false), 720);
+    toast("출석이 저장됐어요");
   };
 
   const columns: Column<Member & { status?: AttendanceStatus }>[] = [
@@ -134,10 +210,7 @@ export function AttendanceView() {
           <AttendanceToggle
             name={row.name}
             value={row.status}
-            onChange={(status) => {
-              if (!event) return;
-              setAttendanceStatus(event.id, row.id, status);
-            }}
+            onChange={(status) => applyAttendance(row.id, status)}
           />
         </div>
       ),
@@ -219,6 +292,7 @@ export function AttendanceView() {
           </span>
           <span className="text-[12px] text-faint">
             {formatWeekday(event.date)}요일 · 미체크 {unchecked}명
+            {selectedIds.length > 1 ? ` · ${selectedIds.length}명 선택` : ""}
           </span>
           <GhostButton className="h-8 px-3 text-[12px]" onClick={() => setSheetOpen(true)}>
             출석표 보기
@@ -236,8 +310,8 @@ export function AttendanceView() {
             columns={columns}
             rows={rows}
             tableClassName="min-w-[920px]"
-            selectedIds={inspectedMemberId ? [inspectedMemberId] : []}
-            onRowClick={(row) => inspectMember(inspectedMemberId === row.id ? null : row.id)}
+            selectedIds={selectedIds}
+            onRowClick={handleRowClick}
             empty={
               <span>
                 이 요일 출석 대상자가 없어요. 회원관리에서 연습요일을 켜 주세요.
@@ -246,15 +320,21 @@ export function AttendanceView() {
           />
         </div>
         <div className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-5 py-2.5">
-          <GhostButton onClick={() => toast("출석이 저장되었어요")}>임시저장</GhostButton>
           <PrimaryButton
-            disabled={isAttendanceClosed(event)}
-            onClick={() => {
-              if (closeAttendance(event.id)) toast("출석을 마감했어요. 출석표에 반영됐어요");
-              else toast("이미 마감된 출석이에요");
-            }}
+            className={cn(
+              "min-w-[88px] origin-center active:scale-90",
+              saveFlash && "animate-save-press",
+            )}
+            onClick={handleSave}
           >
-            {isAttendanceClosed(event) ? "마감됨" : "출석 마감"}
+            {saveFlash ? (
+              <>
+                <Check className="h-3.5 w-3.5" strokeWidth={2.6} />
+                저장됨
+              </>
+            ) : (
+              "저장"
+            )}
           </PrimaryButton>
         </div>
       </main>
