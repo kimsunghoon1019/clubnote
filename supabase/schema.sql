@@ -37,6 +37,10 @@ create table if not exists public.members (
 
 alter table public.members add column if not exists birth_date date;
 alter table public.members add column if not exists college text;
+alter table public.members add column if not exists late_notified int default 0;
+alter table public.members add column if not exists late_unnotified int default 0;
+alter table public.members add column if not exists absent_notified int default 0;
+alter table public.members add column if not exists absent_unnotified int default 0;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

@@ -1,4 +1,4 @@
-import { OPERATOR_NAME, PLACE } from "./constants";
+import { OPERATOR_NAME, PLACE, emptyFineTally } from "./constants";
 import { collegeFromMajor, inferredBirthDate, parseISODate, toISODate, todayISO } from "./format";
 import { placeholderImageDataUrl } from "./proof";
 import type {
@@ -20,7 +20,7 @@ export const groups: Group[] = [
   { id: "g4", name: "그룹4 운영스태프", shortName: "그룹4", part: "운영스태프", sortOrder: 4 },
 ];
 
-type SeedMember = Omit<Member, "id" | "active"> & { active?: boolean };
+type SeedMember = Omit<Member, "id" | "active" | "fineTally"> & { active?: boolean };
 
 function withProfile(
   member: Omit<SeedMember, "college" | "birthDate"> & Partial<Pick<SeedMember, "college" | "birthDate">>,
@@ -138,6 +138,7 @@ export const members: Member[] = [...featured, ...extraMembers()].map((member, i
   ...member,
   id: `m${pad(index + 1, 2)}`,
   active: member.active !== false,
+  fineTally: emptyFineTally(),
 }));
 
 export const EVENTS_KEEP_FROM = "2026-09-08";

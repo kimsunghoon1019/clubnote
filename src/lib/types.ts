@@ -1,5 +1,7 @@
 export type Gender = "여" | "남";
 export type AttendanceStatus = "출석" | "통보지각" | "미통보지각" | "통보결석" | "미통보결석";
+export type FineStatus = "통보지각" | "미통보지각" | "통보결석" | "미통보결석";
+export type FineTally = Record<FineStatus, number>;
 export type TxType = "입금" | "출금" | "이체";
 export type EventType = string;
 export type TxCategory = "회비" | "대관료" | "야식" | "교통" | "의상" | "기타";
@@ -30,6 +32,8 @@ export type Member = {
   unpaidFee: number;
   practiceDays: PracticeDay[];
   active: boolean;
+  /** 출석표 연습 칸 기준 누계. 벌금 산정용. */
+  fineTally: FineTally;
 };
 
 export type ChartNote = {

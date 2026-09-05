@@ -1,7 +1,58 @@
-import { CLUB_NAME } from "./constants";
-import { formatWeekday, todayISO } from "./format";
+import { CLUB_NAME, FINE_STATUSES, emptyFineTally, isFineStatus } from "./constants";
+import { formatWeekday, todayISO, weekdayToPracticeDay } from "./format";
 import { isActive, isPracticeEvent, isScheduledFor, sortMembersByCategory } from "./stats";
-import type { Attendance, AttendanceStatus, ClubEvent, Member } from "./types";
+import type { Attendance, AttendanceStatus, ClubEvent, FineTally, Member } from "./types";
+
+export { emptyFineTally };
+
+function sameFineTally(a: FineTally | undefined, b: FineTally) {
+  if (!a) return false;
+  return FINE_STATUSES.every((status) => a[status] === b[status]);
+}
+
+/** 출석표 연습 열 중 해당 회원 연습요일 칸만. 비활동이어도 누계는 유지. */
+function isFineSheetCell(member: Member, event: ClubEvent) {
+  if (!isPracticeEvent(event)) return false;
+  const day = weekdayToPracticeDay(event.date);
+  return Boolean(day && member.practiceDays.includes(day));
+}
+
+export function tallyMemberFines(
+  member: Member,
+  events: ClubEvent[],
+  attendance: Attendance[],
+): FineTally {
+  const map = attendanceRecordMap(attendance);
+  const tally = emptyFineTally();
+  for (const event of practiceSheetEvents(events)) {
+    if (!isFineSheetCell(member, event)) continue;
+    const status = map.get(`${event.id}:${member.id}`);
+    if (status && isFineStatus(status)) tally[status] += 1;
+  }
+  return tally;
+}
+
+export function withFineTallies(
+  members: Member[],
+  events: ClubEvent[],
+  attendance: Attendance[],
+): Member[] {
+  const map = attendanceRecordMap(attendance);
+  const practices = practiceSheetEvents(events);
+  let changed = false;
+  const next = members.map((member) => {
+    const fineTally = emptyFineTally();
+    for (const event of practices) {
+      if (!isFineSheetCell(member, event)) continue;
+      const status = map.get(`${event.id}:${member.id}`);
+      if (status && isFineStatus(status)) fineTally[status] += 1;
+    }
+    if (sameFineTally(member.fineTally, fineTally)) return member;
+    changed = true;
+    return { ...member, fineTally };
+  });
+  return changed ? next : members;
+}
 
 export function practiceSheetEvents(events: ClubEvent[]) {
   return events

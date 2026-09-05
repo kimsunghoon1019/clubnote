@@ -1,4 +1,4 @@
-import type { AttendanceStatus } from "./types";
+import type { AttendanceStatus, FineStatus, FineTally } from "./types";
 
 export const CLUB_NAME = "글리클럽";
 export const PLACE = "학생회관 404호";
@@ -10,6 +10,7 @@ export const DEFAULT_ROLES = ["회장", "부회장", "총무", "파트장", "회
 export const GENDER_OPTIONS = ["여", "남"] as const;
 
 export const ATTENDANCE_STATUSES = ["출석", "통보지각", "미통보지각", "통보결석", "미통보결석"] as const;
+export const FINE_STATUSES = ["통보지각", "미통보지각", "통보결석", "미통보결석"] as const;
 
 export const ATTENDANCE_STATUS_META: Record<
   AttendanceStatus,
@@ -24,6 +25,14 @@ export const ATTENDANCE_STATUS_META: Record<
 
 export function isAttendanceStatus(value: string): value is AttendanceStatus {
   return (ATTENDANCE_STATUSES as readonly string[]).includes(value);
+}
+
+export function isFineStatus(value: string): value is FineStatus {
+  return (FINE_STATUSES as readonly string[]).includes(value);
+}
+
+export function emptyFineTally(): FineTally {
+  return { 통보지각: 0, 미통보지각: 0, 통보결석: 0, 미통보결석: 0 };
 }
 
 export function normalizeAttendanceStatus(status: string): AttendanceStatus | null {

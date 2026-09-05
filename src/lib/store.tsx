@@ -18,8 +18,10 @@ import {
   OPERATOR_NAME,
   STORAGE_KEY,
   TX_CATEGORIES,
+  emptyFineTally,
   normalizeAttendanceStatus,
 } from "./constants";
+import { withFineTallies } from "./attendanceSheet";
 import { collegeFromMajor, inferredBirthDate } from "./format";
 import {
   attendance as seedAttendance,
@@ -103,7 +105,7 @@ type ClubContextValue = {
   inspectMember: (id: string | null) => void;
   setAttendanceStatus: (eventId: string, memberId: string, status: AttendanceStatus | null) => void;
   updateMember: (id: string, patch: Partial<Member>) => void;
-  addMember: (input: Omit<Member, "id">) => void;
+  addMember: (input: Omit<Member, "id" | "fineTally">) => void;
   removeMembers: (ids: string[]) => void;
   setPracticeDays: (id: string, days: PracticeDay[]) => void;
   addChartNote: (memberId: string, body: string) => void;
@@ -216,6 +218,7 @@ function normalizeMember(member: Member): Member {
     practiceDays: member.practiceDays ?? ["화", "목", "토"],
     college: typeof member.college === "string" ? member.college : collegeFromMajor(member.major),
     birthDate: typeof member.birthDate === "string" ? member.birthDate : inferredBirthDate(member.age, member.id || member.name),
+    fineTally: member.fineTally ?? emptyFineTally(),
   };
 }
 
@@ -258,21 +261,19 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const data = loadPersisted();
     if (data) {
-      setMembers(data.members.map(normalizeMember));
       const attendanceRows = data.attendance.flatMap((row) => {
         const status = normalizeAttendanceStatus(String(row.status));
         if (!status) return [];
         return [{ ...row, status }];
       });
       const cutoff = data.eventsClearedBefore ?? "";
-      if (cutoff < EVENTS_KEEP_FROM) {
-        const pruned = dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM);
-        setEvents(pruned.events);
-        setAttendance(pruned.attendance);
-      } else {
-        setEvents(data.events);
-        setAttendance(attendanceRows);
-      }
+      const loaded =
+        cutoff < EVENTS_KEEP_FROM
+          ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
+          : { events: data.events, attendance: attendanceRows };
+      setEvents(loaded.events);
+      setAttendance(loaded.attendance);
+      setMembers(withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance));
       setEventsClearedBefore(EVENTS_KEEP_FROM);
       setWeatherDays(normalizeWeatherDays(data.weatherDays));
       setWeatherFetchedAt(typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "");
@@ -327,7 +328,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     const payload: Persisted = {
-      members,
+      members: withFineTallies(members, events, attendance),
       events,
       attendance,
       notes,
@@ -348,6 +349,12 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       /* quota: keep in-memory state */
     }
   }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore]);
+
+  const practiceDaysKey = members.map((member) => `${member.id}:${member.practiceDays.join(",")}`).join("|");
+  useEffect(() => {
+    if (!ready) return;
+    setMembers((prev) => withFineTallies(prev, events, attendance));
+  }, [ready, events, attendance, practiceDaysKey]);
 
   const weatherDaysRef = useRef(weatherDays);
   weatherDaysRef.current = weatherDays;
@@ -455,8 +462,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, ...patch } : member)));
   }, []);
 
-  const addMember = useCallback((input: Omit<Member, "id">) => {
-    setMembers((prev) => [...prev, normalizeMember({ ...input, id: uid("m") })]);
+  const addMember = useCallback((input: Omit<Member, "id" | "fineTally">) => {
+    setMembers((prev) => [...prev, normalizeMember({ ...input, id: uid("m"), fineTally: emptyFineTally() })]);
   }, []);
 
   const removeMembers = useCallback((ids: string[]) => {

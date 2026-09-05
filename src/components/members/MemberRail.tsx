@@ -8,7 +8,7 @@ import { ScoreBar } from "@/components/ui/ScoreBar";
 import { FieldLabel, SelectInput, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { GENDER_OPTIONS } from "@/lib/constants";
+import { ATTENDANCE_STATUS_META, FINE_STATUSES, GENDER_OPTIONS, emptyFineTally } from "@/lib/constants";
 import { ageFromBirthDate, collegeFromMajor, formatDateDot, tenureLabel } from "@/lib/format";
 import { diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
@@ -248,6 +248,18 @@ export function MemberRail({ memberId }: { memberId: string }) {
         <p className="text-[11px] leading-4 text-faint">
           성실도는 본인 연습요일 출석, 참여도는 학기 전체 연습 대비 참여예요.
         </p>
+      </div>
+
+      <div className="mb-4">
+        <p className="mb-1.5 text-[12px] text-sub">출결 누계</p>
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]">
+          {FINE_STATUSES.map((status) => (
+            <li key={status} className="flex items-center justify-between gap-2">
+              <span className="text-faint">{ATTENDANCE_STATUS_META[status].short}</span>
+              <span className="font-medium tabular-nums text-ink">{(member.fineTally ?? emptyFineTally())[status]}회</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="mb-4 flex items-start justify-between gap-3">
