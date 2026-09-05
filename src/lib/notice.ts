@@ -53,8 +53,8 @@ export function nextWeekPracticeNoticeText(events: ClubEvent[], today = todayISO
 export function expectedAttendanceNoticeText(event: ClubEvent, category: string, names: string[]) {
   const when = `${formatDateKo(event.date)} (${formatWeekday(event.date)})`;
   const header = `[${category}] ${when} 참석 예정 인원`;
-  const list = names.length === 0 ? "참석 예정 인원이 없습니다." : names.join("\n");
-  return `${header}\n\n${list}\n\n출석 사항에 변동이 있으면 연락 주세요.`;
+  const list = names.length === 0 ? "참석 예정 인원이 없습니다." : names.join(" ");
+  return `${header}\n${list}\n\n출석 사항에 변동이 있으면 연락 주세요.`;
 }
 
 export type TodayMemo = {
