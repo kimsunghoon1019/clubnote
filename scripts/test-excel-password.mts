@@ -16,7 +16,7 @@ function sha1(...parts: Buffer[]): Buffer {
   return hash.digest();
 }
 
-function standardKey(password: string, salt: Buffer): Buffer {
+function hashedPassword(password: string, salt: Buffer): { hn: Buffer; hfinal: Buffer } {
   let h = sha1(Buffer.concat([salt, Buffer.from(password, "utf16le")]));
   for (let i = 0; i < 50000; i += 1) {
     const iter = Buffer.alloc(4);
@@ -24,7 +24,10 @@ function standardKey(password: string, salt: Buffer): Buffer {
     h = sha1(Buffer.concat([iter, h]));
   }
   const block = Buffer.alloc(4);
-  const hfinal = sha1(Buffer.concat([h, block]));
+  return { hn: h, hfinal: sha1(Buffer.concat([h, block])) };
+}
+
+function cryptDeriveKey(hfinal: Buffer): Buffer {
   const buf1 = Buffer.alloc(64, 0x36);
   const buf2 = Buffer.alloc(64, 0x5c);
   for (let i = 0; i < 20; i += 1) {
@@ -32,6 +35,14 @@ function standardKey(password: string, salt: Buffer): Buffer {
     buf2[i] ^= hfinal[i];
   }
   return Buffer.concat([sha1(buf1), sha1(buf2)]).subarray(0, 16);
+}
+
+function standardKey(password: string, salt: Buffer): Buffer {
+  return cryptDeriveKey(hashedPassword(password, salt).hfinal);
+}
+
+function truncateKey(password: string, salt: Buffer): Buffer {
+  return hashedPassword(password, salt).hfinal.subarray(0, 16);
 }
 
 function aesEcbEncrypt(data: Buffer, key: Buffer): Buffer {
@@ -64,9 +75,9 @@ function makeBankXlsx(): Buffer {
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-function encryptStandard(xlsx: Buffer, password: string): Buffer {
+function encryptStandard(xlsx: Buffer, password: string, keyFn = standardKey): Buffer {
   const salt = randomBytes(16);
-  const key = standardKey(password, salt);
+  const key = keyFn(password, salt);
   const verifier = randomBytes(16);
   const verifierHash = Buffer.concat([sha1(verifier), Buffer.alloc(12)]);
   const csp = Buffer.from("Microsoft Enhanced RSA and AES Cryptographic Provider\0", "utf16le");
@@ -137,6 +148,12 @@ async function main() {
   if (parsed.error) throw new Error(parsed.error);
   if (parsed.rows.length !== 2) throw new Error(`expected 2 rows, got ${parsed.rows.length}`);
   if (parsed.rows[0].title !== "비밀번호테스트입금") throw new Error(parsed.rows[0].title);
+
+  const truncated = encryptStandard(xlsx, password, truncateKey);
+  writeFileSync(join(outDir, "bank-password-truncate.xlsx"), truncated);
+  const truncatedParsed = await parseBankExcelFile(new File([new Uint8Array(truncated)], "토스뱅크_거래내역.xlsx"), password);
+  if (truncatedParsed.error) throw new Error(`truncate: ${truncatedParsed.error}`);
+  if (truncatedParsed.rows.length !== 2) throw new Error(`truncate expected 2 rows, got ${truncatedParsed.rows.length}`);
 
   const agilePath = join(outDir, "bank-agile.xlsx");
   if (existsSync(agilePath)) {

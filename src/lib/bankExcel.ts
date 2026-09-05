@@ -282,11 +282,13 @@ export function parseBankWorkbook(
 export async function parseBankExcelFile(file: File, password?: string): Promise<ParseBankExcelResult> {
   const buffer = await file.arrayBuffer();
   let bytes = new Uint8Array(buffer);
+  let unlocked = false;
 
   if (isEncryptedOffice(bytes)) {
     if (!password) return { rows: [], needsPassword: true };
     try {
       bytes = decryptOfficeWorkbook(bytes, password);
+      unlocked = true;
     } catch (error) {
       if (error instanceof WrongPasswordError) return { rows: [], error: "비밀번호가 맞지 않아요" };
       return { rows: [], error: error instanceof Error ? error.message : "암호가 걸린 엑셀을 열지 못했어요" };
@@ -304,7 +306,9 @@ export async function parseBankExcelFile(file: File, password?: string): Promise
       workbook = XLSX.read(bytes, { type: "array", cellDates: false, raw: true });
     }
   } catch {
-    if (isEncryptedOffice(buffer)) return { rows: [], needsPassword: !password, error: password ? "비밀번호가 맞지 않아요" : undefined };
+    if (!unlocked && isEncryptedOffice(buffer)) {
+      return { rows: [], needsPassword: !password, error: password ? "비밀번호가 맞지 않아요" : undefined };
+    }
     return { rows: [], error: "엑셀 파일을 읽지 못했어요" };
   }
 

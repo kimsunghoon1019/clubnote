@@ -13,7 +13,7 @@ export class WrongPasswordError extends Error {
 
 function asBytes(content: number[] | Uint8Array | undefined): Uint8Array {
   if (!content) return new Uint8Array();
-  return content instanceof Uint8Array ? content : Uint8Array.from(content);
+  return Uint8Array.from(content);
 }
 
 function concatBytes(...parts: Uint8Array[]): Uint8Array {
@@ -64,6 +64,14 @@ function isZip(bytes: Uint8Array): boolean {
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07);
 }
 
+function isOle(bytes: Uint8Array): boolean {
+  return bytes.length >= 8 && bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0;
+}
+
+function looksLikeWorkbook(bytes: Uint8Array): boolean {
+  return isZip(bytes) || isOle(bytes);
+}
+
 function sha1(message: Uint8Array): Uint8Array {
   return new Uint8Array(sha1Lib.arrayBuffer(message));
 }
@@ -97,53 +105,164 @@ function hashSize(name: HashName): number {
   return 64;
 }
 
+function aesKey(key: Uint8Array): number[] {
+  return Array.from(key);
+}
+
 function aesEcbDecrypt(data: Uint8Array, key: Uint8Array): Uint8Array {
   if (data.length === 0) return data;
   if (data.length % 16 !== 0) throw new Error("암호 블록이 올바르지 않아요");
-  const aes = new aesjs.ModeOfOperation.ecb(key);
-  return Uint8Array.from(aes.decrypt(data));
+  const aes = new aesjs.ModeOfOperation.ecb(aesKey(key));
+  return Uint8Array.from(aes.decrypt(Array.from(data)));
 }
 
 function aesCbcDecrypt(data: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8Array {
   if (data.length === 0) return data;
   if (data.length % 16 !== 0) throw new Error("암호 블록이 올바르지 않아요");
-  const aes = new aesjs.ModeOfOperation.cbc(key, iv);
-  return Uint8Array.from(aes.decrypt(data));
+  const aes = new aesjs.ModeOfOperation.cbc(aesKey(key), Array.from(iv));
+  return Uint8Array.from(aes.decrypt(Array.from(data)));
 }
 
-function standardKeyFromPassword(password: string, keySizeBits: number, salt: Uint8Array): Uint8Array {
-  const pw = utf16leEncode(password);
-  let h = hashBytes("SHA1", salt, pw);
-  const block = new Uint8Array(24);
-  const view = new DataView(block.buffer);
-  for (let i = 0; i < 50000; i += 1) {
-    view.setUint32(0, i, true);
-    block.set(h, 4);
-    h = sha1(block);
+function blockAlign(data: Uint8Array): Uint8Array {
+  const rem = data.length % 16;
+  if (rem === 0) return data;
+  return concatBytes(data, new Uint8Array(16 - rem));
+}
+
+function pkcs7Unpad(data: Uint8Array): Uint8Array {
+  if (data.length === 0) return data;
+  const pad = data[data.length - 1];
+  if (pad < 1 || pad > 16 || pad > data.length) return data;
+  for (let i = data.length - pad; i < data.length; i += 1) {
+    if (data[i] !== pad) return data;
   }
-  const hfinal = hashBytes("SHA1", h, packU32le(0));
+  return data.subarray(0, data.length - pad);
+}
+
+function truncateHash(hash: Uint8Array, size: number): Uint8Array {
+  if (hash.length >= size) return Uint8Array.from(hash.subarray(0, size));
+  const out = new Uint8Array(size).fill(0x36);
+  out.set(hash);
+  return out;
+}
+
+function cryptDeriveKey(hfinal: Uint8Array, keyBytes: number): Uint8Array {
   const buf1 = new Uint8Array(64).fill(0x36);
   const buf2 = new Uint8Array(64).fill(0x5c);
-  for (let i = 0; i < 20; i += 1) {
+  const n = Math.min(hfinal.length, 64);
+  for (let i = 0; i < n; i += 1) {
     buf1[i] ^= hfinal[i];
     buf2[i] ^= hfinal[i];
   }
-  const x3 = concatBytes(sha1(buf1), sha1(buf2));
-  return x3.subarray(0, keySizeBits / 8);
+  return concatBytes(sha1(buf1), sha1(buf2)).subarray(0, keyBytes);
+}
+
+function iteratedSha1(passwordBytes: Uint8Array, salt: Uint8Array, iteratorFirst: boolean): Uint8Array {
+  let h = sha1(concatBytes(salt, passwordBytes));
+  const block = new Uint8Array(24);
+  const view = new DataView(block.buffer);
+  for (let i = 0; i < 50000; i += 1) {
+    if (iteratorFirst) {
+      view.setUint32(0, i, true);
+      block.set(h, 4);
+    } else {
+      block.set(h, 0);
+      view.setUint32(20, i, true);
+    }
+    h = sha1(block);
+  }
+  return h;
+}
+
+function uniqueKeys(keys: Uint8Array[]): Uint8Array[] {
+  const seen = new Set<string>();
+  const out: Uint8Array[] = [];
+  for (const key of keys) {
+    const id = Array.from(key).join(",");
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(Uint8Array.from(key));
+  }
+  return out;
+}
+
+function keysFromHn(hn: Uint8Array, keyBytes: number): Uint8Array[] {
+  const hfinal = sha1(concatBytes(hn, packU32le(0)));
+  return uniqueKeys([cryptDeriveKey(hfinal, keyBytes), truncateHash(hfinal, keyBytes), cryptDeriveKey(hn, keyBytes), truncateHash(hn, keyBytes)]);
+}
+
+function passwordEncodings(password: string): Uint8Array[] {
+  const nfc = password.normalize("NFC");
+  const nfd = password.normalize("NFD");
+  const encodings = [utf16leEncode(nfc)];
+  if (nfd !== nfc) encodings.push(utf16leEncode(nfd));
+  encodings.push(concatBytes(utf16leEncode(nfc), new Uint8Array(2)));
+  encodings.push(new TextEncoder().encode(nfc));
+  if (nfc.length > 15) encodings.push(utf16leEncode(nfc.slice(0, 15)));
+  return encodings;
+}
+
+function aesBlocks(data: Uint8Array): Uint8Array {
+  const n = data.length - (data.length % 16);
+  return n > 0 ? data.subarray(0, n) : data;
 }
 
 function verifyStandardKey(key: Uint8Array, encryptedVerifier: Uint8Array, encryptedVerifierHash: Uint8Array): boolean {
-  const verifier = aesEcbDecrypt(encryptedVerifier, key);
-  const expected = sha1(verifier);
-  const actual = aesEcbDecrypt(encryptedVerifierHash, key).subarray(0, 20);
-  return bytesEqual(expected, actual);
+  const verifier = aesEcbDecrypt(aesBlocks(encryptedVerifier), key);
+  const actual = aesEcbDecrypt(aesBlocks(encryptedVerifierHash), key).subarray(0, 20);
+  const candidates = [verifier, pkcs7Unpad(verifier)];
+  for (const candidate of candidates) {
+    if (bytesEqual(sha1(candidate), actual)) return true;
+  }
+  return false;
 }
 
-function decryptStandardPackage(key: Uint8Array, encryptedPackage: Uint8Array): Uint8Array {
+function decryptSegmentedCbc(payload: Uint8Array, key: Uint8Array, salt: Uint8Array, totalSize: number, segment: number): Uint8Array {
+  const out = new Uint8Array(totalSize);
+  let written = 0;
+  let index = 0;
+  let offset = 0;
+  const aligned = blockAlign(payload);
+  while (written < totalSize && offset < aligned.length) {
+    const end = Math.min(offset + segment, aligned.length);
+    const chunk = blockAlign(aligned.subarray(offset, end));
+    const iv = sha1(concatBytes(salt, packU32le(index))).subarray(0, 16);
+    const decrypted = aesCbcDecrypt(chunk, key, iv);
+    const take = Math.min(decrypted.length, totalSize - written);
+    out.set(decrypted.subarray(0, take), written);
+    written += take;
+    offset = end;
+    index += 1;
+  }
+  return out;
+}
+
+function decryptStandardPackageCandidates(key: Uint8Array, encryptedPackage: Uint8Array, salt: Uint8Array): Uint8Array[] {
   const totalSize = u32le(encryptedPackage, 0);
-  const payload = encryptedPackage.subarray(8);
-  const decrypted = aesEcbDecrypt(payload, key);
-  return decrypted.subarray(0, totalSize);
+  if (totalSize <= 0 || totalSize > encryptedPackage.length * 2) return [];
+  const payload = blockAlign(encryptedPackage.subarray(8));
+  const out: Uint8Array[] = [];
+  try {
+    out.push(aesEcbDecrypt(payload, key).subarray(0, totalSize));
+  } catch {
+    /* ignore */
+  }
+  try {
+    out.push(decryptSegmentedCbc(payload, key, salt, totalSize, 4096));
+  } catch {
+    /* ignore */
+  }
+  try {
+    out.push(aesCbcDecrypt(payload, key, salt).subarray(0, totalSize));
+  } catch {
+    /* ignore */
+  }
+  try {
+    out.push(aesCbcDecrypt(payload, key, new Uint8Array(16)).subarray(0, totalSize));
+  } catch {
+    /* ignore */
+  }
+  return out;
 }
 
 const BLK_KEY = new Uint8Array([0x14, 0x6e, 0x0b, 0xe7, 0xab, 0xac, 0xd0, 0xd6]);
@@ -165,8 +284,8 @@ function b64(value: string): Uint8Array {
   return out;
 }
 
-function iteratedPasswordHash(password: string, salt: Uint8Array, algorithm: HashName, spinCount: number): Uint8Array {
-  let h = hashBytes(algorithm, salt, utf16leEncode(password));
+function iteratedPasswordHash(passwordBytes: Uint8Array, salt: Uint8Array, algorithm: HashName, spinCount: number): Uint8Array {
+  let h = hashBytes(algorithm, salt, passwordBytes);
   const block = new Uint8Array(4 + h.length);
   const view = new DataView(block.buffer);
   for (let i = 0; i < spinCount; i += 1) {
@@ -178,12 +297,15 @@ function iteratedPasswordHash(password: string, salt: Uint8Array, algorithm: Has
 }
 
 function agileKey(hash: Uint8Array, blockKey: Uint8Array, algorithm: HashName, keyBits: number): Uint8Array {
-  return hashBytes(algorithm, hash, blockKey).subarray(0, keyBits / 8);
+  return truncateHash(hashBytes(algorithm, hash, blockKey), keyBits / 8);
 }
 
 function decryptAgilePackage(secretKey: Uint8Array, salt: Uint8Array, algorithm: HashName, encryptedPackage: Uint8Array): Uint8Array {
   const view = new DataView(encryptedPackage.buffer, encryptedPackage.byteOffset, encryptedPackage.byteLength);
   const totalSize = Number(view.getBigUint64(0, true));
+  if (!Number.isFinite(totalSize) || totalSize <= 0 || totalSize > encryptedPackage.length * 2) {
+    throw new Error("암호가 걸린 엑셀을 열지 못했어요");
+  }
   const out = new Uint8Array(totalSize);
   let written = 0;
   let index = 0;
@@ -191,8 +313,8 @@ function decryptAgilePackage(secretKey: Uint8Array, salt: Uint8Array, algorithm:
   while (written < totalSize && offset < encryptedPackage.length) {
     const end = Math.min(offset + 4096, encryptedPackage.length);
     const chunk = encryptedPackage.subarray(offset, end);
-    const padded = chunk.length % 16 === 0 ? chunk : concatBytes(chunk, new Uint8Array(16 - (chunk.length % 16)));
-    const iv = hashBytes(algorithm, salt, packU32le(index)).subarray(0, 16);
+    const padded = blockAlign(chunk);
+    const iv = truncateHash(hashBytes(algorithm, salt, packU32le(index)), 16);
     const decrypted = aesCbcDecrypt(padded, secretKey, iv);
     const take = Math.min(decrypted.length, totalSize - written);
     out.set(decrypted.subarray(0, take), written);
@@ -201,6 +323,25 @@ function decryptAgilePackage(secretKey: Uint8Array, salt: Uint8Array, algorithm:
     index += 1;
   }
   return out;
+}
+
+function agileVerifierMatches(
+  iterated: Uint8Array,
+  algorithm: HashName,
+  keyBits: number,
+  passwordSalt: Uint8Array,
+  encryptedVerifierHashInput: Uint8Array,
+  encryptedVerifierHashValue: Uint8Array,
+): boolean {
+  const verifierInputKey = agileKey(iterated, BLK_VERIFIER_INPUT, algorithm, keyBits);
+  const verifierValueKey = agileKey(iterated, BLK_VERIFIER_VALUE, algorithm, keyBits);
+  const hashInput = aesCbcDecrypt(encryptedVerifierHashInput, verifierInputKey, passwordSalt);
+  const actual = aesCbcDecrypt(encryptedVerifierHashValue, verifierValueKey, passwordSalt).subarray(0, hashSize(algorithm));
+  const inputs = [hashInput, pkcs7Unpad(hashInput), hashInput.subarray(0, Math.min(passwordSalt.length, hashInput.length))];
+  for (const input of inputs) {
+    if (bytesEqual(hashBytes(algorithm, input), actual)) return true;
+  }
+  return false;
 }
 
 export function isEncryptedOffice(buffer: ArrayBuffer | Uint8Array): boolean {
@@ -213,6 +354,78 @@ export function isEncryptedOffice(buffer: ArrayBuffer | Uint8Array): boolean {
   } catch {
     return false;
   }
+}
+
+function decryptStandardWorkbook(info: Uint8Array, encryptedPackage: Uint8Array, password: string): Uint8Array {
+  const headerSize = u32le(info, 8);
+  const header = info.subarray(12, 12 + headerSize);
+  const algId = u32le(header, 8);
+  const keySize = u32le(header, 16) || 128;
+  if (algId !== 0x660e && algId !== 0x660f && algId !== 0x6610) {
+    throw new Error("이 엑셀 암호 방식은 아직 열 수 없어요");
+  }
+  const verifier = info.subarray(12 + headerSize);
+  const saltSize = u32le(verifier, 0) || 16;
+  const salt = verifier.subarray(4, 4 + saltSize);
+  const encryptedVerifier = verifier.subarray(4 + saltSize, 4 + saltSize + 16);
+  const encryptedVerifierHash = verifier.subarray(4 + saltSize + 20);
+  const keyBytes = keySize / 8;
+  let verified = false;
+
+  for (const encoding of passwordEncodings(password)) {
+    for (const iteratorFirst of [true, false]) {
+      const hn = iteratedSha1(encoding, salt, iteratorFirst);
+      const keys = keysFromHn(hn, keyBytes);
+      const matching = keys.filter((key) => verifyStandardKey(key, encryptedVerifier, encryptedVerifierHash));
+      const tryKeys = matching.length > 0 ? matching : keys;
+      if (matching.length > 0) verified = true;
+      for (const key of tryKeys) {
+        for (const candidate of decryptStandardPackageCandidates(key, encryptedPackage, salt)) {
+          if (looksLikeWorkbook(candidate)) return candidate;
+        }
+      }
+      if (matching.length > 0) break;
+    }
+  }
+
+  if (verified) throw new Error("암호가 걸린 엑셀을 열지 못했어요");
+  throw new WrongPasswordError();
+}
+
+function decryptAgileWorkbook(info: Uint8Array, encryptedPackage: Uint8Array, password: string): Uint8Array {
+  const xml = new TextDecoder("utf-8").decode(info.subarray(8));
+  const keyTag = /<(?:[A-Za-z0-9_-]+:)?encryptedKey\s[^>]*\/?>/;
+  const spinCount = Number(readXmlAttr(xml, keyTag, "spinCount"));
+  const keyBits = Number(readXmlAttr(xml, keyTag, "keyBits"));
+  const passwordSalt = b64(readXmlAttr(xml, keyTag, "saltValue"));
+  const algorithm = normalizeHash(readXmlAttr(xml, keyTag, "hashAlgorithm"));
+  const encryptedKeyValue = b64(readXmlAttr(xml, keyTag, "encryptedKeyValue"));
+  const encryptedVerifierHashInput = b64(readXmlAttr(xml, keyTag, "encryptedVerifierHashInput"));
+  const encryptedVerifierHashValue = b64(readXmlAttr(xml, keyTag, "encryptedVerifierHashValue"));
+  const keyDataSalt = b64(readXmlAttr(xml, /<keyData\s[^>]*\/?>/, "saltValue"));
+  const keyDataHash = normalizeHash(readXmlAttr(xml, /<keyData\s[^>]*\/?>/, "hashAlgorithm"));
+  let verified = false;
+
+  for (const encoding of passwordEncodings(password)) {
+    const iterated = iteratedPasswordHash(encoding, passwordSalt, algorithm, spinCount);
+    if (agileVerifierMatches(iterated, algorithm, keyBits, passwordSalt, encryptedVerifierHashInput, encryptedVerifierHashValue)) {
+      verified = true;
+    }
+    const secret = aesCbcDecrypt(encryptedKeyValue, agileKey(iterated, BLK_KEY, algorithm, keyBits), passwordSalt);
+    const secretKeys = uniqueKeys([truncateHash(secret, keyBits / 8), truncateHash(pkcs7Unpad(secret), keyBits / 8)]);
+    for (const secretKey of secretKeys) {
+      try {
+        const decrypted = decryptAgilePackage(secretKey, keyDataSalt, keyDataHash, encryptedPackage);
+        if (looksLikeWorkbook(decrypted)) return decrypted;
+      } catch {
+        /* try next */
+      }
+    }
+    if (verified) break;
+  }
+
+  if (verified) throw new Error("암호가 걸린 엑셀을 열지 못했어요");
+  throw new WrongPasswordError();
 }
 
 export function decryptOfficeWorkbook(buffer: ArrayBuffer | Uint8Array, password: string): Uint8Array {
@@ -228,50 +441,10 @@ export function decryptOfficeWorkbook(buffer: ArrayBuffer | Uint8Array, password
 
   const major = u16le(info, 0);
   const minor = u16le(info, 2);
-  let decrypted: Uint8Array;
 
-  if (major === 4 && minor === 4) {
-    const xml = new TextDecoder("utf-8").decode(info.subarray(8));
-    const keyTag = /<(?:[A-Za-z0-9_-]+:)?encryptedKey\s[^>]*\/?>/;
-    const spinCount = Number(readXmlAttr(xml, keyTag, "spinCount"));
-    const keyBits = Number(readXmlAttr(xml, keyTag, "keyBits"));
-    const passwordSalt = b64(readXmlAttr(xml, keyTag, "saltValue"));
-    const algorithm = normalizeHash(readXmlAttr(xml, keyTag, "hashAlgorithm"));
-    const encryptedKeyValue = b64(readXmlAttr(xml, keyTag, "encryptedKeyValue"));
-    const encryptedVerifierHashInput = b64(readXmlAttr(xml, keyTag, "encryptedVerifierHashInput"));
-    const encryptedVerifierHashValue = b64(readXmlAttr(xml, keyTag, "encryptedVerifierHashValue"));
-    const keyDataSalt = b64(readXmlAttr(xml, /<keyData\s[^>]*\/?>/, "saltValue"));
-    const keyDataHash = normalizeHash(readXmlAttr(xml, /<keyData\s[^>]*\/?>/, "hashAlgorithm"));
-
-    const iterated = iteratedPasswordHash(password, passwordSalt, algorithm, spinCount);
-    const verifierInputKey = agileKey(iterated, BLK_VERIFIER_INPUT, algorithm, keyBits);
-    const verifierValueKey = agileKey(iterated, BLK_VERIFIER_VALUE, algorithm, keyBits);
-    const hashInput = aesCbcDecrypt(encryptedVerifierHashInput, verifierInputKey, passwordSalt);
-    const expected = hashBytes(algorithm, hashInput);
-    const actual = aesCbcDecrypt(encryptedVerifierHashValue, verifierValueKey, passwordSalt).subarray(0, hashSize(algorithm));
-    if (!bytesEqual(expected, actual)) throw new WrongPasswordError();
-
-    const secretKey = aesCbcDecrypt(encryptedKeyValue, agileKey(iterated, BLK_KEY, algorithm, keyBits), passwordSalt);
-    decrypted = decryptAgilePackage(secretKey, keyDataSalt, keyDataHash, encryptedPackage);
-  } else if ((major === 2 || major === 3 || major === 4) && minor === 2) {
-    const headerSize = u32le(info, 8);
-    const header = info.subarray(12, 12 + headerSize);
-    const algId = u32le(header, 8);
-    const keySize = u32le(header, 16) || 128;
-    if (algId !== 0x660e && algId !== 0x660f && algId !== 0x6610) {
-      throw new Error("이 엑셀 암호 방식은 아직 열 수 없어요");
-    }
-    const verifier = info.subarray(12 + headerSize);
-    const salt = verifier.subarray(4, 20);
-    const encryptedVerifier = verifier.subarray(20, 36);
-    const encryptedVerifierHash = verifier.subarray(40, 72);
-    const key = standardKeyFromPassword(password, keySize, salt);
-    if (!verifyStandardKey(key, encryptedVerifier, encryptedVerifierHash)) throw new WrongPasswordError();
-    decrypted = decryptStandardPackage(key, encryptedPackage);
-  } else {
-    throw new Error("이 엑셀 암호 방식은 아직 열 수 없어요");
+  if (major === 4 && minor === 4) return decryptAgileWorkbook(info, encryptedPackage, password);
+  if ((major === 2 || major === 3 || major === 4) && minor === 2) {
+    return decryptStandardWorkbook(info, encryptedPackage, password);
   }
-
-  if (!isZip(decrypted)) throw new WrongPasswordError();
-  return decrypted;
+  throw new Error("이 엑셀 암호 방식은 아직 열 수 없어요");
 }
