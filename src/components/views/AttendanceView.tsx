@@ -14,10 +14,11 @@ import { cn } from "@/lib/cn";
 import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_META, isPresentStatus } from "@/lib/constants";
 import { formatDateKo, formatEventTime, formatWeekday, todayISO } from "@/lib/format";
 import { categoryAttendance, countByStatus, isPracticeEvent, latestPractice, membersForEvent } from "@/lib/stats";
+import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 
 const STATUS_FILTERS: Array<AttendanceStatus | "전체" | "미체크"> = ["전체", ...ATTENDANCE_STATUSES, "미체크"];
 
@@ -85,6 +86,12 @@ export function AttendanceView() {
   const targetCount = roster.length;
   const unchecked = roster.filter((m) => !recordMap.has(m.id)).length;
 
+  const dismissInspected = (event: MouseEvent<HTMLElement>) => {
+    if (!inspectedMemberId) return;
+    if (!isInspectDismissClick(event.target)) return;
+    inspectMember(null);
+  };
+
   const columns: Column<Member & { status?: AttendanceStatus }>[] = [
     { key: "category", header: "분류", render: (row) => <span className="text-sub">{row.category}</span> },
     { key: "role", header: "직책", render: (row) => <RolePill role={row.role} /> },
@@ -131,7 +138,7 @@ export function AttendanceView() {
 
   return (
     <>
-      <aside className="flex min-h-0 w-[160px] shrink-0 flex-col border-r border-line-soft">
+      <aside className="flex min-h-0 w-[160px] shrink-0 flex-col border-r border-line-soft" onClick={dismissInspected}>
         <div className="flex items-center justify-between px-3 py-3">
           <p className="text-[13px] font-semibold">연습날짜</p>
           <div className="flex flex-col">
@@ -187,7 +194,7 @@ export function AttendanceView() {
         </div>
       </aside>
 
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onClick={dismissInspected}>
         <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-soft px-5 py-2">
           <h1 className="text-[15px] font-semibold">출석대상자</h1>
           <span className="text-[13px] text-sub">
@@ -209,7 +216,8 @@ export function AttendanceView() {
             columns={columns}
             rows={rows}
             tableClassName="min-w-[920px]"
-            onRowClick={(row) => inspectMember(row.id)}
+            selectedIds={inspectedMemberId ? [inspectedMemberId] : []}
+            onRowClick={(row) => inspectMember(inspectedMemberId === row.id ? null : row.id)}
             empty={
               <span>
                 이 요일 출석 대상자가 없어요. 회원관리에서 연습요일을 켜 주세요.

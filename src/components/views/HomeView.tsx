@@ -32,9 +32,11 @@ import {
   rosterAttendanceRate,
   upcomingPractice,
 } from "@/lib/stats";
+import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
 import { CalendarPlus, MessageSquare, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { MouseEvent } from "react";
 import { Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968"];
@@ -71,6 +73,12 @@ export function HomeView() {
     .sort((a, b) => b.recentAbsent - a.recentAbsent || a.diligence - b.diligence)
     .slice(0, 5);
 
+  const dismissInspected = (event: MouseEvent<HTMLElement>) => {
+    if (!inspectedMemberId) return;
+    if (!isInspectDismissClick(event.target)) return;
+    inspectMember(null);
+  };
+
   const columns: Column<(typeof ranked)[number]>[] = [
     {
       key: "name",
@@ -97,7 +105,7 @@ export function HomeView() {
 
   return (
     <>
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin">
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
         <section className="grid grid-cols-2 border-b border-line-soft xl:grid-cols-6">
           <KpiCard label="전체 회원수" value={`${members.length}명`} delta={`전주 대비 +2`} deltaUp spark={memberSpark} />
           <KpiCard label="이번 주 출석률" value={`${rate.toFixed(1)}%`} spark={attendanceSpark} sparkColor="auto" />
@@ -185,7 +193,12 @@ export function HomeView() {
             </button>
           </div>
           <p className="mb-3 text-[12px] text-faint">성실도 높은 순 · 상위 10명 · {formatDateKo(today)} 기준</p>
-          <DataTable columns={columns} rows={ranked} onRowClick={(row) => inspectMember(row.id)} />
+          <DataTable
+            columns={columns}
+            rows={ranked}
+            selectedIds={inspectedMemberId ? [inspectedMemberId] : []}
+            onRowClick={(row) => inspectMember(inspectedMemberId === row.id ? null : row.id)}
+          />
         </section>
       </main>
 

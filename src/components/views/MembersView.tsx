@@ -14,6 +14,7 @@ import { SelectInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
 import { tenureLabel, tenureMonths, todayISO } from "@/lib/format";
+import { isInspectDismissClick } from "@/lib/inspect";
 import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { Member } from "@/lib/types";
@@ -90,9 +91,7 @@ export function MembersView() {
 
   const dismissInspected = (event: MouseEvent<HTMLElement>) => {
     if (!inspectedMemberId && selectedMemberIds.length === 0) return;
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-    if (target.closest("tr, button, a, input, select, textarea, label, [role='dialog']")) return;
+    if (!isInspectDismissClick(event.target)) return;
     inspectMember(null);
     clearSelection();
     setSelectionAnchorId(null);
@@ -122,7 +121,10 @@ export function MembersView() {
       return;
     }
 
-    if (selectedMemberIds.length === 1 && selectedMemberIds[0] === row.id) {
+    if (
+      inspectedMemberId === row.id &&
+      (selectedMemberIds.length === 0 || (selectedMemberIds.length === 1 && selectedMemberIds[0] === row.id))
+    ) {
       inspectMember(null);
       clearSelection();
       setSelectionAnchorId(null);
