@@ -7,11 +7,14 @@ import { Modal } from "@/components/ui/Modal";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { TX_TYPES } from "@/lib/constants";
 import { todayISO } from "@/lib/format";
-import { proofFromFile, type ProofFields } from "@/lib/proof";
+import { fileToProof } from "@/lib/proof";
+import { putProofBlob } from "@/lib/proofDb";
 import { useClub } from "@/lib/store";
-import type { TxType } from "@/lib/types";
+import type { TxProof, TxType } from "@/lib/types";
 import { Paperclip } from "lucide-react";
 import { useState } from "react";
+
+type PendingProof = { meta: TxProof; blob: Blob };
 
 export function TransactionModal() {
   const { modal, closeModal, addTransaction, txCategories, toast } = useClub();
@@ -23,7 +26,7 @@ export function TransactionModal() {
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
   const [category, setCategory] = useState("");
-  const [proof, setProof] = useState<ProofFields>({});
+  const [proofs, setProofs] = useState<PendingProof[]>([]);
   const [occurredOn, setOccurredOn] = useState(todayISO());
 
   if (!open) return null;
@@ -33,7 +36,7 @@ export function TransactionModal() {
     setAmount("");
     setMemo("");
     setCategory("");
-    setProof({});
+    setProofs([]);
     setType("출금");
   };
 
@@ -95,22 +98,38 @@ export function TransactionModal() {
         </div>
         <div className="col-span-2">
           <FieldLabel>증빙</FieldLabel>
-          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
+          {proofs.length ? (
+            <ul className="mb-2 space-y-1">
+              {proofs.map((item) => (
+                <li key={item.meta.id} className="flex items-center gap-2 text-[13px]">
+                  <span className="min-w-0 flex-1 truncate text-sub">{item.meta.name}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[12px] text-sub hover:text-up"
+                    onClick={() => setProofs((prev) => prev.filter((row) => row.meta.id !== item.meta.id))}
+                  >
+                    삭제
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-2 text-[12px] text-faint">증빙없음</p>
+          )}
+          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
             <Paperclip className="h-3.5 w-3.5" />
-            {proof.proofName || "파일첨부"}
+            증빙 추가
             <input
               type="file"
+              multiple
               accept="image/*,.pdf,application/pdf"
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (!file) {
-                  setProof({});
-                  return;
-                }
-                void proofFromFile(file)
-                  .then(setProof)
+                if (!files.length) return;
+                void Promise.all(files.map((file) => fileToProof(file)))
+                  .then((next) => setProofs((prev) => [...prev, ...next]))
                   .catch((error: unknown) => toast(error instanceof Error ? error.message : "증빙을 읽지 못했어요"));
               }}
             />
@@ -124,22 +143,23 @@ export function TransactionModal() {
           onClick={() => {
             const raw = Number(amount);
             const signed = type === "입금" ? raw : -Math.abs(raw);
-            addTransaction({
-              occurredOn,
-              title,
-              type,
-              institution,
-              accountMasked: account,
-              amount: signed,
-              memo,
-              category,
-              proofName: proof.proofName,
-              proofMime: proof.proofMime,
-              proofDataUrl: proof.proofDataUrl,
-            });
-            toast("거래를 등록했어요");
-            reset();
-            closeModal();
+            void (async () => {
+              for (const item of proofs) await putProofBlob(item.meta.id, item.blob);
+              addTransaction({
+                occurredOn,
+                title,
+                type,
+                institution,
+                accountMasked: account,
+                amount: signed,
+                memo,
+                category,
+                proofs: proofs.map((item) => item.meta),
+              });
+              toast("거래를 등록했어요");
+              reset();
+              closeModal();
+            })();
           }}
         >
           거래 추가

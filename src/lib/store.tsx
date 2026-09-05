@@ -147,6 +147,17 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function mergeProofsDuringHydrate(prev: Transaction[], hydrated: Transaction[]): Transaction[] {
+  const current = new Map(prev.map((row) => [row.id, row]));
+  return hydrated.map((row) => {
+    const live = current.get(row.id);
+    if (!live) return row;
+    const have = new Set(txProofs(row).map((item) => item.id));
+    const extra = txProofs(live).filter((item) => !have.has(item.id));
+    return extra.length ? { ...row, proofs: [...txProofs(row), ...extra] } : row;
+  });
+}
+
 async function hydrateTransactionProofs(rows: Transaction[]): Promise<Transaction[]> {
   const out: Transaction[] = [];
   for (const row of rows) {
@@ -259,51 +270,59 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
 
   useEffect(() => {
-    const data = loadPersisted();
-    if (data) {
-      const attendanceRows = data.attendance.flatMap((row) => {
-        const status = normalizeAttendanceStatus(String(row.status));
-        if (!status) return [];
-        return [{ ...row, status }];
-      });
-      const cutoff = data.eventsClearedBefore ?? "";
-      const loaded =
-        cutoff < EVENTS_KEEP_FROM
-          ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
-          : { events: data.events, attendance: attendanceRows };
-      setEvents(loaded.events);
-      setAttendance(loaded.attendance);
-      setMembers(withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance));
-      setEventsClearedBefore(EVENTS_KEEP_FROM);
-      setWeatherDays(normalizeWeatherDays(data.weatherDays));
-      setWeatherFetchedAt(typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "");
-      setNotes(data.notes ?? []);
-      setTransactions((data.transactions ?? seedTransactions).map(withSeedProof));
-      setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
-      setRoles(data.roles?.length ? data.roles : DEFAULT_ROLES);
-      setEventTypes(
-        uniqueNames(
-          EVENT_TYPES,
-          data.eventTypes ?? [],
-          (data.events ?? []).map((event) => event.type),
-        ),
-      );
-      setPlaces(
-        uniqueNames(
-          DEFAULT_PLACES,
-          data.places ?? [],
-          (data.events ?? []).map((event) => event.place),
-        ),
-      );
-      setTxCategories(
-        uniqueNames(
-          data.txCategories?.length ? data.txCategories : TX_CATEGORIES,
-          (data.transactions ?? []).map((row) => row.category),
-        ),
-      );
-      setChartSeenByAccount(normalizeChartSeen(data.chartSeenByAccount));
-    }
-    setReady(true);
+    let alive = true;
+    void (async () => {
+      const data = loadPersisted();
+      const txs = await hydrateTransactionProofs(data?.transactions ?? seedTransactions);
+      if (!alive) return;
+      if (data) {
+        const attendanceRows = data.attendance.flatMap((row) => {
+          const status = normalizeAttendanceStatus(String(row.status));
+          if (!status) return [];
+          return [{ ...row, status }];
+        });
+        const cutoff = data.eventsClearedBefore ?? "";
+        const loaded =
+          cutoff < EVENTS_KEEP_FROM
+            ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
+            : { events: data.events, attendance: attendanceRows };
+        setEvents(loaded.events);
+        setAttendance(loaded.attendance);
+        setMembers(withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance));
+        setEventsClearedBefore(EVENTS_KEEP_FROM);
+        setWeatherDays(normalizeWeatherDays(data.weatherDays));
+        setWeatherFetchedAt(typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "");
+        setNotes(data.notes ?? []);
+        setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
+        setRoles(data.roles?.length ? data.roles : DEFAULT_ROLES);
+        setEventTypes(
+          uniqueNames(
+            EVENT_TYPES,
+            data.eventTypes ?? [],
+            (data.events ?? []).map((event) => event.type),
+          ),
+        );
+        setPlaces(
+          uniqueNames(
+            DEFAULT_PLACES,
+            data.places ?? [],
+            (data.events ?? []).map((event) => event.place),
+          ),
+        );
+        setTxCategories(
+          uniqueNames(
+            data.txCategories?.length ? data.txCategories : TX_CATEGORIES,
+            (data.transactions ?? []).map((row) => row.category),
+          ),
+        );
+        setChartSeenByAccount(normalizeChartSeen(data.chartSeenByAccount));
+      }
+      setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
+      setReady(true);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -332,7 +351,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       events,
       attendance,
       notes,
-      transactions,
+      transactions: transactions.map(persistableTransaction),
       categories,
       roles,
       eventTypes,

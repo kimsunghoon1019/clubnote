@@ -3,17 +3,30 @@
 import { ProofThumb } from "@/components/finance/ProofPreview";
 import { FieldLabel, SelectInput, TextArea } from "@/components/ui/Field";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
-import { EMPTY_PROOF, proofFromFile } from "@/lib/proof";
+import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
-import { Paperclip, X } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import { useRef } from "react";
 
 export function TransactionRail({ txId, onClose }: { txId: string; onClose: () => void }) {
-  const { transactions, txCategories, updateTransaction, toast } = useClub();
+  const { transactions, txCategories, updateTransaction, addTransactionProof, removeTransactionProof, toast } =
+    useClub();
   const tx = transactions.find((item) => item.id === txId);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!tx) return null;
+
+  const proofs = txProofs(tx);
+
+  async function attach(files: File[]) {
+    try {
+      for (const file of files) {
+        await addTransactionProof(txId, file);
+      }
+    } catch (error: unknown) {
+      toast(error instanceof Error ? error.message : "증빙을 읽지 못했어요");
+    }
+  }
 
   return (
     <div>
@@ -70,50 +83,45 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
         <input
           ref={fileRef}
           type="file"
+          multiple
           accept="image/*,.pdf,application/pdf"
           className="hidden"
           aria-label="증빙 첨부"
           onChange={(e) => {
-            const file = e.target.files?.[0];
+            const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            if (!file) return;
-            void proofFromFile(file)
-              .then((proof) => updateTransaction(tx.id, proof))
-              .catch((error: unknown) => toast(error instanceof Error ? error.message : "증빙을 읽지 못했어요"));
+            if (files.length) void attach(files);
           }}
         />
-        {tx.proofName ? (
+        {proofs.length ? (
           <div className="space-y-2">
-            <ProofThumb name={tx.proofName} mime={tx.proofMime} dataUrl={tx.proofDataUrl} size="rail" />
-            <div className="flex items-center gap-1">
-              <p className="min-w-0 flex-1 truncate text-[12px] text-sub">{tx.proofName}</p>
-              <button
-                type="button"
-                className="text-[12px] text-sub hover:text-ink"
-                onClick={() => fileRef.current?.click()}
-              >
-                변경
-              </button>
-              <button
-                type="button"
-                className="rounded p-0.5 text-faint hover:text-up"
-                aria-label="증빙 삭제"
-                onClick={() => updateTransaction(tx.id, EMPTY_PROOF)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {proofs.map((proof) => (
+              <div key={proof.id}>
+                <ProofThumb proof={proof} size="rail" />
+                <div className="mt-1 flex items-center gap-1">
+                  <p className="min-w-0 flex-1 truncate text-[12px] text-sub">{proof.name}</p>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[12px] text-sub hover:text-up"
+                    onClick={() => void removeTransactionProof(tx.id, proof.id)}
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <button
-            type="button"
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-btn border border-line text-[13px] text-sub hover:bg-muted"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Paperclip className="h-3.5 w-3.5" />
-            파일첨부
-          </button>
+          <p className="text-[12px] text-faint">증빙없음</p>
         )}
+        <button
+          type="button"
+          className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-btn border border-line text-[13px] text-sub hover:bg-muted"
+          onClick={() => fileRef.current?.click()}
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          증빙 추가
+        </button>
       </div>
     </div>
   );

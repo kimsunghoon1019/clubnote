@@ -231,15 +231,15 @@ export const chartNotes: ChartNote[] = [
 
 export const transactions: Transaction[] = [
   { id: "t01", occurredOn: "2026-04-03", title: "4월 회비 입금", type: "입금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: 420000, balanceAfter: 1_145_000, memo: "48명 중 14명 선입금", category: "회비" },
-  { id: "t02", occurredOn: "2026-04-07", title: "학생회관 대관료", type: "출금", institution: "신한", accountMasked: "110-***-******", amount: -150000, balanceAfter: 995000, memo: "4월 연습실 4회", category: "대관료", proofName: "대관료_4월.pdf", proofMime: "application/pdf", proofDataUrl: placeholderImageDataUrl("대관료", "4월 연습실 4회") },
-  { id: "t03", occurredOn: "2026-04-11", title: "연습 후 야식", type: "출금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: -28400, balanceAfter: 966600, memo: "김밥·음료 32인분", category: "야식", proofName: "야식_0411.jpg", proofMime: "image/jpeg", proofDataUrl: placeholderImageDataUrl("야식", "김밥·음료 32인분") },
+  { id: "t02", occurredOn: "2026-04-07", title: "학생회관 대관료", type: "출금", institution: "신한", accountMasked: "110-***-******", amount: -150000, balanceAfter: 995000, memo: "4월 연습실 4회", category: "대관료", proofs: [{ id: "pf-t02", name: "대관료_4월.pdf", mime: "application/pdf" }], proofDataUrl: placeholderImageDataUrl("대관료", "4월 연습실 4회") },
+  { id: "t03", occurredOn: "2026-04-11", title: "연습 후 야식", type: "출금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: -28400, balanceAfter: 966600, memo: "김밥·음료 32인분", category: "야식", proofs: [{ id: "pf-t03", name: "야식_0411.jpg", mime: "image/jpeg" }], proofDataUrl: placeholderImageDataUrl("야식", "김밥·음료 32인분") },
   { id: "t04", occurredOn: "2026-04-16", title: "악보 인쇄", type: "출금", institution: "신한", accountMasked: "110-***-******", amount: -12800, balanceAfter: 953800, memo: "파트보 추가 인쇄", category: "기타" },
-  { id: "t05", occurredOn: "2026-04-20", title: "버스 대절 계약금", type: "출금", institution: "신한", accountMasked: "110-***-******", amount: -85000, balanceAfter: 868800, memo: "봄 공연 이동", category: "교통", proofName: "버스대절_계약.pdf", proofMime: "application/pdf", proofDataUrl: placeholderImageDataUrl("버스 대절", "봄 공연 이동") },
+  { id: "t05", occurredOn: "2026-04-20", title: "버스 대절 계약금", type: "출금", institution: "신한", accountMasked: "110-***-******", amount: -85000, balanceAfter: 868800, memo: "봄 공연 이동", category: "교통", proofs: [{ id: "pf-t05", name: "버스대절_계약.pdf", mime: "application/pdf" }], proofDataUrl: placeholderImageDataUrl("버스 대절", "봄 공연 이동") },
   { id: "t06", occurredOn: "2026-04-24", title: "공연 의상 대여", type: "출금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: -45000, balanceAfter: 823800, memo: "블랙 정장 8벌", category: "의상" },
   { id: "t07", occurredOn: "2026-04-28", title: "동문 후원금", type: "입금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: 200000, balanceAfter: 1_023_800, memo: "19학번 동문회", category: "기타" },
   { id: "t08", occurredOn: "2026-04-30", title: "피아노 조율", type: "출금", institution: "신한", accountMasked: "110-***-******", amount: -60000, balanceAfter: 963800, memo: "대강당 연습용", category: "기타" },
   { id: "t09", occurredOn: "2026-05-01", title: "5월 회비 입금", type: "입금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: 360000, balanceAfter: 1_323_800, memo: "12명 입금 확인", category: "회비" },
-  { id: "t10", occurredOn: "2026-05-02", title: "현수막·포스터", type: "출금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: -39800, balanceAfter: 1_284_000, memo: "정문 현수막 1, 포스터 40", category: "기타", proofName: "현수막_견적.pdf", proofMime: "application/pdf", proofDataUrl: placeholderImageDataUrl("현수막 견적", "정문 현수막 1, 포스터 40") },
+  { id: "t10", occurredOn: "2026-05-02", title: "현수막·포스터", type: "출금", institution: "카카오뱅크", accountMasked: "3333-**-******", amount: -39800, balanceAfter: 1_284_000, memo: "정문 현수막 1, 포스터 40", category: "기타", proofs: [{ id: "pf-t10", name: "현수막_견적.pdf", mime: "application/pdf" }], proofDataUrl: placeholderImageDataUrl("현수막 견적", "정문 현수막 1, 포스터 40") },
 ];
 
 export const memberTrend = [

@@ -1,19 +1,22 @@
-export type ProofFields = {
-  proofName?: string;
-  proofMime?: string;
-  proofDataUrl?: string;
-};
+import type { Transaction, TxProof } from "./types";
 
-export const EMPTY_PROOF: ProofFields = {
-  proofName: undefined,
-  proofMime: undefined,
-  proofDataUrl: undefined,
-};
-
-const MAX_PROOF_BYTES = 1.5 * 1024 * 1024;
+const MAX_PROOF_BYTES = 8 * 1024 * 1024;
 const IMAGE_MAX_EDGE = 1280;
 
 export type ProofKind = "image" | "pdf" | "other" | "none";
+
+export function txProofs(row: Pick<Transaction, "id" | "proofs" | "proofName" | "proofMime">): TxProof[] {
+  if (Array.isArray(row.proofs)) return row.proofs;
+  if (row.proofName) {
+    return [{ id: `pf-${row.id}`, name: row.proofName, mime: row.proofMime || "" }];
+  }
+  return [];
+}
+
+export function persistableTransaction(row: Transaction): Transaction {
+  const { proofName: _name, proofMime: _mime, proofDataUrl: _data, ...rest } = row;
+  return { ...rest, proofs: txProofs(row) };
+}
 
 export function proofKind(name?: string, mime?: string): ProofKind {
   if (!name && !mime) return "none";
@@ -24,19 +27,37 @@ export function proofKind(name?: string, mime?: string): ProofKind {
   return "other";
 }
 
-export function isImageProofData(dataUrl?: string, mime?: string) {
-  if (dataUrl?.startsWith("data:image/")) return true;
-  return Boolean(dataUrl && (mime ?? "").startsWith("image/"));
+export function isImageBlob(blob?: Blob, mime?: string) {
+  if (blob?.type.startsWith("image/")) return true;
+  return (mime ?? "").startsWith("image/");
 }
 
-export async function proofFromFile(file: File): Promise<Required<ProofFields>> {
+export async function fileToProof(file: File): Promise<{ meta: TxProof; blob: Blob }> {
   if (file.size > MAX_PROOF_BYTES) {
-    throw new Error("증빙은 1.5MB 이하만 올릴 수 있어요");
+    throw new Error("증빙은 8MB 이하만 올릴 수 있어요");
   }
-  const proofMime = file.type || guessMime(file.name);
-  const kind = proofKind(file.name, proofMime);
-  const proofDataUrl = kind === "image" ? await compressImage(file) : await readAsDataUrl(file);
-  return { proofName: file.name, proofMime, proofDataUrl };
+  const mime = file.type || guessMime(file.name);
+  const kind = proofKind(file.name, mime);
+  const blob = kind === "image" ? await compressImage(file) : file.slice(0, file.size, mime);
+  return {
+    meta: {
+      id: newProofId(),
+      name: file.name,
+      mime: blob.type || mime,
+    },
+    blob,
+  };
+}
+
+export function dataUrlToBlob(dataUrl: string, mime?: string): Blob {
+  const comma = dataUrl.indexOf(",");
+  const head = comma >= 0 ? dataUrl.slice(0, comma) : "";
+  const body = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const binary = /;base64/i.test(head) ? atob(body) : decodeURIComponent(body);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  const type = mime || head.match(/data:([^;,]+)/)?.[1] || "application/octet-stream";
+  return new Blob([bytes], { type });
 }
 
 export function placeholderImageDataUrl(title: string, caption: string) {
@@ -54,6 +75,10 @@ export function placeholderImageDataUrl(title: string, caption: string) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function newProofId() {
+  return `pf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function guessMime(name: string) {
   const lower = name.toLowerCase();
   if (lower.endsWith(".pdf")) return "application/pdf";
@@ -65,20 +90,11 @@ function guessMime(name: string) {
   return "application/octet-stream";
 }
 
-function readAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("파일을 읽지 못했어요"));
-    reader.readAsDataURL(file);
-  });
-}
-
 function compressImage(file: File) {
   if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
-    return readAsDataUrl(file);
+    return Promise.resolve(file.slice(0, file.size, "image/svg+xml"));
   }
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<Blob>((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
@@ -97,12 +113,22 @@ function compressImage(file: File) {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
       ctx.drawImage(image, 0, 0, width, height);
-      URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/jpeg", 0.78));
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(objectUrl);
+          if (!blob) {
+            reject(new Error("이미지를 읽지 못했어요"));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        0.78,
+      );
     };
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      readAsDataUrl(file).then(resolve, reject);
+      resolve(file.slice(0, file.size, file.type || "image/jpeg"));
     };
     image.src = objectUrl;
   });

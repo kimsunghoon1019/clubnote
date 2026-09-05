@@ -65,6 +65,12 @@ export type Attendance = {
   status: AttendanceStatus;
 };
 
+export type TxProof = {
+  id: string;
+  name: string;
+  mime: string;
+};
+
 export type Transaction = {
   id: string;
   occurredOn: string;
@@ -77,6 +83,7 @@ export type Transaction = {
   balanceAfter: number;
   memo: string;
   category: string;
+  proofs?: TxProof[];
   proofName?: string;
   proofMime?: string;
   proofDataUrl?: string;

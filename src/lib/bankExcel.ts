@@ -1,7 +1,10 @@
 import { decryptOfficeWorkbook, isEncryptedOffice, WrongPasswordError } from "./officeDecrypt";
 import type { Transaction, TxType } from "./types";
 
-export type ParsedBankTx = Omit<Transaction, "id" | "category" | "proofName" | "proofMime" | "proofDataUrl">;
+export type ParsedBankTx = Omit<
+  Transaction,
+  "id" | "category" | "proofs" | "proofName" | "proofMime" | "proofDataUrl"
+>;
 
 const DATE_HEADERS = ["거래일시", "거래일자", "거래일", "일자", "날짜", "일시"];
 const TYPE_HEADERS = ["거래유형", "거래구분", "구분", "유형"];

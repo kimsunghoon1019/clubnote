@@ -1,6 +1,6 @@
 "use client";
 
-import { ProofThumb } from "@/components/finance/ProofPreview";
+import { ProofThumbs } from "@/components/finance/ProofPreview";
 import { TransactionRail } from "@/components/finance/TransactionRail";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -15,6 +15,7 @@ import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
+import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { Transaction, TxType } from "@/lib/types";
 import { Upload } from "lucide-react";
@@ -203,9 +204,7 @@ export function FinanceView() {
     {
       key: "proof",
       header: "증빙",
-      render: (row) => (
-        <ProofThumb name={row.proofName} mime={row.proofMime} dataUrl={row.proofDataUrl} />
-      ),
+      render: (row) => <ProofThumbs proofs={txProofs(row)} />,
     },
   ];
 
