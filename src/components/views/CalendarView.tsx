@@ -1,5 +1,6 @@
 "use client";
 
+import { DateTimeRangeField, type DateTimeRangeValue } from "@/components/ui/DateTimeRangeField";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -7,7 +8,7 @@ import { EVENT_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import {
   formatDateKo,
-  formatTimeRange,
+  formatEventTime,
   formatWeekday,
   parseISODate,
   toISODate,
@@ -167,7 +168,7 @@ export function CalendarView() {
                       key={event.id}
                       className="block truncate rounded-[6px] bg-brand-soft px-1.5 py-0.5 text-[11px] text-brand-text"
                     >
-                      {event.startTime} {event.title.replace("정기", "")}
+                      {event.allDay ? event.title.replace("정기", "") : `${event.startTime} ${event.title.replace("정기", "")}`}
                     </span>
                   ))}
                 </div>
@@ -223,7 +224,7 @@ export function CalendarView() {
                         {isPracticeEvent(active) ? <Pill tone="brand">출석대상</Pill> : null}
                       </div>
                       <p className="mt-3 text-[13px] text-sub">
-                        {formatTimeRange(active.startTime, active.endTime)} · {active.place}
+                        {formatEventTime(active)} · {active.place}
                       </p>
                       {active.preview ? <p className="mt-2 text-[14px] leading-6 text-ink">{active.preview}</p> : null}
                       <div className="mt-5 rounded-btn border border-dashed border-line px-3 py-3">
@@ -311,9 +312,13 @@ function EditEvent({
   const [type, setType] = useState(event.type);
   const [place, setPlace] = useState(event.place);
   const [preview, setPreview] = useState(event.preview);
-  const [startTime, setStartTime] = useState(event.startTime);
-  const [endTime, setEndTime] = useState(event.endTime);
-  const [date, setDate] = useState(event.date);
+  const [range, setRange] = useState<DateTimeRangeValue>({
+    startDate: event.date,
+    endDate: event.endDate ?? event.date,
+    startTime: event.startTime || "19:00",
+    endTime: event.endTime || "21:00",
+    allDay: Boolean(event.allDay),
+  });
   return (
     <div className="space-y-2">
       <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -322,15 +327,27 @@ function EditEvent({
           <option key={item}>{item}</option>
         ))}
       </select>
-      <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      <div className="grid grid-cols-2 gap-2">
-        <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-        <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-      </div>
+      <DateTimeRangeField value={range} onChange={setRange} />
       <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={place} onChange={(e) => setPlace(e.target.value)} />
       <textarea className="min-h-[72px] w-full rounded-btn border border-line px-3 py-2 text-[14px]" value={preview} onChange={(e) => setPreview(e.target.value)} />
       <div className="flex gap-2">
-        <PrimaryButton onClick={() => onSave({ title, type, place, preview, startTime, endTime, date })}>저장</PrimaryButton>
+        <PrimaryButton
+          onClick={() =>
+            onSave({
+              title,
+              type,
+              place,
+              preview,
+              startTime: range.startTime,
+              endTime: range.endTime,
+              date: range.startDate,
+              endDate: range.endDate !== range.startDate ? range.endDate : undefined,
+              allDay: range.allDay,
+            })
+          }
+        >
+          저장
+        </PrimaryButton>
         <GhostButton onClick={onCancel}>취소</GhostButton>
       </div>
     </div>

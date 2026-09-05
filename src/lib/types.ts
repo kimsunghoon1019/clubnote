@@ -41,12 +41,14 @@ export type ChartNote = {
 export type ClubEvent = {
   id: string;
   date: string;
+  endDate?: string;
   title: string;
   type: EventType;
   place: string;
   preview: string;
   startTime: string;
   endTime: string;
+  allDay?: boolean;
   attachmentName?: string;
 };
 

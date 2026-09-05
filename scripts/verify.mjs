@@ -36,10 +36,20 @@ await page.screenshot({ path: "screenshots/calendar.png" });
 const notice = await page.getByText("연습 일정 공지").count();
 const may2Selected = await page.locator("text=5월 2일").count();
 
+const eventDialog = page.getByRole("dialog", { name: "일정 생성" });
 await page.getByRole("button", { name: "일정 생성" }).first().click();
 await page.waitForTimeout(200);
-await page.locator('input[type="date"]').fill("2026-09-15");
-await page.getByRole("button", { name: "일정 생성" }).last().click();
+await eventDialog.getByRole("button", { name: /^시작 날짜/ }).click();
+const datePicker = eventDialog.locator("[data-date-picker]");
+await datePicker.waitFor();
+for (let i = 0; i < 24; i++) {
+  const month = await datePicker.getAttribute("data-month");
+  if (month === "2026-09") break;
+  if ((month ?? "") < "2026-09") await datePicker.getByRole("button", { name: "다음 달" }).click();
+  else await datePicker.getByRole("button", { name: "이전 달" }).click();
+}
+await eventDialog.getByRole("button", { name: "2026-09-15" }).click();
+await eventDialog.getByRole("button", { name: "일정 생성" }).click();
 await page.waitForTimeout(500);
 
 await page.goto("http://localhost:3000/attendance", { waitUntil: "networkidle" });

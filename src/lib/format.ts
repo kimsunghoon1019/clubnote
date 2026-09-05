@@ -67,6 +67,25 @@ export function formatTimeRange(start: string, end: string) {
   return end ? `${start}–${end}` : start;
 }
 
+export function formatDateWeekday(iso: string) {
+  return `${formatDateKo(iso)} (${formatWeekday(iso)})`;
+}
+
+export function formatTimeKo(hhmm: string) {
+  if (!hhmm) return "";
+  const [hStr, mStr = "00"] = hhmm.split(":");
+  const hour = Number(hStr);
+  if (!Number.isFinite(hour)) return hhmm;
+  const period = hour < 12 ? "오전" : "오후";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${period} ${hour12}:${mStr.padStart(2, "0")}`;
+}
+
+export function formatEventTime(event: { startTime: string; endTime: string; allDay?: boolean }) {
+  if (event.allDay) return "하루 종일";
+  return formatTimeRange(event.startTime, event.endTime);
+}
+
 export function formatChartStamp(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;

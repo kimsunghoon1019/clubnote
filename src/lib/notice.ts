@@ -1,4 +1,4 @@
-import { formatDateKo, formatTimeRange, formatWeekday, startOfWeekMonday, toISODate, todayISO } from "./format";
+import { formatDateKo, formatEventTime, formatWeekday, startOfWeekMonday, toISODate, todayISO } from "./format";
 import { practiceEvents } from "./stats";
 import type { ClubEvent } from "./types";
 
@@ -21,7 +21,7 @@ export function practiceNoticeText(events: ClubEvent[], today = todayISO()) {
     return `${header}\n\n이번 주는 예정된 연습 일정이 없습니다.\n\n${footer}`;
   }
   const lines = week.map((event) => {
-    const time = formatTimeRange(event.startTime, event.endTime);
+    const time = formatEventTime(event);
     return `${formatDateKo(event.date)} (${formatWeekday(event.date)}) ${time} ${event.place}`.replace(/\s+/g, " ").trim();
   });
   return `${header}\n\n${lines.join("\n")}\n\n${footer}`;
