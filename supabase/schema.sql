@@ -36,12 +36,14 @@ create table if not exists public.members (
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   date date not null,
+  end_date date,
   title text not null,
   type text,
   place text,
   preview text,
   start_time text default '19:00',
   end_time text default '21:00',
+  all_day boolean default false,
   attachment_path text
 );
 
@@ -64,7 +66,7 @@ create table if not exists public.attendance (
   id uuid primary key default gen_random_uuid(),
   event_id uuid references public.events(id) on delete cascade,
   member_id uuid references public.members(id) on delete cascade,
-  status text check (status in ('출석','결석','지각','공결')),
+  status text check (status in ('출석','미통보지각','통보지각','통보결석','미통보결석')),
   unique (event_id, member_id)
 );
 

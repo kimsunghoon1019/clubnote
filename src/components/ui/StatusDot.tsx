@@ -1,11 +1,13 @@
+import { ATTENDANCE_STATUS_META } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import type { AttendanceStatus } from "@/lib/types";
 
 export const STATUS_COLOR: Record<AttendanceStatus, string> = {
-  출석: "var(--up)",
-  결석: "var(--down)",
-  지각: "var(--warn)",
-  공결: "var(--text-sub)",
+  출석: ATTENDANCE_STATUS_META.출석.color,
+  미통보지각: ATTENDANCE_STATUS_META.미통보지각.color,
+  통보지각: ATTENDANCE_STATUS_META.통보지각.color,
+  통보결석: ATTENDANCE_STATUS_META.통보결석.color,
+  미통보결석: ATTENDANCE_STATUS_META.미통보결석.color,
 };
 
 export function StatusDot({ status, className }: { status: AttendanceStatus; className?: string }) {

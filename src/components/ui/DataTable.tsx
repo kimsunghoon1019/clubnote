@@ -23,6 +23,7 @@ export function DataTable<T extends { id: string }>({
   onToggle,
   onToggleAll,
   empty,
+  tableClassName,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -34,13 +35,14 @@ export function DataTable<T extends { id: string }>({
   onToggle?: (id: string) => void;
   onToggleAll?: () => void;
   empty?: ReactNode;
+  tableClassName?: string;
 }) {
   const allSelected = Boolean(rows.length && selectedIds && rows.every((row) => selectedIds.includes(row.id)));
   const someSelected = Boolean(selectedIds && selectedIds.length > 0 && !allSelected);
 
   return (
     <div className="overflow-auto scrollbar-thin">
-      <table className="w-full min-w-[760px] border-collapse text-table">
+      <table className={cn("w-full min-w-[760px] border-collapse text-table", tableClassName)}>
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="border-b border-line-soft text-faint">
             {onToggle ? (

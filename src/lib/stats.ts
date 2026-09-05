@@ -1,3 +1,4 @@
+import { ATTENDANCE_STATUSES, isPresentStatus } from "./constants";
 import { todayISO, weekdayToPracticeDay, formatWeekday } from "./format";
 import type { Attendance, AttendanceStatus, ClubEvent, Member, PracticeDay } from "./types";
 
@@ -24,21 +25,31 @@ export function membersForEvent(members: Member[], event: ClubEvent) {
   return members.filter((member) => isScheduledFor(member, event));
 }
 
+export function emptyStatusCounts(): Record<AttendanceStatus, number> {
+  return Object.fromEntries(ATTENDANCE_STATUSES.map((status) => [status, 0])) as Record<AttendanceStatus, number>;
+}
+
 export function attendanceRate(records: Attendance[]) {
-  const counted = records.filter((row) => row.status !== "공결");
-  if (counted.length === 0) return 0;
-  const present = counted.filter((row) => row.status === "출석" || row.status === "지각").length;
-  return (present / counted.length) * 100;
+  if (records.length === 0) return 0;
+  const present = records.filter((row) => isPresentStatus(row.status)).length;
+  return (present / records.length) * 100;
+}
+
+export function rosterAttendanceRate(members: Member[], records: Attendance[]) {
+  if (members.length === 0) return 0;
+  const map = new Map(records.map((row) => [row.memberId, row.status]));
+  const present = members.filter((member) => {
+    const status = map.get(member.id);
+    return Boolean(status && isPresentStatus(status));
+  }).length;
+  return (present / members.length) * 100;
 }
 
 export function countByStatus(records: Attendance[]) {
-  return records.reduce(
-    (acc, row) => {
-      acc[row.status] += 1;
-      return acc;
-    },
-    { 출석: 0, 결석: 0, 지각: 0, 공결: 0 } as Record<AttendanceStatus, number>,
-  );
+  return records.reduce((acc, row) => {
+    acc[row.status] += 1;
+    return acc;
+  }, emptyStatusCounts());
 }
 
 function recordOf(attendance: Attendance[], eventId: string, memberId: string) {
@@ -71,7 +82,7 @@ export function participationScore(
   if (held.length === 0) return 0;
   const joined = held.filter((event) => {
     const status = recordOf(attendance, event.id, member.id)?.status;
-    return status === "출석" || status === "지각";
+    return Boolean(status && isPresentStatus(status));
   });
   return joined.length / held.length;
 }
@@ -88,12 +99,18 @@ export function categoryAttendance(
   members: Member[],
   records: Attendance[],
 ) {
-  const ids = new Set(members.filter((member) => member.category === category).map((m) => m.id));
+  const catMembers = members.filter((member) => member.category === category);
+  const ids = new Set(catMembers.map((m) => m.id));
   const rows = records.filter((row) => ids.has(row.memberId));
+  const present = catMembers.filter((member) => {
+    const status = rows.find((row) => row.memberId === member.id)?.status;
+    return Boolean(status && isPresentStatus(status));
+  }).length;
   return {
-    rate: attendanceRate(rows),
+    rate: catMembers.length === 0 ? 0 : (present / catMembers.length) * 100,
     counts: countByStatus(rows),
-    total: rows.length,
+    total: catMembers.length,
+    unchecked: Math.max(0, catMembers.length - rows.length),
   };
 }
 

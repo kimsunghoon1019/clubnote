@@ -168,17 +168,19 @@ export const events: ClubEvent[] = [...extraEvents, ...generatePracticeEvents()]
 
 function statusFor(member: Member, event: ClubEvent, index: number): AttendanceStatus {
   if (member.name === "오세훈") return "출석";
-  if (member.name === "조하준" && weekdayToPracticeDay(event.date) === "토") return "결석";
-  if (member.name === "강태민" && weekdayToPracticeDay(event.date) === "목") return "지각";
+  if (member.name === "조하준" && weekdayToPracticeDay(event.date) === "토") return "미통보결석";
+  if (member.name === "강태민" && weekdayToPracticeDay(event.date) === "목") return "미통보지각";
   const key = (member.id.charCodeAt(1) + event.date.charCodeAt(8) + index) % 19;
-  if (key === 0) return "결석";
-  if (key === 1) return "지각";
-  if (key === 2) return "공결";
+  if (key === 0) return "미통보결석";
+  if (key === 1) return "미통보지각";
+  if (key === 2) return "통보결석";
+  if (key === 3) return "통보지각";
   return "출석";
 }
 
 export const attendance: Attendance[] = events.flatMap((event) => {
   if (!isPracticeEvent(event)) return [];
+  if (event.date >= todayISO()) return [];
   const day = weekdayToPracticeDay(event.date);
   if (!day) return [];
   return members

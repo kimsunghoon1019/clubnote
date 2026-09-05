@@ -12,7 +12,7 @@ import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction } from "@/lib/bankExcel";
 import { formatDateKo, formatWon, todayISO } from "@/lib/format";
-import { CLUB_NAME } from "@/lib/constants";
+import { CLUB_NAME, isAbsentStatus } from "@/lib/constants";
 import {
   attendanceSpark,
   balanceSpark,
@@ -23,12 +23,13 @@ import {
   unpaidSpark,
 } from "@/lib/seed";
 import {
-  attendanceRate,
   categoryCounts,
   diligenceScore,
   latestPractice,
+  membersForEvent,
   participationScore,
   practiceEvents,
+  rosterAttendanceRate,
   upcomingPractice,
 } from "@/lib/stats";
 import { useClub } from "@/lib/store";
@@ -44,7 +45,7 @@ export function HomeView() {
   const today = todayISO();
   const featuredEvent = latestPractice(events, today);
   const featured = attendance.filter((row) => featuredEvent && row.eventId === featuredEvent.id);
-  const rate = attendanceRate(featured);
+  const rate = rosterAttendanceRate(featuredEvent ? membersForEvent(members, featuredEvent) : [], featured);
   const unpaidMembers = members.filter((m) => m.unpaidFee > 0);
   const unpaidSum = unpaidMembers.reduce((sum, m) => sum + m.unpaidFee, 0);
   const nextEvent = upcomingPractice(events, today) ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
@@ -64,7 +65,7 @@ export function HomeView() {
   const watch = [...members]
     .map((member) => {
       const rows = attendance.filter((row) => row.memberId === member.id);
-      const recentAbsent = rows.filter((row) => row.status === "결석").length;
+      const recentAbsent = rows.filter((row) => isAbsentStatus(row.status)).length;
       return { ...member, recentAbsent, diligence: diligenceScore(member, events, attendance) };
     })
     .sort((a, b) => b.recentAbsent - a.recentAbsent || a.diligence - b.diligence)

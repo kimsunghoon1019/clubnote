@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DEFAULT_CATEGORIES, DEFAULT_ROLES, OPERATOR_NAME, STORAGE_KEY } from "./constants";
+import { DEFAULT_CATEGORIES, DEFAULT_ROLES, OPERATOR_NAME, STORAGE_KEY, normalizeAttendanceStatus } from "./constants";
 import {
   attendance as seedAttendance,
   chartNotes as seedNotes,
@@ -61,7 +61,7 @@ type ClubContextValue = {
   selectAll: (ids: string[]) => void;
   clearSelection: () => void;
   inspectMember: (id: string | null) => void;
-  setAttendanceStatus: (eventId: string, memberId: string, status: AttendanceStatus) => void;
+  setAttendanceStatus: (eventId: string, memberId: string, status: AttendanceStatus | null) => void;
   updateMember: (id: string, patch: Partial<Member>) => void;
   addMember: (input: Omit<Member, "id">) => void;
   removeMembers: (ids: string[]) => void;
@@ -130,7 +130,13 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         })),
       );
       setEvents(data.events);
-      setAttendance(data.attendance);
+      setAttendance(
+        data.attendance.flatMap((row) => {
+          const status = normalizeAttendanceStatus(String(row.status));
+          if (!status) return [];
+          return [{ ...row, status }];
+        }),
+      );
       setNotes(data.notes ?? []);
       setTransactions(data.transactions ?? seedTransactions);
       setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
@@ -171,13 +177,13 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const inspectMember = useCallback((id: string | null) => setInspectedMemberId(id), []);
 
   const setAttendanceStatus = useCallback(
-    (eventId: string, memberId: string, status: AttendanceStatus) => {
+    (eventId: string, memberId: string, status: AttendanceStatus | null) => {
       setAttendance((prev) => {
-        const exists = prev.some((row) => row.eventId === eventId && row.memberId === memberId);
+        const match = (row: Attendance) => row.eventId === eventId && row.memberId === memberId;
+        if (!status) return prev.filter((row) => !match(row));
+        const exists = prev.some(match);
         if (exists) {
-          return prev.map((row) =>
-            row.eventId === eventId && row.memberId === memberId ? { ...row, status } : row,
-          );
+          return prev.map((row) => (match(row) ? { ...row, status } : row));
         }
         return [...prev, { id: uid("a"), eventId, memberId, status }];
       });

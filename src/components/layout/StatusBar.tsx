@@ -2,14 +2,18 @@
 
 import { latestTransaction } from "@/lib/bankExcel";
 import { formatWon, todayISO } from "@/lib/format";
-import { attendanceRate, latestPractice } from "@/lib/stats";
+import { latestPractice, membersForEvent, rosterAttendanceRate } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 
 export function StatusBar() {
-  const { attendance, transactions, events } = useClub();
+  const { attendance, transactions, events, members } = useClub();
   const today = todayISO();
   const featured = latestPractice(events, today);
-  const rate = attendanceRate(attendance.filter((row) => featured && row.eventId === featured.id));
+  const roster = featured ? membersForEvent(members, featured) : [];
+  const rate = rosterAttendanceRate(
+    roster,
+    attendance.filter((row) => featured && row.eventId === featured.id),
+  );
   const balance = latestTransaction(transactions)?.balanceAfter ?? 0;
 
   return (

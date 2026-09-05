@@ -37,13 +37,13 @@ on conflict (id) do nothing;
 insert into public.attendance (event_id, member_id, status)
 select 'e0000000-0000-0000-0000-000000000009', id,
   case name
-    when '오세훈' then '결석'
-    when '조하준' then '결석'
-    when '강태민' then '지각'
-    when '신예린' then '지각'
-    when '서준호' then '지각'
-    when '문채원' then '공결'
-    when '권나연' then '공결'
+    when '오세훈' then '미통보결석'
+    when '조하준' then '미통보결석'
+    when '강태민' then '미통보지각'
+    when '신예린' then '미통보지각'
+    when '서준호' then '통보지각'
+    when '문채원' then '통보결석'
+    when '권나연' then '통보결석'
     else '출석'
   end
 from public.members
