@@ -3,7 +3,6 @@
 import { ChartNotes } from "@/components/ui/ChartNotes";
 import { Avatar } from "@/components/ui/Avatar";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
-import { RolePill } from "@/components/ui/Pill";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { FieldLabel, SelectInput, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
@@ -93,7 +92,17 @@ export function MemberRail({ memberId }: { memberId: string }) {
         <div className="flex items-center gap-2.5">
           <Avatar name={member.name} size={40} />
           <div>
-            <p className="text-[15px] font-semibold">{member.name}</p>
+            <p className="flex items-baseline gap-1.5">
+              <span className="text-[15px] font-semibold">{member.name}</span>
+              {" "}
+              <span className="text-[12px] font-normal text-sub">{member.role}</span>
+              {member.active === false ? (
+                <>
+                  {" "}
+                  <span className="text-[12px] font-normal text-faint">비활동</span>
+                </>
+              ) : null}
+            </p>
             <p className="text-[12px] text-faint">
               <span className="tabular-nums">{member.studentId}</span> · {member.major}
             </p>
@@ -102,15 +111,6 @@ export function MemberRail({ memberId }: { memberId: string }) {
         <button type="button" className="text-[12px] text-faint hover:text-ink" onClick={() => inspectMember(null)}>
           닫기
         </button>
-      </div>
-
-      <div className="mb-4 flex items-center gap-1.5">
-        <RolePill role={member.role} />
-        {member.active === false ? (
-          <span className="inline-flex h-[22px] items-center rounded-[6px] bg-[#F2F4F6] px-2 text-[11px] font-medium text-sub">
-            비활동
-          </span>
-        ) : null}
       </div>
 
       {editing && draft ? (
