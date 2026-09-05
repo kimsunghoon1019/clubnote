@@ -30,8 +30,6 @@ import type { AttendanceStatus, Member } from "@/lib/types";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
-const STATUS_FILTERS: Array<AttendanceStatus | "전체" | "미체크"> = ["전체", ...ATTENDANCE_STATUSES, "미체크"];
-
 export function AttendanceView() {
   const {
     members,
@@ -61,7 +59,7 @@ export function AttendanceView() {
   const fallback =
     latestPractice(events, todayISO()) ?? upcomingPractice(events, todayISO()) ?? practiceList[0];
   const [eventId, setEventId] = useState(fallback?.id ?? "");
-  const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "전체" | "미체크">("전체");
+  const [categoryFilter, setCategoryFilter] = useState("전체");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
@@ -79,6 +77,12 @@ export function AttendanceView() {
     setSelectionAnchorId(null);
     inspectMember(null);
   }, [eventId, inspectMember]);
+
+  useEffect(() => {
+    if (categoryFilter !== "전체" && !categories.includes(categoryFilter)) {
+      setCategoryFilter("전체");
+    }
+  }, [categories, categoryFilter]);
 
   useEffect(() => () => window.clearTimeout(saveFlashTimer.current), []);
 
@@ -98,12 +102,8 @@ export function AttendanceView() {
         ...member,
         status: recordMap.get(member.id) as AttendanceStatus | undefined,
       }))
-      .filter((row) => {
-        if (statusFilter === "전체") return true;
-        if (statusFilter === "미체크") return !row.status;
-        return row.status === statusFilter;
-      });
-  }, [roster, recordMap, statusFilter]);
+      .filter((row) => categoryFilter === "전체" || row.category === categoryFilter);
+  }, [roster, recordMap, categoryFilter]);
 
   const targetRecords = records.filter((row) => roster.some((m) => m.id === row.memberId));
   const counts = countByStatus(targetRecords);
@@ -253,7 +253,7 @@ export function AttendanceView() {
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto px-2 scrollbar-thin">
+        <div className="flex-1 overflow-auto px-2 pt-1.5 pb-1.5 scrollbar-thin">
           {practiceList.map((item) => {
             const active = item.id === event.id;
             return (
@@ -298,9 +298,18 @@ export function AttendanceView() {
             출석표 보기
           </GhostButton>
           <div className="ml-auto flex flex-wrap items-center gap-1">
-            {STATUS_FILTERS.map((item) => (
-              <FilterChip key={item} active={statusFilter === item} onClick={() => setStatusFilter(item)}>
-                {item === "전체" || item === "미체크" ? item : ATTENDANCE_STATUS_META[item].short}
+            {["전체", ...categories].map((tab) => (
+              <FilterChip
+                key={tab}
+                active={categoryFilter === tab}
+                onClick={() => {
+                  setCategoryFilter(tab);
+                  setSelectedIds([]);
+                  setSelectionAnchorId(null);
+                  inspectMember(null);
+                }}
+              >
+                {tab}
               </FilterChip>
             ))}
           </div>
@@ -314,7 +323,9 @@ export function AttendanceView() {
             onRowClick={handleRowClick}
             empty={
               <span>
-                이 요일 출석 대상자가 없어요. 회원관리에서 연습요일을 켜 주세요.
+                {categoryFilter === "전체"
+                  ? "이 요일 출석 대상자가 없어요. 회원관리에서 연습요일을 켜 주세요."
+                  : "이 분류에 출석 대상자가 없어요."}
               </span>
             }
           />
