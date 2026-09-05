@@ -2,6 +2,7 @@
 
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
+import { AttendanceSheetModal } from "@/components/modals/AttendanceSheetModal";
 import { AttendanceToggle, StatusMixBar } from "@/components/ui/AttendanceToggle";
 import { Avatar } from "@/components/ui/Avatar";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -50,6 +51,7 @@ export function AttendanceView() {
   const fallback = latestPractice(events, todayISO()) ?? practiceList[practiceList.length - 1];
   const [eventId, setEventId] = useState(fallback?.id ?? "");
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | "전체" | "미체크">("전체");
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     if (!practiceList.some((item) => item.id === eventId) && fallback) {
@@ -203,6 +205,9 @@ export function AttendanceView() {
           <span className="text-[12px] text-faint">
             {formatWeekday(event.date)}요일 · 미체크 {unchecked}명
           </span>
+          <GhostButton className="h-8 px-3 text-[12px]" onClick={() => setSheetOpen(true)}>
+            출석표 보기
+          </GhostButton>
           <div className="ml-auto flex flex-wrap items-center gap-1">
             {STATUS_FILTERS.map((item) => (
               <FilterChip key={item} active={statusFilter === item} onClick={() => setStatusFilter(item)}>
@@ -265,6 +270,8 @@ export function AttendanceView() {
           </RailSection>
         )}
       </RightRail>
+
+      <AttendanceSheetModal open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </>
   );
 }

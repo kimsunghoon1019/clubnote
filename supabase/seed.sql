@@ -75,21 +75,6 @@ insert into public.events (id, date, title, type, place, preview, attachment_pat
   ('e0000000-0000-0000-0000-000000000011', '2026-05-16', '봄 정기연주', '공연', '대학 대강당', '19:00 개막', null)
 on conflict (id) do nothing;
 
-insert into public.attendance (event_id, member_id, status)
-select 'e0000000-0000-0000-0000-000000000009', id,
-  case name
-    when '오세훈' then '미통보결석'
-    when '조하준' then '미통보결석'
-    when '강태민' then '미통보지각'
-    when '신예린' then '미통보지각'
-    when '서준호' then '통보지각'
-    when '문채원' then '통보결석'
-    when '권나연' then '통보결석'
-    else '출석'
-  end
-from public.members
-on conflict (event_id, member_id) do nothing;
-
 insert into public.transactions (occurred_on, title, type, institution, account_masked, amount, balance_after, memo, category, proof_path) values
   ('2026-04-03', '4월 회비 입금', '입금', '카카오뱅크', '3333-**-******', 420000, 1145000, '48명 중 14명 선입금', '회비', null),
   ('2026-04-07', '학생회관 대관료', '출금', '신한', '110-***-******', -150000, 995000, '4월 연습실 4회', '대관료', '대관료_4월.pdf'),

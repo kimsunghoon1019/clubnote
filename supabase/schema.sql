@@ -71,7 +71,7 @@ create table if not exists public.attendance (
   id uuid primary key default gen_random_uuid(),
   event_id uuid references public.events(id) on delete cascade,
   member_id uuid references public.members(id) on delete cascade,
-  status text check (status in ('출석','미통보지각','통보지각','통보결석','미통보결석')),
+  status text check (status in ('출석','통보지각','미통보지각','통보결석','미통보결석')),
   unique (event_id, member_id)
 );
 

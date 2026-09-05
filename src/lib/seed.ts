@@ -1,9 +1,7 @@
 import { OPERATOR_NAME, PLACE } from "./constants";
-import { collegeFromMajor, inferredBirthDate, toISODate, todayISO, weekdayToPracticeDay } from "./format";
-import { isPracticeEvent } from "./stats";
+import { collegeFromMajor, inferredBirthDate, toISODate, todayISO } from "./format";
 import type {
   Attendance,
-  AttendanceStatus,
   ChartNote,
   ClubEvent,
   EventType,
@@ -178,32 +176,7 @@ export const events: ClubEvent[] = [...extraEvents, ...generatePracticeEvents()]
   a.date.localeCompare(b.date),
 );
 
-function statusFor(member: Member, event: ClubEvent, index: number): AttendanceStatus {
-  if (member.name === "오세훈") return "출석";
-  if (member.name === "조하준" && weekdayToPracticeDay(event.date) === "토") return "미통보결석";
-  if (member.name === "강태민" && weekdayToPracticeDay(event.date) === "목") return "미통보지각";
-  const key = (member.id.charCodeAt(1) + event.date.charCodeAt(8) + index) % 19;
-  if (key === 0) return "미통보결석";
-  if (key === 1) return "미통보지각";
-  if (key === 2) return "통보결석";
-  if (key === 3) return "통보지각";
-  return "출석";
-}
-
-export const attendance: Attendance[] = events.flatMap((event) => {
-  if (!isPracticeEvent(event)) return [];
-  if (event.date >= todayISO()) return [];
-  const day = weekdayToPracticeDay(event.date);
-  if (!day) return [];
-  return members
-    .filter((member) => member.practiceDays.includes(day))
-    .map((member, index) => ({
-      id: `a-${event.id}-${member.id}`,
-      eventId: event.id,
-      memberId: member.id,
-      status: statusFor(member, event, index),
-    }));
-});
+export const attendance: Attendance[] = [];
 
 export const chartNotes: ChartNote[] = [
   {
