@@ -92,6 +92,10 @@ export function AddMemberModal() {
           />
         </div>
         <div>
+          <FieldLabel>단과대학</FieldLabel>
+          <TextInput value={college} onChange={(e) => setCollege(e.target.value)} placeholder="음악대학" />
+        </div>
+        <div>
           <FieldLabel>전공</FieldLabel>
           <TextInput
             value={major}
@@ -102,10 +106,6 @@ export function AddMemberModal() {
               if (inferred) setCollege(inferred);
             }}
           />
-        </div>
-        <div>
-          <FieldLabel>단과대학</FieldLabel>
-          <TextInput value={college} onChange={(e) => setCollege(e.target.value)} placeholder="음악대학" />
         </div>
         <div className="col-span-2">
           <FieldLabel>연락처</FieldLabel>

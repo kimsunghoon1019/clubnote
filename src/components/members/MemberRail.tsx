@@ -25,6 +25,8 @@ type MemberDraft = {
   college: string;
   phone: string;
   gender: Gender;
+  category: string;
+  role: string;
 };
 
 function draftFrom(member: {
@@ -36,6 +38,8 @@ function draftFrom(member: {
   college: string;
   phone: string;
   gender: Gender;
+  category: string;
+  role: string;
 }): MemberDraft {
   return {
     name: member.name,
@@ -46,6 +50,8 @@ function draftFrom(member: {
     college: member.college,
     phone: member.phone,
     gender: member.gender,
+    category: member.category,
+    role: member.role,
   };
 }
 
@@ -118,6 +124,30 @@ export function MemberRail({ memberId }: { memberId: string }) {
             />
           </div>
           <div>
+            <FieldLabel>분류</FieldLabel>
+            <SelectInput
+              className="h-8 text-[13px]"
+              value={draft.category}
+              onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+            >
+              {categories.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </SelectInput>
+          </div>
+          <div>
+            <FieldLabel>직책</FieldLabel>
+            <SelectInput
+              className="h-8 text-[13px]"
+              value={draft.role}
+              onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+            >
+              {roles.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </SelectInput>
+          </div>
+          <div>
             <FieldLabel>나이</FieldLabel>
             <TextInput
               className="h-8 text-[13px]"
@@ -165,6 +195,14 @@ export function MemberRail({ memberId }: { memberId: string }) {
             />
           </div>
           <div>
+            <FieldLabel>단과대학</FieldLabel>
+            <TextInput
+              className="h-8 text-[13px]"
+              value={draft.college}
+              onChange={(e) => setDraft({ ...draft, college: e.target.value })}
+            />
+          </div>
+          <div>
             <FieldLabel>전공</FieldLabel>
             <TextInput
               className="h-8 text-[13px]"
@@ -180,14 +218,6 @@ export function MemberRail({ memberId }: { memberId: string }) {
               }}
             />
           </div>
-          <div>
-            <FieldLabel>단과대학</FieldLabel>
-            <TextInput
-              className="h-8 text-[13px]"
-              value={draft.college}
-              onChange={(e) => setDraft({ ...draft, college: e.target.value })}
-            />
-          </div>
           <div className="col-span-2">
             <FieldLabel>연락처</FieldLabel>
             <TextInput
@@ -199,8 +229,8 @@ export function MemberRail({ memberId }: { memberId: string }) {
         </div>
       ) : (
         <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-          <Info label="전공" value={member.major} />
           <Info label="단과대학" value={member.college || "-"} />
+          <Info label="전공" value={member.major} />
           <Info label="분류" value={member.category} />
           <Info label="성별" value={member.gender} />
           <Info label="나이" value={`${member.age}세`} />
@@ -248,19 +278,6 @@ export function MemberRail({ memberId }: { memberId: string }) {
         </div>
       </div>
 
-      <div className="mb-3 space-y-2">
-        <SelectInput value={member.role} onChange={(e) => updateMember(member.id, { role: e.target.value })}>
-          {roles.map((role) => (
-            <option key={role}>{role}</option>
-          ))}
-        </SelectInput>
-        <SelectInput value={member.category} onChange={(e) => updateMember(member.id, { category: e.target.value })}>
-          {categories.map((category) => (
-            <option key={category}>{category}</option>
-          ))}
-        </SelectInput>
-      </div>
-
       <ChartNotes
         notes={memberNotes}
         onAdd={(body) => addChartNote(member.id, body)}
@@ -287,6 +304,8 @@ export function MemberRail({ memberId }: { memberId: string }) {
                   college: draft.college.trim() || collegeFromMajor(draft.major) || member.college,
                   phone: draft.phone.trim(),
                   gender: draft.gender,
+                  category: draft.category,
+                  role: draft.role,
                 });
                 setEditing(false);
                 setDraft(null);
