@@ -144,10 +144,13 @@ export function CalendarView() {
             const isToday = cell.iso === today;
             const isSelected = cell.iso === selected;
             const dayEvents = byDate.get(cell.iso) ?? [];
+            const hasPractice = dayEvents.some(isPracticeEvent);
+            const showDate = isToday || hasPractice;
             return (
               <button
                 key={cell.iso}
                 type="button"
+                aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
                 onClick={() => {
                   setSelected(cell.iso);
                   setActiveId(dayEvents[0]?.id ?? null);
@@ -158,15 +161,19 @@ export function CalendarView() {
                   isSelected && "bg-[#F7FBFF]",
                 )}
               >
-                <span
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px]",
-                    isToday && "bg-brand font-semibold text-white",
-                    !isToday && "text-ink",
-                  )}
-                >
-                  {cell.day}
-                </span>
+                {showDate ? (
+                  <span
+                    className={cn(
+                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px]",
+                      isToday && "bg-brand font-semibold text-white",
+                      !isToday && "text-ink",
+                    )}
+                  >
+                    {cell.day}
+                  </span>
+                ) : (
+                  <span className="inline-flex h-6 w-6" />
+                )}
                 <div className="mt-1 space-y-1">
                   {dayEvents.slice(0, 3).map((event) => (
                     <span

@@ -1,14 +1,22 @@
 "use client";
 
 import { AttendanceToggle } from "@/components/ui/AttendanceToggle";
+import { GhostButton } from "@/components/ui/GhostButton";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { cn } from "@/lib/cn";
+import {
+  attendanceRecordMap,
+  downloadAttendanceSheetXlsx,
+  practiceMonthGroups,
+  practiceSheetEvents,
+  sheetMembers,
+} from "@/lib/attendanceSheet";
 import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_META } from "@/lib/constants";
 import { formatDateKo, formatWeekday, todayISO } from "@/lib/format";
-import { isActive, isPracticeEvent, isScheduledFor } from "@/lib/stats";
+import { isScheduledFor } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, ClubEvent, Member } from "@/lib/types";
-import { X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -27,39 +35,15 @@ export function AttendanceSheetModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { members, categories, events, attendance, setAttendanceStatus } = useClub();
+  const { members, categories, events, attendance, setAttendanceStatus, toast } = useClub();
   const [edit, setEdit] = useState<EditCell | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const todayRowRef = useRef<HTMLTableRowElement>(null);
+  const todayColRef = useRef<HTMLTableCellElement>(null);
 
-  const practiceList = useMemo(
-    () =>
-      events
-        .filter(isPracticeEvent)
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)),
-    [events],
-  );
-
-  const sheetMembers = useMemo(() => {
-    const catIndex = (category: string) => {
-      const index = categories.indexOf(category);
-      return index === -1 ? 99 : index;
-    };
-    return members
-      .filter(isActive)
-      .slice()
-      .sort((a, b) => catIndex(a.category) - catIndex(b.category) || a.name.localeCompare(b.name, "ko"));
-  }, [members, categories]);
-
-  const recordMap = useMemo(() => {
-    const map = new Map<string, AttendanceStatus>();
-    for (const row of attendance) {
-      map.set(`${row.eventId}:${row.memberId}`, row.status);
-    }
-    return map;
-  }, [attendance]);
-
+  const practiceList = useMemo(() => practiceSheetEvents(events), [events]);
+  const people = useMemo(() => sheetMembers(members, categories), [members, categories]);
+  const recordMap = useMemo(() => attendanceRecordMap(attendance), [attendance]);
+  const monthGroups = useMemo(() => practiceMonthGroups(practiceList), [practiceList]);
   const today = todayISO();
 
   useEffect(() => {
@@ -81,10 +65,19 @@ export function AttendanceSheetModal({
 
   useLayoutEffect(() => {
     if (!open) return;
-    todayRowRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+    todayColRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [open, practiceList.length]);
 
   if (!open) return null;
+
+  const exportSheet = async () => {
+    if (practiceList.length === 0 || people.length === 0) {
+      toast("내보낼 출석표가 없어요");
+      return;
+    }
+    await downloadAttendanceSheetXlsx(members, events, attendance, categories);
+    toast("출석표 엑셀을 내려받았어요");
+  };
 
   return (
     <>
@@ -98,7 +91,7 @@ export function AttendanceSheetModal({
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-line-soft px-5 py-3.5">
           <h2 className="text-[16px] font-semibold text-ink">출석표</h2>
-          <p className="text-[12px] text-faint">열이 회원, 행이 연습 날짜 · 칸을 눌러 수정</p>
+          <p className="text-[12px] text-faint">행이 회원, 열이 연습 날짜 · 칸을 눌러 수정</p>
           <ul className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-sub">
             {ATTENDANCE_STATUSES.map((status) => (
               <li key={status} className="inline-flex items-center gap-1">
@@ -111,6 +104,10 @@ export function AttendanceSheetModal({
               미체크
             </li>
           </ul>
+          <GhostButton className="h-8 shrink-0 px-3 text-[12px]" onClick={() => void exportSheet()}>
+            <Download className="h-3.5 w-3.5" />
+            엑셀로 내보내기
+          </GhostButton>
           <button
             type="button"
             onClick={onClose}
@@ -126,7 +123,7 @@ export function AttendanceSheetModal({
           className="min-h-0 flex-1 overflow-auto scrollbar-thin"
           onScroll={() => setEdit(null)}
         >
-          {practiceList.length === 0 || sheetMembers.length === 0 ? (
+          {practiceList.length === 0 || people.length === 0 ? (
             <p className="px-5 py-10 text-center text-[13px] text-faint">
               연습 일정이나 출석 대상 회원이 없어요.
             </p>
@@ -134,61 +131,74 @@ export function AttendanceSheetModal({
             <table className="min-w-max border-separate border-spacing-0 text-[12px]">
               <thead>
                 <tr>
-                  <th className="sticky left-0 top-0 z-30 w-[88px] border-b border-r border-line-soft bg-white px-2 py-2 text-left text-[11px] font-semibold text-faint">
-                    날짜
+                  <th
+                    rowSpan={2}
+                    className="sticky left-0 top-0 z-30 w-[88px] border-b border-r border-line-soft bg-white px-2 py-2 text-left text-[11px] font-semibold text-faint"
+                  >
+                    이름
                   </th>
-                  {sheetMembers.map((member) => (
+                  {monthGroups.map((group) => (
                     <th
-                      key={member.id}
-                      className="sticky top-0 z-20 w-14 border-b border-line-soft bg-white px-0.5 py-2 text-center font-medium text-ink"
+                      key={group.key}
+                      colSpan={group.count}
+                      className="sticky top-0 z-20 h-8 border-b border-l border-line-soft bg-white px-1 text-center text-[11px] font-semibold text-sub"
                     >
-                      <span className="block truncate">{member.name}</span>
-                      <span className="block text-[10px] font-normal text-faint">{member.category}</span>
+                      {group.label}
                     </th>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {practiceList.map((event) => {
-                  const isToday = event.date === today;
-                  return (
-                    <tr key={event.id} ref={isToday ? todayRowRef : undefined} data-today-practice={isToday ? "true" : undefined}>
+                <tr>
+                  {practiceList.map((event) => {
+                    const isToday = event.date === today;
+                    return (
                       <th
+                        key={event.id}
+                        ref={isToday ? todayColRef : undefined}
+                        data-today-practice={isToday ? "true" : undefined}
                         className={cn(
-                          "sticky left-0 z-10 border-b border-r border-line-soft px-2 py-1.5 text-left font-medium",
+                          "sticky top-8 z-20 w-12 border-b border-l border-line-soft px-0.5 py-1.5 text-center font-medium",
                           isToday ? "bg-brand-soft text-brand-text" : "bg-white text-ink",
                         )}
                       >
-                        <span className="block">{formatDateKo(event.date)}</span>
-                        <span className="block text-[10px] font-normal text-faint">
-                          {formatWeekday(event.date)} {event.startTime}
-                        </span>
+                        <span className="block text-[12px] leading-4">{Number(event.date.slice(8, 10))}</span>
+                        <span className="block text-[10px] font-normal text-faint">{formatWeekday(event.date)}</span>
                       </th>
-                      {sheetMembers.map((member) => (
-                        <SheetCell
-                          key={member.id}
-                          event={event}
-                          member={member}
-                          status={recordMap.get(`${event.id}:${member.id}`)}
-                          editing={edit?.eventId === event.id && edit.memberId === member.id}
-                          onEdit={(rect) =>
-                            setEdit((current) =>
-                              current?.eventId === event.id && current.memberId === member.id
-                                ? null
-                                : {
-                                    eventId: event.id,
-                                    memberId: member.id,
-                                    name: member.name,
-                                    status: recordMap.get(`${event.id}:${member.id}`),
-                                    rect,
-                                  },
-                            )
-                          }
-                        />
-                      ))}
-                    </tr>
-                  );
-                })}
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((member) => (
+                  <tr key={member.id}>
+                    <th className="sticky left-0 z-10 border-b border-r border-line-soft bg-white px-2 py-1.5 text-left font-medium text-ink">
+                      <span className="block truncate">{member.name}</span>
+                      <span className="block text-[10px] font-normal text-faint">{member.category}</span>
+                    </th>
+                    {practiceList.map((event) => (
+                      <SheetCell
+                        key={event.id}
+                        event={event}
+                        member={member}
+                        status={recordMap.get(`${event.id}:${member.id}`)}
+                        today={event.date === today}
+                        editing={edit?.eventId === event.id && edit.memberId === member.id}
+                        onEdit={(rect) =>
+                          setEdit((current) =>
+                            current?.eventId === event.id && current.memberId === member.id
+                              ? null
+                              : {
+                                  eventId: event.id,
+                                  memberId: member.id,
+                                  name: member.name,
+                                  status: recordMap.get(`${event.id}:${member.id}`),
+                                  rect,
+                                },
+                          )
+                        }
+                      />
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
@@ -214,12 +224,14 @@ function SheetCell({
   event,
   member,
   status,
+  today,
   editing,
   onEdit,
 }: {
   event: ClubEvent;
   member: Member;
   status?: AttendanceStatus;
+  today: boolean;
   editing: boolean;
   onEdit: (rect: DOMRect) => void;
 }) {
@@ -227,7 +239,7 @@ function SheetCell({
   const meta = status ? ATTENDANCE_STATUS_META[status] : null;
 
   return (
-    <td className="border-b border-line-soft p-0.5">
+    <td className={cn("border-b border-l border-line-soft p-0.5", today && "bg-brand-soft")}>
       {scheduled ? (
         <button
           type="button"
