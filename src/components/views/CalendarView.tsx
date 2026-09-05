@@ -37,7 +37,7 @@ import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
-import { ChevronLeft, ChevronRight, ClipboardPaste, Copy, Paperclip, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -185,15 +185,10 @@ export function CalendarView() {
       if (key === "c") {
         if (!active || !selected) return;
         event.preventDefault();
-        setClipboard(active);
-        toast("일정을 복사했어요");
+        copyEvent();
       } else if (key === "v") {
-        if (!clipboard || !selected) return;
         event.preventDefault();
-        const created = addEvent(cloneEventOntoDate(clipboard, selected));
-        setActiveId(created.id);
-        setEditing(false);
-        toast("일정을 붙여넣었어요");
+        pasteEvent();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -311,14 +306,6 @@ export function CalendarView() {
                   <button type="button" className="text-brand-text" onClick={() => openCreate(selected)}>
                     추가하기
                   </button>
-                  {clipboard ? (
-                    <>
-                      {" · "}
-                      <button type="button" className="text-brand-text" onClick={pasteEvent}>
-                        붙여넣기
-                      </button>
-                    </>
-                  ) : null}
                 </p>
               )}
             </>
@@ -333,19 +320,8 @@ export function CalendarView() {
           <GhostButton className="flex-1" disabled={!active || !selected} onClick={() => setEditing(true)}>
             수정
           </GhostButton>
-          <GhostButton className="w-9 shrink-0 px-0" disabled={!active || !selected} onClick={copyEvent} aria-label="일정 복사">
-            <Copy className="h-3.5 w-3.5" />
-          </GhostButton>
           <GhostButton
-            className="w-9 shrink-0 px-0"
-            disabled={!clipboard || !selected}
-            onClick={pasteEvent}
-            aria-label="일정 붙여넣기"
-          >
-            <ClipboardPaste className="h-3.5 w-3.5" />
-          </GhostButton>
-          <GhostButton
-            className="w-9 shrink-0 px-0"
+            className="px-3"
             disabled={!active || !selected}
             onClick={() => {
               if (!active) return;
@@ -355,8 +331,9 @@ export function CalendarView() {
               setEditing(false);
               setActiveId(null);
             }}
+            aria-label="일정 삭제"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </GhostButton>
         </div>
       </aside>
