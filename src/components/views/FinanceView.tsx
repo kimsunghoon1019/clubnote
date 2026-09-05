@@ -56,22 +56,23 @@ export function FinanceView() {
   const currentSemester = useMemo(() => duesSemester(), []);
   const priorSemester = useMemo(() => previousSemester(), []);
 
+  const periodRange = period === "당기" ? currentSemester : period === "전기" ? priorSemester : null;
+
   const filtered = useMemo(() => {
-    const range = period === "당기" ? currentSemester : period === "전기" ? priorSemester : null;
     return ordered.filter((row) => {
-      if (range && !inSemester(row.occurredOn, range)) return false;
+      if (periodRange && !inSemester(row.occurredOn, periodRange)) return false;
       if (type !== "전체" && row.type !== type) return false;
       if (category !== "전체" && row.category !== category) return false;
       return true;
     });
-  }, [ordered, period, type, category, currentSemester, priorSemester]);
+  }, [ordered, periodRange, type, category]);
 
-  const semesterRows = useMemo(
-    () => transactions.filter((row) => inSemester(row.occurredOn, currentSemester)),
-    [transactions, currentSemester],
+  const periodRows = useMemo(
+    () => (periodRange ? transactions.filter((row) => inSemester(row.occurredOn, periodRange)) : transactions),
+    [transactions, periodRange],
   );
-  const income = semesterRows.filter((r) => r.type === "입금").reduce((s, r) => s + r.amount, 0);
-  const expense = semesterRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
+  const income = periodRows.filter((r) => r.type === "입금").reduce((s, r) => s + r.amount, 0);
+  const expense = periodRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
   const balance = ordered[0]?.balanceAfter ?? 0;
 
   useEffect(() => {
@@ -224,16 +225,21 @@ export function FinanceView() {
 
   return (
     <>
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
-        <section className="grid grid-cols-3 border-b border-line-soft">
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable] scrollbar-thin" onClick={dismissInspected}>
+        <section className="grid shrink-0 grid-cols-3 border-b border-line-soft">
           <Kpi label="잔액" value={formatWon(balance)} />
-          <Kpi label="수입 (당기)" value={formatSignedWon(income)} up />
-          <Kpi label="지출 (당기)" value={formatSignedWon(expense)} />
+          <Kpi label={`수입 (${period})`} value={formatSignedWon(income)} up />
+          <Kpi label={`지출 (${period})`} value={formatSignedWon(expense)} />
         </section>
 
         <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line-soft px-5 py-1.5">
           {PERIODS.map((item) => (
-            <FilterChip key={item} active={period === item} onClick={() => setPeriod(item)}>
+            <FilterChip
+              key={item}
+              active={period === item}
+              className="w-12 justify-center"
+              onClick={() => setPeriod(item)}
+            >
               {item}
             </FilterChip>
           ))}
@@ -374,9 +380,14 @@ export function FinanceView() {
 
 function Kpi({ label, value, up }: { label: string; value: string; up?: boolean }) {
   return (
-    <div className="px-5 py-4">
-      <p className="text-[12px] text-sub">{label}</p>
-      <p className={cn("mt-1 text-[22px] font-semibold", up ? "text-up" : label.includes("지출") ? "text-down" : "text-ink")}>
+    <div className="min-w-0 px-5 py-4">
+      <p className="h-4 truncate text-[12px] leading-4 text-sub">{label}</p>
+      <p
+        className={cn(
+          "mt-1 h-7 truncate text-[22px] font-semibold leading-7 tabular-nums",
+          up ? "text-up" : label.includes("지출") ? "text-down" : "text-ink",
+        )}
+      >
         {value}
       </p>
     </div>
