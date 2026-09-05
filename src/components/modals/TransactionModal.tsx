@@ -5,15 +5,15 @@ import { FilterChip } from "@/components/ui/FilterChip";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { Modal } from "@/components/ui/Modal";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { TX_CATEGORIES, TX_TYPES } from "@/lib/constants";
+import { TX_TYPES } from "@/lib/constants";
 import { todayISO } from "@/lib/format";
 import { useClub } from "@/lib/store";
-import type { TxCategory, TxType } from "@/lib/types";
+import type { TxType } from "@/lib/types";
 import { Paperclip } from "lucide-react";
 import { useState } from "react";
 
 export function TransactionModal() {
-  const { modal, closeModal, addTransaction, toast } = useClub();
+  const { modal, closeModal, addTransaction, txCategories, toast } = useClub();
   const open = modal === "transaction";
   const [title, setTitle] = useState("");
   const [type, setType] = useState<TxType>("출금");
@@ -21,7 +21,7 @@ export function TransactionModal() {
   const [account, setAccount] = useState("3333-**-******");
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
-  const [category, setCategory] = useState<TxCategory | "">("");
+  const [category, setCategory] = useState("");
   const [proofName, setProofName] = useState("");
   const [occurredOn, setOccurredOn] = useState(todayISO());
 
@@ -73,17 +73,17 @@ export function TransactionModal() {
           />
         </div>
         <div className="col-span-2">
-          <FieldLabel hint="선택 가능 · AI 추천">카테고리</FieldLabel>
+          <FieldLabel>카테고리</FieldLabel>
           <div className="mb-2 flex flex-wrap gap-1">
-            {TX_CATEGORIES.map((item) => (
+            {txCategories.map((item) => (
               <FilterChip key={item} active={category === item} onClick={() => setCategory(item)}>
                 {item}
               </FilterChip>
             ))}
           </div>
-          <SelectInput value={category} onChange={(e) => setCategory(e.target.value as TxCategory | "")}>
+          <SelectInput value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">카테고리 선택</option>
-            {TX_CATEGORIES.map((item) => (
+            {txCategories.map((item) => (
               <option key={item}>{item}</option>
             ))}
           </SelectInput>

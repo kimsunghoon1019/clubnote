@@ -16,6 +16,7 @@ import {
   EVENT_TYPES,
   OPERATOR_NAME,
   STORAGE_KEY,
+  TX_CATEGORIES,
   normalizeAttendanceStatus,
 } from "./constants";
 import { collegeFromMajor, inferredBirthDate } from "./format";
@@ -51,6 +52,7 @@ type Persisted = {
   roles: string[];
   eventTypes: string[];
   places: string[];
+  txCategories?: string[];
 };
 
 type ClubContextValue = {
@@ -64,6 +66,7 @@ type ClubContextValue = {
   roles: string[];
   eventTypes: string[];
   places: string[];
+  txCategories: string[];
   selectedMemberIds: string[];
   inspectedMemberId: string | null;
   toasts: ToastItem[];
@@ -89,6 +92,9 @@ type ClubContextValue = {
   removeEventType: (name: string) => void;
   addPlace: (name: string) => void;
   removePlace: (name: string) => void;
+  addTxCategory: (name: string) => void;
+  removeTxCategory: (name: string) => void;
+  moveTxCategory: (from: number, to: number) => void;
   assignCategory: (ids: string[], category: string) => void;
   addTransaction: (input: Omit<Transaction, "id" | "balanceAfter"> & { balanceAfter?: number }) => void;
   importBankTransactions: (incoming: ParsedBankTx[]) => number;
@@ -117,6 +123,14 @@ function uniqueNames(...groups: Array<string[] | readonly string[]>) {
     }
   }
   return out;
+}
+
+function moveName(list: string[], from: number, to: number) {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
 }
 
 function normalizeMember(member: Member): Member {
@@ -152,6 +166,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<string[]>(DEFAULT_ROLES);
   const [eventTypes, setEventTypes] = useState<string[]>([...EVENT_TYPES]);
   const [places, setPlaces] = useState<string[]>(DEFAULT_PLACES);
+  const [txCategories, setTxCategories] = useState<string[]>([...TX_CATEGORIES]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [inspectedMemberId, setInspectedMemberId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -189,6 +204,12 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           (data.events ?? []).map((event) => event.place),
         ),
       );
+      setTxCategories(
+        uniqueNames(
+          data.txCategories?.length ? data.txCategories : TX_CATEGORIES,
+          (data.transactions ?? []).map((row) => row.category),
+        ),
+      );
     }
     setReady(true);
   }, []);
@@ -205,9 +226,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       roles,
       eventTypes,
       places,
+      txCategories,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories]);
 
   const toast = useCallback((message: string) => {
     const id = uid("toast");
@@ -329,6 +351,20 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setPlaces((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
   }, []);
 
+  const addTxCategory = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setTxCategories((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }, []);
+
+  const removeTxCategory = useCallback((name: string) => {
+    setTxCategories((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
+  }, []);
+
+  const moveTxCategory = useCallback((from: number, to: number) => {
+    setTxCategories((prev) => moveName(prev, from, to));
+  }, []);
+
   const assignCategory = useCallback((ids: string[], category: string) => {
     setMembers((prev) => prev.map((member) => (ids.includes(member.id) ? { ...member, category } : member)));
   }, []);
@@ -393,6 +429,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       roles,
       eventTypes,
       places,
+      txCategories,
       selectedMemberIds,
       inspectedMemberId,
       toasts,
@@ -418,6 +455,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeEventType,
       addPlace,
       removePlace,
+      addTxCategory,
+      removeTxCategory,
+      moveTxCategory,
       assignCategory,
       addTransaction,
       importBankTransactions,
@@ -440,6 +480,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       roles,
       eventTypes,
       places,
+      txCategories,
       selectedMemberIds,
       inspectedMemberId,
       toasts,
@@ -464,6 +505,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeEventType,
       addPlace,
       removePlace,
+      addTxCategory,
+      removeTxCategory,
+      moveTxCategory,
       assignCategory,
       addTransaction,
       importBankTransactions,

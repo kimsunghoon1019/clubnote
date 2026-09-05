@@ -1,31 +1,43 @@
 "use client";
 
+import { TransactionRail } from "@/components/finance/TransactionRail";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
-import { AiInsightCard } from "@/components/ui/AiInsightCard";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FieldLabel, TextInput } from "@/components/ui/Field";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { Modal } from "@/components/ui/Modal";
-import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
 import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
-import { TX_CATEGORIES, TX_TYPES } from "@/lib/constants";
+import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { formatDateDot, formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
+import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
+import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
-import type { Transaction, TxCategory, TxType } from "@/lib/types";
-import { Paperclip, Upload } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import type { Transaction, TxType } from "@/lib/types";
+import { Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#F04452", "#FFB800", "#4E5968", "#8B95A1", "#1B64DA"];
 
 export function FinanceView() {
-  const { transactions, updateTransaction, openModal, importBankTransactions, toast } = useClub();
+  const {
+    transactions,
+    txCategories,
+    updateTransaction,
+    addTxCategory,
+    removeTxCategory,
+    moveTxCategory,
+    openModal,
+    importBankTransactions,
+    toast,
+  } = useClub();
   const [period, setPeriod] = useState("전체");
   const [type, setType] = useState<"전체" | TxType>("전체");
-  const [category, setCategory] = useState<"전체" | TxCategory>("전체");
+  const [category, setCategory] = useState("전체");
+  const [inspectedTxId, setInspectedTxId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [password, setPassword] = useState("");
@@ -49,6 +61,14 @@ export function FinanceView() {
   const income = monthRows.filter((r) => r.type === "입금").reduce((s, r) => s + r.amount, 0);
   const expense = monthRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
   const balance = ordered[0]?.balanceAfter ?? 0;
+
+  useEffect(() => {
+    if (category !== "전체" && !txCategories.includes(category)) setCategory("전체");
+  }, [category, txCategories]);
+
+  useEffect(() => {
+    if (inspectedTxId && !transactions.some((row) => row.id === inspectedTxId)) setInspectedTxId(null);
+  }, [inspectedTxId, transactions]);
 
   function clearPendingExcel() {
     setPendingFile(null);
@@ -92,20 +112,30 @@ export function FinanceView() {
     }
   }
 
-  const byCategory = TX_CATEGORIES.map((cat) => ({
-    name: cat,
-    value: Math.abs(
-      transactions.filter((t) => t.category === cat && t.amount < 0).reduce((s, t) => s + t.amount, 0),
-    ),
-  })).filter((d) => d.value > 0);
+  const byCategory = useMemo(() => {
+    const names = [...txCategories];
+    for (const row of transactions) {
+      if (row.category && !names.includes(row.category)) names.push(row.category);
+    }
+    return names
+      .map((cat) => ({
+        name: cat,
+        value: Math.abs(
+          transactions.filter((t) => t.category === cat && t.amount < 0).reduce((s, t) => s + t.amount, 0),
+        ),
+      }))
+      .filter((d) => d.value > 0);
+  }, [transactions, txCategories]);
 
-  const rentShare = (() => {
-    const out = transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-    const rent = transactions.filter((t) => t.category === "대관료").reduce((s, t) => s + Math.abs(t.amount), 0);
-    return out ? Math.round((rent / out) * 100) : 0;
-  })();
+  const dismissInspected = (event: MouseEvent<HTMLElement>) => {
+    if (!inspectedTxId) return;
+    if (!isInspectDismissClick(event.target)) return;
+    setInspectedTxId(null);
+  };
 
-  const proofs = transactions.filter((t) => t.proofName).slice(-3).reverse();
+  const handleRowClick = (row: Transaction) => {
+    setInspectedTxId((current) => (current === row.id ? null : row.id));
+  };
 
   const columns: Column<Transaction>[] = [
     {
@@ -136,50 +166,44 @@ export function FinanceView() {
       align: "right",
       render: (row) => <span className="tabular-nums">{formatWon(row.balanceAfter)}</span>,
     },
-    { key: "memo", header: "메모", render: (row) => <span className="max-w-[160px] truncate text-sub">{row.memo || "-"}</span> },
+    { key: "title", header: "적요", render: (row) => <span className="font-medium">{row.title}</span> },
     {
       key: "category",
-      header: "카테고리",
+      header: (
+        <TaxonomyEditor
+          label="카테고리"
+          items={txCategories}
+          onAdd={addTxCategory}
+          onRemove={removeTxCategory}
+          onMove={moveTxCategory}
+        />
+      ),
       render: (row) => (
         <div onClick={(e) => e.stopPropagation()}>
           <select
             value={row.category}
             aria-label={`${row.title} 카테고리`}
             className="h-7 rounded-btn border border-line bg-white px-1.5 text-[12px]"
-            onChange={(e) => updateTransaction(row.id, { category: e.target.value as TxCategory | "" })}
+            onChange={(e) => updateTransaction(row.id, { category: e.target.value })}
           >
-            <option value="">선택 가능 · AI 추천</option>
-            {TX_CATEGORIES.map((c) => (
-              <option key={c}>{c}</option>
+            <option value="">선택</option>
+            {txCategories.map((item) => (
+              <option key={item}>{item}</option>
             ))}
           </select>
         </div>
       ),
     },
     {
-      key: "proof",
-      header: "증빙",
-      render: (row) => (
-        <label className="inline-flex cursor-pointer items-center gap-1 text-[12px] text-sub" onClick={(e) => e.stopPropagation()}>
-          <Paperclip className="h-3.5 w-3.5" />
-          {row.proofName ? <Pill tone="brand">{row.proofName}</Pill> : <span>파일첨부</span>}
-          <input
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) updateTransaction(row.id, { proofName: file.name });
-            }}
-          />
-        </label>
-      ),
+      key: "memo",
+      header: "메모",
+      render: (row) => <span className="max-w-[200px] truncate text-sub">{row.memo || "-"}</span>,
     },
-    { key: "title", header: "적요", render: (row) => <span className="font-medium">{row.title}</span> },
   ];
 
   return (
     <>
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin">
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
         <section className="grid grid-cols-3 border-b border-line-soft">
           <Kpi label="잔액" value={formatWon(balance)} />
           <Kpi label="수입 (이번 달)" value={formatSignedWon(income)} up />
@@ -199,7 +223,7 @@ export function FinanceView() {
             </FilterChip>
           ))}
           <span className="mx-1 h-3 w-px bg-line" />
-          {(["전체", ...TX_CATEGORIES] as const).map((item) => (
+          {["전체", ...txCategories].map((item) => (
             <FilterChip key={item} active={category === item} onClick={() => setCategory(item)}>
               {item}
             </FilterChip>
@@ -228,6 +252,8 @@ export function FinanceView() {
           <DataTable
             columns={columns}
             rows={filtered}
+            selectedIds={inspectedTxId ? [inspectedTxId] : undefined}
+            onRowClick={handleRowClick}
             empty={
               <span>
                 조건에 맞는 거래가 없어요.{" "}
@@ -241,57 +267,42 @@ export function FinanceView() {
       </main>
 
       <RightRail>
-        <RailSection title="카테고리별 지출">
-          <div className="mx-auto h-[168px] w-[168px]">
-            <PieChart width={168} height={168}>
-              <Pie
-                data={byCategory}
-                dataKey="value"
-                innerRadius={50}
-                outerRadius={74}
-                paddingAngle={1.5}
-                stroke="none"
-                isAnimationActive={false}
-                cx="50%"
-                cy="50%"
-              >
-                {byCategory.map((entry, i) => (
-                  <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </div>
-          <ul className="mt-2 space-y-1.5">
-            {byCategory.map((item, i) => (
-              <li key={item.name} className="flex items-center justify-between text-[12px]">
-                <span className="inline-flex items-center gap-1.5 text-sub">
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: PIE_COLORS[i] }} />
-                  {item.name}
-                </span>
-                <span>{formatWon(item.value)}</span>
-              </li>
-            ))}
-          </ul>
-        </RailSection>
-        <RailSection>
-          <AiInsightCard text={`이번 달 대관료 비중이 ${rentShare}%로 평소보다 높아요`} />
-        </RailSection>
-        <RailSection title="최근 증빙">
-          {proofs.length === 0 ? (
-            <p className="text-[13px] text-faint">첨부된 증빙이 없어요</p>
-          ) : (
-            <ul className="space-y-2">
-              {proofs.map((item) => (
-                <li key={item.id} className="rounded-btn border border-line-soft px-3 py-2">
-                  <p className="truncate text-[13px] font-medium">{item.proofName}</p>
-                  <p className="mt-0.5 text-[11px] text-faint">
-                    {item.title} · {formatDateDot(item.occurredOn)}
-                  </p>
+        {inspectedTxId ? (
+          <TransactionRail txId={inspectedTxId} onClose={() => setInspectedTxId(null)} />
+        ) : (
+          <RailSection title="카테고리별 지출">
+            <div className="mx-auto h-[168px] w-[168px]">
+              <PieChart width={168} height={168}>
+                <Pie
+                  data={byCategory}
+                  dataKey="value"
+                  innerRadius={50}
+                  outerRadius={74}
+                  paddingAngle={1.5}
+                  stroke="none"
+                  isAnimationActive={false}
+                  cx="50%"
+                  cy="50%"
+                >
+                  {byCategory.map((entry, i) => (
+                    <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </div>
+            <ul className="mt-2 space-y-1.5">
+              {byCategory.map((item, i) => (
+                <li key={item.name} className="flex items-center justify-between text-[12px]">
+                  <span className="inline-flex items-center gap-1.5 text-sub">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    {item.name}
+                  </span>
+                  <span>{formatWon(item.value)}</span>
                 </li>
               ))}
             </ul>
-          )}
-        </RailSection>
+          </RailSection>
+        )}
       </RightRail>
 
       <Modal open={Boolean(pendingFile)} title="엑셀 비밀번호" onClose={clearPendingExcel} width={400}>

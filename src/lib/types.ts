@@ -72,7 +72,7 @@ export type Transaction = {
   amount: number;
   balanceAfter: number;
   memo: string;
-  category: TxCategory | "";
+  category: string;
   proofName?: string;
 };
 
