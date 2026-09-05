@@ -23,6 +23,8 @@ import {
   eachISODate,
   eventEndDate,
   formatDateKo,
+  formatDateWeekday,
+  formatTimeKo,
   formatWeekday,
   parseISODate,
   toISODate,
@@ -302,20 +304,9 @@ export function CalendarView() {
                       }}
                     />
                   ) : (
-                    <EventFields
+                    <EventDetail
                       key={active.id}
-                      title={active.title}
-                      type={active.type}
-                      place={active.place}
-                      preview={active.preview}
-                      range={eventRangeOf(active)}
-                      attachmentName={active.attachmentName}
-                      readOnly
-                      onTitle={() => undefined}
-                      onType={() => undefined}
-                      onPlace={() => undefined}
-                      onPreview={() => undefined}
-                      onRange={() => undefined}
+                      event={active}
                       onAttach={(name) => {
                         updateEvent(active.id, { attachmentName: name });
                         toast("첨부파일을 추가했어요");
@@ -557,6 +548,69 @@ function NoticePanel({ text, onCopy }: { text: string; onCopy: () => void }) {
   );
 }
 
+function eventWhenText(event: ClubEvent) {
+  const end = eventEndDate(event);
+  if (event.allDay) {
+    if (end === event.date) return "하루 종일";
+    return `${formatDateWeekday(event.date)} → ${formatDateWeekday(end)} · 하루 종일`;
+  }
+  const startT = formatTimeKo(event.startTime);
+  const endT = formatTimeKo(event.endTime);
+  if (end === event.date) return `${startT} – ${endT}`;
+  return `${formatDateWeekday(event.date)} ${startT} → ${formatDateWeekday(end)} ${endT}`;
+}
+
+function EventDetail({ event, onAttach }: { event: ClubEvent; onAttach: (name: string) => void }) {
+  const pickFile = (file: File | undefined) => {
+    if (!file) return;
+    onAttach(file.name);
+  };
+
+  return (
+    <dl className="space-y-4" data-event-fields="readonly">
+      <Info label="제목" value={event.title || "-"} />
+      <Info label="유형" value={event.type || "-"} />
+      <Info label="일시" value={eventWhenText(event)} />
+      <Info label="장소" value={event.place || "-"} />
+      <div>
+        <dt className="text-[12px] font-medium text-sub">메모</dt>
+        <dd className={cn("mt-1 whitespace-pre-wrap text-[14px]", event.preview ? "text-ink" : "text-faint")}>
+          {event.preview || "없음"}
+        </dd>
+      </div>
+      <div>
+        <dt className="text-[12px] font-medium text-sub">첨부파일</dt>
+        <dd className="mt-1">
+          {event.attachmentName ? (
+            <p className="inline-flex items-center gap-2 text-[14px] text-ink">
+              <Paperclip className="h-3.5 w-3.5 text-faint" />
+              {event.attachmentName}
+            </p>
+          ) : (
+            <label
+              data-attach-add
+              className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-medium text-brand-text hover:underline"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              첨부파일 추가하기
+              <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
+            </label>
+          )}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[12px] font-medium text-sub">{label}</dt>
+      <dd className="mt-1 text-[14px] text-ink">{value}</dd>
+    </div>
+  );
+}
+
 function EventFields({
   title,
   type,
@@ -564,7 +618,6 @@ function EventFields({
   preview,
   range,
   attachmentName,
-  readOnly,
   onTitle,
   onType,
   onPlace,
@@ -578,7 +631,6 @@ function EventFields({
   preview: string;
   range: DateTimeRangeValue;
   attachmentName?: string;
-  readOnly?: boolean;
   onTitle: (value: string) => void;
   onType: (value: string) => void;
   onPlace: (value: string) => void;
@@ -595,10 +647,10 @@ function EventFields({
   };
 
   return (
-    <div className="space-y-3" data-event-fields={readOnly ? "readonly" : "edit"}>
+    <div className="space-y-3" data-event-fields="edit">
       <div>
         <FieldLabel>제목</FieldLabel>
-        <TextInput readOnly={readOnly} value={title} onChange={(e) => onTitle(e.target.value)} />
+        <TextInput value={title} onChange={(e) => onTitle(e.target.value)} />
       </div>
       <div>
         <FieldLabel>유형</FieldLabel>
@@ -607,7 +659,6 @@ function EventFields({
           items={typeItems}
           addLabel="유형 추가"
           placeholder="유형 선택"
-          readOnly={readOnly}
           onChange={onType}
           onAdd={addEventType}
           onRemove={removeEventType}
@@ -615,7 +666,7 @@ function EventFields({
       </div>
       <div>
         <FieldLabel>일시</FieldLabel>
-        <DateTimeRangeField value={range} onChange={onRange} readOnly={readOnly} />
+        <DateTimeRangeField value={range} onChange={onRange} />
       </div>
       <div>
         <FieldLabel>장소</FieldLabel>
@@ -624,7 +675,6 @@ function EventFields({
           items={placeItems}
           addLabel="장소 추가"
           placeholder="장소 선택"
-          readOnly={readOnly}
           onChange={onPlace}
           onAdd={addPlace}
           onRemove={removePlace}
@@ -632,36 +682,15 @@ function EventFields({
       </div>
       <div>
         <FieldLabel>메모</FieldLabel>
-        <TextArea
-          readOnly={readOnly}
-          value={preview}
-          onChange={(e) => onPreview(e.target.value)}
-          placeholder="한 줄 메모"
-        />
+        <TextArea value={preview} onChange={(e) => onPreview(e.target.value)} placeholder="한 줄 메모" />
       </div>
       <div>
         <FieldLabel>첨부파일</FieldLabel>
-        {readOnly && !attachmentName ? (
-          <label
-            data-attach-add
-            className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-dashed border-line px-3 text-[13px] text-brand-text hover:bg-muted"
-          >
-            <Paperclip className="h-3.5 w-3.5" />
-            첨부파일 추가하기
-            <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
-          </label>
-        ) : readOnly ? (
-          <p className="inline-flex h-10 items-center gap-2 rounded-btn border border-line px-3 text-[13px]">
-            <Paperclip className="h-3.5 w-3.5" />
-            {attachmentName}
-          </p>
-        ) : (
-          <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
-            <Paperclip className="h-3.5 w-3.5" />
-            {attachmentName || "파일첨부"}
-            <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
-          </label>
-        )}
+        <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
+          <Paperclip className="h-3.5 w-3.5" />
+          {attachmentName || "파일첨부"}
+          <input type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
+        </label>
       </div>
     </div>
   );
