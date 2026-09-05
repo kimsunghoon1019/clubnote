@@ -10,6 +10,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
+import { latestTransaction } from "@/lib/bankExcel";
 import { formatDateKo, formatWon, todayISO } from "@/lib/format";
 import { CLUB_NAME } from "@/lib/constants";
 import {
@@ -49,7 +50,7 @@ export function HomeView() {
   const nextEvent = upcomingPractice(events, today) ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
   const practiceCount = practiceEvents(events).filter((e) => e.date <= today).length;
   const groupData = categoryCounts(members, categories).map((g) => ({ name: g.name, value: g.count, part: "" }));
-  const balance = transactions[transactions.length - 1]?.balanceAfter ?? 0;
+  const balance = latestTransaction(transactions)?.balanceAfter ?? 0;
 
   const ranked = [...members]
     .map((member) => ({

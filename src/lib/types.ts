@@ -60,6 +60,7 @@ export type Attendance = {
 export type Transaction = {
   id: string;
   occurredOn: string;
+  occurredAt?: string;
   title: string;
   type: TxType;
   institution: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { latestTransaction } from "@/lib/bankExcel";
 import { formatWon, todayISO } from "@/lib/format";
 import { attendanceRate, latestPractice } from "@/lib/stats";
 import { useClub } from "@/lib/store";
@@ -9,7 +10,7 @@ export function StatusBar() {
   const today = todayISO();
   const featured = latestPractice(events, today);
   const rate = attendanceRate(attendance.filter((row) => featured && row.eventId === featured.id));
-  const balance = transactions[transactions.length - 1]?.balanceAfter ?? 0;
+  const balance = latestTransaction(transactions)?.balanceAfter ?? 0;
 
   return (
     <footer className="sticky bottom-0 z-20 flex h-9 items-center justify-between border-t border-line-soft bg-white px-5 text-[12px] text-sub">

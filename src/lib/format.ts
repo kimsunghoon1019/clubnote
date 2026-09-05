@@ -44,6 +44,13 @@ export function formatDateDot(iso: string) {
   return `${date.getFullYear()}.${m}.${d}`;
 }
 
+export function formatTxWhen(occurredOn: string, occurredAt?: string) {
+  const date = formatDateDot(occurredOn);
+  const stamp = occurredAt ?? occurredOn;
+  const time = stamp.match(/T(\d{2}:\d{2})/);
+  return time ? `${date} ${time[1]}` : date;
+}
+
 export function formatWeekday(iso: string) {
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   return days[parseISODate(iso).getDay()];

@@ -4,39 +4,64 @@ import { RightRail, RailSection } from "@/components/layout/RightRail";
 import { AiInsightCard } from "@/components/ui/AiInsightCard";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FilterChip } from "@/components/ui/FilterChip";
+import { GhostButton } from "@/components/ui/GhostButton";
 import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
 import { TX_CATEGORIES, TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { formatDateDot, formatSignedWon, formatWon } from "@/lib/format";
+import { formatDateDot, formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import type { Transaction, TxCategory, TxType } from "@/lib/types";
-import { Paperclip } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Paperclip, Upload } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#F04452", "#FFB800", "#4E5968", "#8B95A1", "#1B64DA"];
 
 export function FinanceView() {
-  const { transactions, updateTransaction, openModal } = useClub();
+  const { transactions, updateTransaction, openModal, importBankTransactions, toast } = useClub();
   const [period, setPeriod] = useState("전체");
   const [type, setType] = useState<"전체" | TxType>("전체");
   const [category, setCategory] = useState<"전체" | TxCategory>("전체");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const ordered = useMemo(() => [...transactions].sort(compareTxDesc), [transactions]);
 
   const filtered = useMemo(() => {
-    return [...transactions].reverse().filter((row) => {
+    return ordered.filter((row) => {
       if (period === "이번 달" && !row.occurredOn.startsWith("2026-05")) return false;
       if (period === "지난 달" && !row.occurredOn.startsWith("2026-04")) return false;
       if (type !== "전체" && row.type !== type) return false;
       if (category !== "전체" && row.category !== category) return false;
       return true;
     });
-  }, [transactions, period, type, category]);
+  }, [ordered, period, type, category]);
 
   const monthRows = transactions.filter((row) => row.occurredOn.startsWith("2026-05") || row.occurredOn.startsWith("2026-04"));
   const income = monthRows.filter((r) => r.type === "입금").reduce((s, r) => s + r.amount, 0);
   const expense = monthRows.filter((r) => r.type === "출금").reduce((s, r) => s + r.amount, 0);
-  const balance = transactions[transactions.length - 1]?.balanceAfter ?? 0;
+  const balance = ordered[0]?.balanceAfter ?? 0;
+
+  async function onExcelUpload(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { rows, error } = await parseBankExcelFile(file);
+      if (error) {
+        toast(error);
+        return;
+      }
+      const added = importBankTransactions(rows);
+      toast(added === 0 ? "이미 있는 내역이에요. 새로 추가된 거래가 없어요" : `은행 엑셀에서 ${added}건을 추가했어요`);
+    } catch {
+      toast("엑셀 파일을 읽지 못했어요");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   const byCategory = TX_CATEGORIES.map((cat) => ({
     name: cat,
@@ -54,7 +79,11 @@ export function FinanceView() {
   const proofs = transactions.filter((t) => t.proofName).slice(-3).reverse();
 
   const columns: Column<Transaction>[] = [
-    { key: "title", header: "적요", render: (row) => <span className="font-medium">{row.title}</span> },
+    {
+      key: "when",
+      header: "거래일시",
+      render: (row) => <span className="tabular-nums text-sub">{formatTxWhen(row.occurredOn, row.occurredAt)}</span>,
+    },
     {
       key: "type",
       header: "거래유형",
@@ -116,6 +145,7 @@ export function FinanceView() {
         </label>
       ),
     },
+    { key: "title", header: "적요", render: (row) => <span className="font-medium">{row.title}</span> },
   ];
 
   return (
@@ -145,7 +175,19 @@ export function FinanceView() {
               {item}
             </FilterChip>
           ))}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+              className="hidden"
+              aria-label="은행 엑셀 업로드"
+              onChange={(e) => void onExcelUpload(e.target.files?.[0])}
+            />
+            <GhostButton disabled={uploading} onClick={() => fileRef.current?.click()}>
+              <Upload className="h-3.5 w-3.5" />
+              {uploading ? "읽는 중" : "엑셀 업로드"}
+            </GhostButton>
             <PrimaryButton onClick={() => openModal("transaction")}>거래 추가</PrimaryButton>
           </div>
         </div>

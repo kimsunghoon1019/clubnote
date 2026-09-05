@@ -18,6 +18,7 @@ import {
   members as seedMembers,
   transactions as seedTransactions,
 } from "./seed";
+import { compareTxAsc, newBankRows, type ParsedBankTx } from "./bankExcel";
 import type {
   Attendance,
   AttendanceStatus,
@@ -73,6 +74,7 @@ type ClubContextValue = {
   removeRole: (name: string) => void;
   assignCategory: (ids: string[], category: string) => void;
   addTransaction: (input: Omit<Transaction, "id" | "balanceAfter"> & { balanceAfter?: number }) => void;
+  importBankTransactions: (incoming: ParsedBankTx[]) => number;
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
   addEvent: (input: Omit<ClubEvent, "id">) => ClubEvent;
   updateEvent: (id: string, patch: Partial<ClubEvent>) => void;
@@ -252,11 +254,22 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       setTransactions((prev) => {
         const last = prev[prev.length - 1];
         const balanceAfter = input.balanceAfter ?? (last?.balanceAfter ?? 0) + input.amount;
-        return [...prev, { ...input, id: uid("t"), balanceAfter }];
+        return [...prev, { ...input, id: uid("t"), balanceAfter }].sort(compareTxAsc);
       });
     },
     [],
   );
+
+  const importBankTransactions = useCallback((incoming: ParsedBankTx[]) => {
+    const fresh = newBankRows(transactions, incoming);
+    if (fresh.length === 0) return 0;
+    setTransactions((prev) => {
+      const next = newBankRows(prev, incoming);
+      if (next.length === 0) return prev;
+      return [...prev, ...next.map((row) => ({ ...row, id: uid("t"), category: "" as const }))].sort(compareTxAsc);
+    });
+    return fresh.length;
+  }, [transactions]);
 
   const updateTransaction = useCallback((id: string, patch: Partial<Transaction>) => {
     setTransactions((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -313,6 +326,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeRole,
       assignCategory,
       addTransaction,
+      importBankTransactions,
       updateTransaction,
       addEvent,
       updateEvent,
@@ -352,6 +366,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeRole,
       assignCategory,
       addTransaction,
+      importBankTransactions,
       updateTransaction,
       addEvent,
       updateEvent,
