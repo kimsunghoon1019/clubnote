@@ -1,25 +1,26 @@
 "use client";
 
 import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { ChartInbox } from "@/components/members/ChartInbox";
 import { MemberRail } from "@/components/members/MemberRail";
 import { Avatar } from "@/components/ui/Avatar";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { GhostButton } from "@/components/ui/GhostButton";
-import { MiniCalendar } from "@/components/ui/MiniCalendar";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
 import { RolePill } from "@/components/ui/Pill";
 import { ScoreBar } from "@/components/ui/ScoreBar";
 import { SelectInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
+import { LiveClock } from "@/components/ui/LiveClock";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
-import { tenureLabel, tenureMonths, todayISO } from "@/lib/format";
+import { tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { Member } from "@/lib/types";
 import { Download, UserPlus } from "lucide-react";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
@@ -344,8 +345,8 @@ export function MembersView() {
             <RailSection>
               <LiveClock />
             </RailSection>
-            <RailSection title="캘린더">
-              <MiniCalendar events={events} month={todayISO()} />
+            <RailSection>
+              <ChartInbox />
             </RailSection>
             <RailSection>
               <GhostButton className="w-full" onClick={() => openModal("member-add")}>
@@ -396,47 +397,5 @@ export function MembersView() {
         )}
       </RightRail>
     </>
-  );
-}
-
-function LiveClock() {
-  const [now, setNow] = useState<Date | null>(null);
-
-  useEffect(() => {
-    const tick = () => setNow(new Date());
-    tick();
-    let interval = 0;
-    const timeout = window.setTimeout(() => {
-      tick();
-      interval = window.setInterval(tick, 1000);
-    }, 1000 - (Date.now() % 1000));
-    return () => {
-      window.clearTimeout(timeout);
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  if (!now) {
-    return <div className="h-[52px]" aria-hidden />;
-  }
-
-  const week = ["일", "월", "화", "수", "목", "금", "토"][now.getDay()];
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const period = now.getHours() < 12 ? "오전" : "오후";
-  const hour12 = now.getHours() % 12 === 0 ? 12 : now.getHours() % 12;
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
-
-  return (
-    <div>
-      <p className="text-[12px] text-faint">
-        {y}.{m}.{d} ({week})
-      </p>
-      <p className="mt-0.5 text-[22px] font-semibold leading-7 tabular-nums tracking-tight">
-        {period} {hour12}:{mm}:{ss}
-      </p>
-    </div>
   );
 }

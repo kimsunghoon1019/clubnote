@@ -29,6 +29,7 @@ import {
   transactions as seedTransactions,
 } from "./seed";
 import { compareTxAsc, newBankRows, type ParsedBankTx } from "./bankExcel";
+import { createClient } from "./supabase/client";
 import type {
   Attendance,
   AttendanceStatus,
@@ -38,6 +39,9 @@ import type {
   PracticeDay,
   Transaction,
 } from "./types";
+
+const LOCAL_ACCOUNT_ID = "local";
+type ChartSeenByAccount = Record<string, string[]>;
 
 export type ToastItem = { id: string; message: string };
 export type ModalKey = "sms" | "transaction" | "event" | "member-add" | null;
@@ -53,6 +57,7 @@ type Persisted = {
   eventTypes: string[];
   places: string[];
   txCategories?: string[];
+  chartSeenByAccount?: ChartSeenByAccount;
 };
 
 type ClubContextValue = {
@@ -84,6 +89,9 @@ type ClubContextValue = {
   setPracticeDays: (id: string, days: PracticeDay[]) => void;
   addChartNote: (memberId: string, body: string) => void;
   deleteChartNote: (id: string) => void;
+  accountId: string;
+  chartSeenByAccount: ChartSeenByAccount;
+  acknowledgeChartNote: (id: string) => void;
   addCategory: (name: string) => void;
   removeCategory: (name: string) => void;
   moveCategory: (from: number, to: number) => void;
@@ -124,6 +132,28 @@ function withSeedProof(row: Transaction): Transaction {
   const seed = seedTransactions.find((item) => item.id === row.id && item.proofName === row.proofName);
   if (!seed?.proofDataUrl) return row;
   return { ...row, proofMime: row.proofMime ?? seed.proofMime, proofDataUrl: seed.proofDataUrl };
+}
+
+function normalizeChartSeen(raw: unknown): ChartSeenByAccount {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: ChartSeenByAccount = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue;
+    out[key] = value.filter((id): id is string => typeof id === "string");
+  }
+  return out;
+}
+
+function omitSeenIds(map: ChartSeenByAccount, drop: Set<string>): ChartSeenByAccount {
+  if (drop.size === 0) return map;
+  let changed = false;
+  const next: ChartSeenByAccount = {};
+  for (const [key, ids] of Object.entries(map)) {
+    const kept = ids.filter((id) => !drop.has(id));
+    if (kept.length !== ids.length) changed = true;
+    next[key] = kept;
+  }
+  return changed ? next : map;
 }
 
 function uniqueNames(...groups: Array<string[] | readonly string[]>) {
@@ -185,6 +215,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [modal, setModal] = useState<ModalKey>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
+  const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
 
   useEffect(() => {
     const data = loadPersisted();
@@ -222,8 +254,28 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           (data.transactions ?? []).map((row) => row.category),
         ),
       );
+      setChartSeenByAccount(normalizeChartSeen(data.chartSeenByAccount));
     }
     setReady(true);
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase) {
+      setAccountId(LOCAL_ACCOUNT_ID);
+      return;
+    }
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (alive) setAccountId(data.user?.id ?? LOCAL_ACCOUNT_ID);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAccountId(session?.user?.id ?? LOCAL_ACCOUNT_ID);
+    });
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -239,13 +291,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventTypes,
       places,
       txCategories,
+      chartSeenByAccount,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       /* quota: keep in-memory state */
     }
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount]);
 
   const toast = useCallback((message: string) => {
     const id = uid("toast");
@@ -297,12 +350,16 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const removeMembers = useCallback((ids: string[]) => {
     const drop = new Set(ids);
+    const dropNoteIds = notes.filter((note) => drop.has(note.memberId)).map((note) => note.id);
     setMembers((prev) => prev.filter((member) => !drop.has(member.id)));
     setAttendance((prev) => prev.filter((row) => !drop.has(row.memberId)));
     setNotes((prev) => prev.filter((note) => !drop.has(note.memberId)));
+    if (dropNoteIds.length) {
+      setChartSeenByAccount((prev) => omitSeenIds(prev, new Set(dropNoteIds)));
+    }
     setSelectedMemberIds((prev) => prev.filter((id) => !drop.has(id)));
     setInspectedMemberId((current) => (current && drop.has(current) ? null : current));
-  }, []);
+  }, [notes]);
 
   const setPracticeDays = useCallback((id: string, days: PracticeDay[]) => {
     setMembers((prev) => prev.map((member) => (member.id === id ? { ...member, practiceDays: days } : member)));
@@ -325,7 +382,16 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const deleteChartNote = useCallback((id: string) => {
     setNotes((prev) => prev.filter((note) => note.id !== id));
+    setChartSeenByAccount((prev) => omitSeenIds(prev, new Set([id])));
   }, []);
+
+  const acknowledgeChartNote = useCallback((id: string) => {
+    setChartSeenByAccount((prev) => {
+      const current = prev[accountId] ?? [];
+      if (current.includes(id)) return prev;
+      return { ...prev, [accountId]: [...current, id] };
+    });
+  }, [accountId]);
 
   const addCategory = useCallback((name: string) => {
     const trimmed = name.trim();
@@ -471,6 +537,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       setPracticeDays,
       addChartNote,
       deleteChartNote,
+      accountId,
+      chartSeenByAccount,
+      acknowledgeChartNote,
       addCategory,
       removeCategory,
       moveCategory,
@@ -523,6 +592,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       setPracticeDays,
       addChartNote,
       deleteChartNote,
+      accountId,
+      chartSeenByAccount,
+      acknowledgeChartNote,
       addCategory,
       removeCategory,
       moveCategory,
