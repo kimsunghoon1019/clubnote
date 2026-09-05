@@ -154,7 +154,7 @@ function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
 }
 
 export function CalendarView() {
-  const { events, weatherDays, addEvent, updateEvent, deleteEvent, openModal, toast } = useClub();
+  const { events, weatherDays, addEvent, updateEvent, deleteEvent, undoEventChange, openModal, toast } = useClub();
   const today = todayISO();
   const [cursor, setCursor] = useState(() => parseISODate(today));
   const [selected, setSelected] = useState<string | null>(null);
@@ -264,11 +264,16 @@ export function CalendarView() {
       } else if (key === "v") {
         event.preventDefault();
         pasteEvent();
+      } else if (key === "z") {
+        event.preventDefault();
+        setEventMenu(null);
+        if (undoEventChange()) toast("일정을 되돌렸어요");
+        else toast("되돌릴 변경이 없어요");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, selected, clipboard, addEvent, toast]);
+  }, [active, selected, clipboard, addEvent, undoEventChange, toast]);
 
   useEffect(() => {
     if (!draggingId) return;

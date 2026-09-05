@@ -148,6 +148,7 @@ type ClubContextValue = {
   addEventAttachment: (id: string, file: File) => Promise<void>;
   removeEventAttachment: (id: string, attachmentId: string) => Promise<void>;
   deleteEvent: (id: string) => void;
+  undoEventChange: () => boolean;
   toast: (message: string) => void;
   dismissToast: (id: string) => void;
   eventModalDate: string | null;
@@ -161,6 +162,31 @@ const ClubContext = createContext<ClubContextValue | null>(null);
 
 function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const EVENT_UNDO_LIMIT = 40;
+
+type EventUndoSnap = { events: ClubEvent[]; attendance: Attendance[] };
+
+function cloneEventState(events: ClubEvent[]): ClubEvent[] {
+  return events.map((event) =>
+    persistableEvent({
+      ...event,
+      attachments: eventAttachments(event).map((item) => ({ ...item })),
+    }),
+  );
+}
+
+function cloneAttendanceState(rows: Attendance[]): Attendance[] {
+  return rows.map((row) => ({ ...row }));
+}
+
+function eventAttachmentIds(events: ClubEvent[]): Set<string> {
+  const ids = new Set<string>();
+  for (const event of events) {
+    for (const item of eventAttachments(event)) ids.add(item.id);
+  }
+  return ids;
 }
 
 function mergeProofsDuringHydrate(prev: Transaction[], hydrated: Transaction[]): Transaction[] {
@@ -300,6 +326,44 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
   const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
   const [duesOverrides, setDuesOverrides] = useState<DuesOverride[]>([]);
+  const eventsRef = useRef(events);
+  const attendanceRef = useRef(attendance);
+  eventsRef.current = events;
+  attendanceRef.current = attendance;
+  const eventUndoRef = useRef<EventUndoSnap[]>([]);
+  const orphanEventBlobsRef = useRef<Set<string>>(new Set());
+
+  const sweepOrphanEventBlobs = (live: ClubEvent[]) => {
+    const used = eventAttachmentIds(live);
+    for (const snap of eventUndoRef.current) {
+      for (const id of eventAttachmentIds(snap.events)) used.add(id);
+    }
+    for (const id of [...orphanEventBlobsRef.current]) {
+      if (used.has(id)) continue;
+      orphanEventBlobsRef.current.delete(id);
+      void deleteProofBlob(id);
+    }
+  };
+
+  const pushEventUndo = () => {
+    eventUndoRef.current.push({
+      events: cloneEventState(eventsRef.current),
+      attendance: cloneAttendanceState(attendanceRef.current),
+    });
+    if (eventUndoRef.current.length > EVENT_UNDO_LIMIT) {
+      eventUndoRef.current.shift();
+      sweepOrphanEventBlobs(eventsRef.current);
+    }
+  };
+
+  const undoEventChange = useCallback(() => {
+    const snap = eventUndoRef.current.pop();
+    if (!snap) return false;
+    setEvents(snap.events);
+    setAttendance(snap.attendance);
+    sweepOrphanEventBlobs(snap.events);
+    return true;
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -716,6 +780,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     if (isPracticeEvent(created) && created.date < todayISO() && !created.attendanceClosedAt) {
       created.attendanceClosedAt = new Date().toISOString();
     }
+    pushEventUndo();
     setEvents((prev) => [...prev, created].sort((a, b) => a.date.localeCompare(b.date)));
     if (input.type) setEventTypes((prev) => (prev.includes(input.type) ? prev : [...prev, input.type]));
     if (input.place) setPlaces((prev) => (prev.includes(input.place) ? prev : [...prev, input.place]));
@@ -723,6 +788,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateEvent = useCallback((id: string, patch: Partial<ClubEvent>) => {
+    if (!eventsRef.current.some((row) => row.id === id)) return;
+    pushEventUndo();
     setEvents((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
@@ -740,6 +807,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const addEventAttachment = useCallback(async (id: string, file: File) => {
     const { meta, blob } = await fileToProof(file);
     await putProofBlob(meta.id, blob);
+    pushEventUndo();
+    orphanEventBlobsRef.current.add(meta.id);
     setEvents((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
@@ -750,6 +819,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeEventAttachment = useCallback(async (id: string, attachmentId: string) => {
+    pushEventUndo();
     setEvents((prev) => {
       const next = prev.map((row) => {
         if (row.id !== id) return row;
@@ -759,21 +829,25 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         });
       });
       const stillUsed = next.some((row) => eventAttachments(row).some((item) => item.id === attachmentId));
-      if (!stillUsed) void deleteProofBlob(attachmentId);
+      if (!stillUsed) orphanEventBlobsRef.current.add(attachmentId);
+      sweepOrphanEventBlobs(next);
       return next;
     });
   }, []);
 
   const deleteEvent = useCallback((id: string) => {
+    if (!eventsRef.current.some((row) => row.id === id)) return;
+    pushEventUndo();
     setEvents((prev) => {
       const doomed = prev.find((row) => row.id === id);
       const next = prev.filter((row) => row.id !== id);
       if (doomed) {
         for (const item of eventAttachments(doomed)) {
           const stillUsed = next.some((row) => eventAttachments(row).some((file) => file.id === item.id));
-          if (!stillUsed) void deleteProofBlob(item.id);
+          if (!stillUsed) orphanEventBlobsRef.current.add(item.id);
         }
       }
+      sweepOrphanEventBlobs(next);
       return next;
     });
     setAttendance((prev) => prev.filter((row) => row.eventId !== id));
@@ -855,6 +929,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       addEventAttachment,
       removeEventAttachment,
       deleteEvent,
+      undoEventChange,
       toast,
       dismissToast,
       eventModalDate,
@@ -919,6 +994,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       addEventAttachment,
       removeEventAttachment,
       deleteEvent,
+      undoEventChange,
       toast,
       dismissToast,
       eventModalDate,
