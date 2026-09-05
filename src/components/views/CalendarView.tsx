@@ -1,10 +1,11 @@
 "use client";
 
 import { DateTimeRangeField, type DateTimeRangeValue } from "@/components/ui/DateTimeRangeField";
+import { FieldLabel } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
+import { InlineTaxonomySelect } from "@/components/ui/InlineTaxonomySelect";
 import { Pill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { EVENT_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import {
   formatDateKo,
@@ -17,13 +18,13 @@ import {
 import { practiceNoticeText } from "@/lib/notice";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
-import type { ClubEvent, EventType } from "@/lib/types";
+import type { ClubEvent } from "@/lib/types";
 import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-const TYPE_TONE: Record<EventType, "brand" | "warn" | "muted" | "up" | "default"> = {
+const TYPE_TONE: Record<string, "brand" | "warn" | "muted" | "up" | "default"> = {
   연습: "default",
   정기연습: "brand",
   공연: "up",
@@ -31,6 +32,10 @@ const TYPE_TONE: Record<EventType, "brand" | "warn" | "muted" | "up" | "default"
   오디션: "brand",
   회의: "muted",
 };
+
+function typeTone(type: string) {
+  return TYPE_TONE[type] ?? "default";
+}
 
 export function CalendarView() {
   const { events, updateEvent, deleteEvent, openModal, toast } = useClub();
@@ -179,7 +184,7 @@ export function CalendarView() {
       </main>
 
       <aside className="flex min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft">
-        <div className="flex-1 overflow-auto px-5 py-5 scrollbar-thin">
+        <div className="flex-1 overflow-auto px-5 py-5 [scrollbar-gutter:stable] scrollbar-thin">
           {selected ? (
             <>
               <p className="text-[28px] font-semibold leading-8">{formatDateKo(selected)}</p>
@@ -219,8 +224,8 @@ export function CalendarView() {
                     <>
                       <h2 className="text-[18px] font-semibold">{active.title}</h2>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {active.preview ? <Pill tone="muted">예고</Pill> : null}
-                        <Pill tone={TYPE_TONE[active.type]}>{active.type}</Pill>
+                        {active.preview ? <Pill tone="muted">메모</Pill> : null}
+                        <Pill tone={typeTone(active.type)}>{active.type}</Pill>
                         {isPracticeEvent(active) ? <Pill tone="brand">출석대상</Pill> : null}
                       </div>
                       <p className="mt-3 text-[13px] text-sub">
@@ -308,6 +313,7 @@ function EditEvent({
   onSave: (patch: Partial<ClubEvent>) => void;
   onCancel: () => void;
 }) {
+  const { eventTypes, places, addEventType, removeEventType, addPlace, removePlace } = useClub();
   const [title, setTitle] = useState(event.title);
   const [type, setType] = useState(event.type);
   const [place, setPlace] = useState(event.place);
@@ -319,17 +325,48 @@ function EditEvent({
     endTime: event.endTime || "21:00",
     allDay: Boolean(event.allDay),
   });
+  const typeItems = eventTypes.includes(type) ? eventTypes : [...eventTypes, type];
+  const placeItems = places.includes(place) ? places : [...places, place];
   return (
-    <div className="space-y-2">
-      <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <select className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={type} onChange={(e) => setType(e.target.value as EventType)}>
-        {EVENT_TYPES.map((item) => (
-          <option key={item}>{item}</option>
-        ))}
-      </select>
+    <div className="space-y-3">
+      <div>
+        <FieldLabel>제목</FieldLabel>
+        <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={title} onChange={(e) => setTitle(e.target.value)} />
+      </div>
+      <div>
+        <FieldLabel>유형</FieldLabel>
+        <InlineTaxonomySelect
+          value={type}
+          items={typeItems}
+          addLabel="유형 추가"
+          placeholder="유형 선택"
+          onChange={setType}
+          onAdd={addEventType}
+          onRemove={removeEventType}
+        />
+      </div>
       <DateTimeRangeField value={range} onChange={setRange} />
-      <input className="h-10 w-full rounded-btn border border-line px-3 text-[14px]" value={place} onChange={(e) => setPlace(e.target.value)} />
-      <textarea className="min-h-[72px] w-full rounded-btn border border-line px-3 py-2 text-[14px]" value={preview} onChange={(e) => setPreview(e.target.value)} />
+      <div>
+        <FieldLabel>장소</FieldLabel>
+        <InlineTaxonomySelect
+          value={place}
+          items={placeItems}
+          addLabel="장소 추가"
+          placeholder="장소 선택"
+          onChange={setPlace}
+          onAdd={addPlace}
+          onRemove={removePlace}
+        />
+      </div>
+      <div>
+        <FieldLabel>메모</FieldLabel>
+        <textarea
+          className="min-h-[72px] w-full rounded-btn border border-line px-3 py-2 text-[14px]"
+          value={preview}
+          onChange={(e) => setPreview(e.target.value)}
+          placeholder="한 줄 메모"
+        />
+      </div>
       <div className="flex gap-2">
         <PrimaryButton
           onClick={() =>

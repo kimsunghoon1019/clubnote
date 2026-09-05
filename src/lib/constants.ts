@@ -45,6 +45,7 @@ export function isAbsentStatus(status: AttendanceStatus) {
 export const TX_TYPES = ["입금", "출금", "이체"] as const;
 export const TX_CATEGORIES = ["회비", "대관료", "야식", "교통", "의상", "기타"] as const;
 export const EVENT_TYPES = ["연습", "정기연습", "공연", "회식", "오디션", "회의"] as const;
+export const DEFAULT_PLACES = ["학생회관 404호", "학생회관 301호"];
 export const PRACTICE_DAYS = ["화", "목", "토"] as const;
 
 export const SMS_TEMPLATES = {

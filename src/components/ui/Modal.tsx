@@ -10,12 +10,16 @@ export function Modal({
   children,
   onClose,
   width = 440,
+  align = "center",
+  footer,
 }: {
   open: boolean;
   title: string;
   children: ReactNode;
   onClose: () => void;
   width?: number;
+  align?: "center" | "top";
+  footer?: ReactNode;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -29,22 +33,31 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center bg-black/30 p-4",
+        align === "top" ? "items-start pt-[7vh]" : "items-center",
+      )}
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal
         aria-label={title}
-        className="max-h-[86vh] overflow-auto rounded-card border border-line bg-white"
+        className="flex max-h-[86vh] flex-col overflow-hidden rounded-card border border-line bg-white"
         style={{ width }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-line-soft px-5 py-3.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-line-soft px-5 py-3.5">
           <h2 className="text-[16px] font-semibold text-ink">{title}</h2>
           <button type="button" onClick={onClose} className="rounded-btn p-1 text-faint hover:bg-muted hover:text-ink" aria-label="닫기">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden px-5 py-4 [scrollbar-gutter:stable] scrollbar-thin">
+          {children}
+        </div>
+        {footer ? <div className="shrink-0 border-t border-line-soft px-5 py-3">{footer}</div> : null}
       </div>
     </div>
   );

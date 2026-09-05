@@ -369,6 +369,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const updateEvent = useCallback((id: string, patch: Partial<ClubEvent>) => {
     setEvents((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    if (patch.type) setEventTypes((prev) => (prev.includes(patch.type!) ? prev : [...prev, patch.type!]));
+    if (patch.place) setPlaces((prev) => (prev.includes(patch.place!) ? prev : [...prev, patch.place!]));
   }, []);
 
   const deleteEvent = useCallback((id: string) => {
@@ -389,6 +391,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       transactions,
       categories,
       roles,
+      eventTypes,
+      places,
       selectedMemberIds,
       inspectedMemberId,
       toasts,
@@ -410,6 +414,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeCategory,
       addRole,
       removeRole,
+      addEventType,
+      removeEventType,
+      addPlace,
+      removePlace,
       assignCategory,
       addTransaction,
       importBankTransactions,
@@ -430,6 +438,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       transactions,
       categories,
       roles,
+      eventTypes,
+      places,
       selectedMemberIds,
       inspectedMemberId,
       toasts,
@@ -450,6 +460,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       removeCategory,
       addRole,
       removeRole,
+      addEventType,
+      removeEventType,
+      addPlace,
+      removePlace,
       assignCategory,
       addTransaction,
       importBankTransactions,

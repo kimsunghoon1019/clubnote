@@ -40,13 +40,19 @@ export function DateTimeRangeField({
   onChange: (next: DateTimeRangeValue) => void;
 }) {
   const [open, setOpen] = useState<FieldKey | null>(null);
+  const [shown, setShown] = useState<"date" | "time" | null>(null);
 
   const emit = (patch: Partial<DateTimeRangeValue>) => {
     onChange(normalizeRange(value, { ...value, ...patch }));
   };
 
   const toggle = (key: FieldKey) => {
-    setOpen((current) => (current === key ? null : key));
+    if (open === key) {
+      setOpen(null);
+      return;
+    }
+    setOpen(key);
+    setShown(key.endsWith("date") ? "date" : "time");
   };
 
   const setAllDay = (allDay: boolean) => {
@@ -55,6 +61,17 @@ export function DateTimeRangeField({
   };
 
   const picker = open?.endsWith("date") ? "date" : open?.endsWith("time") ? "time" : null;
+  const expanded = picker !== null;
+
+  useEffect(() => {
+    if (picker) {
+      setShown(picker);
+      return;
+    }
+    const timer = window.setTimeout(() => setShown(null), 320);
+    return () => window.clearTimeout(timer);
+  }, [picker]);
+
   const activeDate = open === "end-date" ? value.endDate : value.startDate;
   const activeTime = open === "end-time" ? value.endTime : value.startTime;
 
@@ -117,14 +134,19 @@ export function DateTimeRangeField({
 
       <div
         className={cn(
-          "grid transition-[grid-template-rows] duration-200 ease-out",
-          picker ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         )}
       >
-        <div className="overflow-hidden">
-          {picker ? (
-            <div className="border-t border-line-soft pt-2">
-              {picker === "date" ? (
+        <div className="min-h-0 overflow-hidden">
+          {shown ? (
+            <div
+              className={cn(
+                "border-t border-line-soft pt-2 transition-opacity duration-200 ease-out",
+                expanded ? "opacity-100" : "opacity-0",
+              )}
+            >
+              {shown === "date" ? (
                 <MonthPicker
                   selected={activeDate}
                   onSelect={(iso) => {
@@ -135,6 +157,7 @@ export function DateTimeRangeField({
                 />
               ) : (
                 <TimeWheel
+                  key={open ?? "time"}
                   time={activeTime || (open === "end-time" ? "21:00" : "19:00")}
                   onChange={(next) => {
                     if (open === "end-time") emit({ endTime: next });
