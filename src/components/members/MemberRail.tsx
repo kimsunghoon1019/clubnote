@@ -4,7 +4,8 @@ import { ChartNotes } from "@/components/ui/ChartNotes";
 import { Avatar } from "@/components/ui/Avatar";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
 import { ScoreBar } from "@/components/ui/ScoreBar";
-import { FieldLabel, SelectInput, TextInput } from "@/components/ui/Field";
+import { FieldLabel, TextInput } from "@/components/ui/Field";
+import { PropertySelect } from "@/components/ui/PropertySelect";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { FINE_STATUSES, GENDER_OPTIONS, emptyFineTally } from "@/lib/constants";
@@ -125,27 +126,21 @@ export function MemberRail({ memberId }: { memberId: string }) {
           </div>
           <div>
             <FieldLabel>분류</FieldLabel>
-            <SelectInput
+            <PropertySelect
               className="h-8 text-[13px]"
               value={draft.category}
-              onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-            >
-              {categories.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </SelectInput>
+              options={categories}
+              onChange={(value) => setDraft({ ...draft, category: value })}
+            />
           </div>
           <div>
             <FieldLabel>직책</FieldLabel>
-            <SelectInput
+            <PropertySelect
               className="h-8 text-[13px]"
               value={draft.role}
-              onChange={(e) => setDraft({ ...draft, role: e.target.value })}
-            >
-              {roles.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </SelectInput>
+              options={roles}
+              onChange={(value) => setDraft({ ...draft, role: value })}
+            />
           </div>
           <div>
             <FieldLabel>나이</FieldLabel>
@@ -174,15 +169,12 @@ export function MemberRail({ memberId }: { memberId: string }) {
           </div>
           <div>
             <FieldLabel>성별</FieldLabel>
-            <SelectInput
+            <PropertySelect
               className="h-8 text-[13px]"
               value={draft.gender}
-              onChange={(e) => setDraft({ ...draft, gender: e.target.value as Gender })}
-            >
-              {GENDER_OPTIONS.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </SelectInput>
+              options={[...GENDER_OPTIONS]}
+              onChange={(value) => setDraft({ ...draft, gender: value as Gender })}
+            />
           </div>
           <div>
             <FieldLabel>학번</FieldLabel>
