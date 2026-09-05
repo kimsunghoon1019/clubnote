@@ -40,22 +40,20 @@ export function DuesStatusModal({ open, onClose }: { open: boolean; onClose: () 
     {
       key: "paid",
       header: "납부여부",
+      width: "92px",
       render: (row) => (
-        <span className="inline-flex items-center gap-1">
-          <select
-            aria-label={`${row.name} 납부여부`}
-            value={row.paid ? "납부" : "미납"}
-            onChange={(event) => setPaid(row, event.target.value as "납부" | "미납")}
-            className={cn(
-              "h-7 rounded-btn border border-line bg-white px-1.5 text-[13px] font-medium",
-              row.paid ? "text-brand-text" : "text-up",
-            )}
-          >
-            <option value="미납">미납</option>
-            <option value="납부">납부</option>
-          </select>
-          {row.manual ? <span className="text-[11px] text-faint">수동</span> : null}
-        </span>
+        <select
+          aria-label={`${row.name} 납부여부`}
+          value={row.paid ? "납부" : "미납"}
+          onChange={(event) => setPaid(row, event.target.value as "납부" | "미납")}
+          className={cn(
+            "h-7 w-[72px] rounded-btn border border-line bg-white px-1.5 text-[13px] font-medium",
+            row.paid ? "text-brand-text" : "text-up",
+          )}
+        >
+          <option value="미납">미납</option>
+          <option value="납부">납부</option>
+        </select>
       ),
     },
     {
