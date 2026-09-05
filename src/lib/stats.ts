@@ -1,5 +1,5 @@
 import { ATTENDANCE_STATUSES, isPresentStatus } from "./constants";
-import { todayISO, weekdayToPracticeDay, formatWeekday } from "./format";
+import { formatWeekday, parseISODate, startOfWeekMonday, toISODate, todayISO, weekdayToPracticeDay } from "./format";
 import type { Attendance, AttendanceStatus, ClubEvent, Member, PracticeDay } from "./types";
 
 export function isPracticeEvent(event: ClubEvent) {
@@ -134,6 +134,113 @@ export function upcomingPractice(events: ClubEvent[], today = todayISO()) {
   return practiceEvents(events)
     .filter((event) => event.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))[0];
+}
+
+/** 오늘 포함, 이미 지난(또는 당일) 연습 */
+export function heldPracticeEvents(events: ClubEvent[], today = todayISO()) {
+  return practiceEvents(events)
+    .filter((event) => event.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
+
+/** 오늘 이후 남은 연습 */
+export function remainingPracticeEvents(events: ClubEvent[], today = todayISO()) {
+  return practiceEvents(events)
+    .filter((event) => event.date > today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
+
+export function thisWeekHeldPractices(events: ClubEvent[], today = todayISO()) {
+  const start = startOfWeekMonday(today);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const from = toISODate(start);
+  const to = toISODate(end);
+  return heldPracticeEvents(events, today).filter((event) => event.date >= from && event.date <= to);
+}
+
+export function attendanceStatusMap(attendance: Attendance[]) {
+  const map = new Map<string, AttendanceStatus>();
+  for (const row of attendance) {
+    map.set(`${row.eventId}:${row.memberId}`, row.status);
+  }
+  return map;
+}
+
+export function presentMembersForEvent(
+  event: ClubEvent,
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+) {
+  return membersForEvent(members, event).filter((member) => {
+    const status = recordMap.get(`${event.id}:${member.id}`);
+    return Boolean(status && isPresentStatus(status));
+  });
+}
+
+/** 출석표 칸 기준 출석률. 대상(연습요일 맞는 활동 회원) 대비 출석·지각. */
+export function pooledRosterRate(
+  events: ClubEvent[],
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+) {
+  let roster = 0;
+  let present = 0;
+  for (const event of events) {
+    const people = membersForEvent(members, event);
+    roster += people.length;
+    for (const member of people) {
+      const status = recordMap.get(`${event.id}:${member.id}`);
+      if (status && isPresentStatus(status)) present += 1;
+    }
+  }
+  return roster === 0 ? 0 : (present / roster) * 100;
+}
+
+export function weeklyAttendanceSpark(
+  events: ClubEvent[],
+  members: Member[],
+  recordMap: Map<string, AttendanceStatus>,
+  today = todayISO(),
+  weeks = 8,
+) {
+  const monday = startOfWeekMonday(today);
+  const rates: number[] = [];
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const start = new Date(monday);
+    start.setDate(monday.getDate() - i * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    const from = toISODate(start);
+    const to = toISODate(end);
+    const weekEvents = heldPracticeEvents(events, today).filter(
+      (event) => event.date >= from && event.date <= to,
+    );
+    rates.push(pooledRosterRate(weekEvents, members, recordMap));
+  }
+  return rates;
+}
+
+export function monthlyHeldPracticeSpark(events: ClubEvent[], today = todayISO(), months = 6) {
+  const held = heldPracticeEvents(events, today);
+  const now = parseISODate(today);
+  const counts: number[] = [];
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const cursor = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    counts.push(held.filter((event) => event.date.startsWith(key)).length);
+  }
+  return counts;
+}
+
+export function categoryPresentCounts(present: Member[], categories: string[]) {
+  const extra = [
+    ...new Set(present.map((member) => member.category).filter((name) => !categories.includes(name))),
+  ];
+  return [...categories, ...extra].map((name) => ({
+    name,
+    value: present.filter((member) => member.category === name).length,
+  }));
 }
 
 export function hasPracticeDay(days: PracticeDay[], day: PracticeDay) {
