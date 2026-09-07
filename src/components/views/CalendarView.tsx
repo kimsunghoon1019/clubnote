@@ -122,6 +122,17 @@ function swallowNextClick() {
   window.setTimeout(() => window.removeEventListener("click", onClick, true), 400);
 }
 
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_PX = 8;
+
+function isCompactViewport() {
+  return window.matchMedia("(max-width: 1023px)").matches;
+}
+
+function dayOccupied(iso: string, events: ClubEvent[]) {
+  return events.some((event) => event.date <= iso && eventEndDate(event) >= iso);
+}
+
 type DragGhost = {
   event: ClubEvent;
   x: number;
@@ -652,6 +663,10 @@ export function CalendarView() {
                     setSelectedEventIds([id]);
                   }}
                   onCreateDay={(iso) => {
+                    if (isCompactViewport()) {
+                      openCreate(iso);
+                      return;
+                    }
                     const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
                     setSelected(iso);
                     setActiveId(first);
@@ -834,7 +849,19 @@ function WeekRow({
   onEventContextMenu: (clientX: number, clientY: number, event: ClubEvent) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const pressTimer = useRef<number | null>(null);
+  const pressStart = useRef<{ iso: string; x: number; y: number } | null>(null);
   const weekIsos = week.map((cell) => cell.iso);
+
+  const clearPress = () => {
+    if (pressTimer.current != null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  };
+
+  useEffect(() => () => clearPress(), []);
   const segments = layoutWeek(weekIsos, events);
   const visible = segments.filter((seg) => seg.lane < CALENDAR_MAX_LANES);
   const laneCount = segments.reduce((max, seg) => Math.max(max, seg.lane + 1), 0);
@@ -868,14 +895,40 @@ function WeekRow({
             data-iso={cell.iso}
             data-drop-hover={isDrop ? "true" : undefined}
             aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
+            onPointerDown={(event) => {
+              if (!isCompactViewport() || event.button !== 0) return;
+              if (dayOccupied(cell.iso, events)) return;
+              clearPress();
+              pressStart.current = { iso: cell.iso, x: event.clientX, y: event.clientY };
+              pressTimer.current = window.setTimeout(() => {
+                const start = pressStart.current;
+                pressTimer.current = null;
+                pressStart.current = null;
+                if (!start) return;
+                swallowNextClick();
+                onCreateDay(start.iso);
+              }, LONG_PRESS_MS);
+            }}
+            onPointerMove={(event) => {
+              if (!pressStart.current || pressStart.current.iso !== cell.iso) return;
+              const dx = event.clientX - pressStart.current.x;
+              const dy = event.clientY - pressStart.current.y;
+              if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_PX) clearPress();
+            }}
+            onPointerUp={clearPress}
+            onPointerCancel={clearPress}
+            onContextMenu={(event) => {
+              if (isCompactViewport()) event.preventDefault();
+            }}
             onClick={() => onSelectDay(cell.iso)}
             onDoubleClick={(event) => {
               event.preventDefault();
+              if (isCompactViewport()) return;
               onCreateDay(cell.iso);
             }}
             style={{ gridColumn: index + 1, gridRow: "1 / 3" }}
             className={cn(
-              "relative flex flex-col border-r border-line-soft text-left hover:bg-muted",
+              "relative flex flex-col border-r border-line-soft text-left hover:bg-muted touch-manipulation max-lg:select-none",
               !cell.inMonth && "bg-[#fcfcfd]",
               isSelected && "bg-[#F7FBFF]",
               isDrop && "bg-brand-soft",
