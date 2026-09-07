@@ -54,6 +54,12 @@ import {
   txProofs,
 } from "./proof";
 import { deleteProofBlob, getProofBlob, putProofBlob } from "./proofDb";
+import {
+  authenticateMember,
+  defaultSessionMemberId,
+  loadSession,
+  persistSession,
+} from "./session";
 import { createClient } from "./supabase/client";
 import type {
   Attendance,
@@ -156,6 +162,11 @@ type ClubContextValue = {
   closeModal: () => void;
   duesOverrides: DuesOverride[];
   setDuesOverride: (memberId: string, semesterStart: string, paid: boolean | null) => void;
+  sessionReady: boolean;
+  sessionMemberId: string | null;
+  currentMember: Member | null;
+  signIn: (studentId: string, pin: string) => { ok: true } | { ok: false; error: string };
+  signOut: () => void;
 };
 
 const ClubContext = createContext<ClubContextValue | null>(null);
@@ -326,7 +337,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
   const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
   const [duesOverrides, setDuesOverrides] = useState<DuesOverride[]>([]);
+  const [sessionMemberId, setSessionMemberId] = useState<string | null>(() => defaultSessionMemberId(seedMembers));
+  const [sessionReady, setSessionReady] = useState(false);
   const eventsRef = useRef(events);
+  const membersRef = useRef(members);
+  membersRef.current = members;
   const attendanceRef = useRef(attendance);
   eventsRef.current = events;
   attendanceRef.current = attendance;
@@ -423,17 +438,55 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const stored = loadSession();
+    if (stored?.status === "out") {
+      setSessionMemberId(null);
+    } else if (stored?.status === "in") {
+      setSessionMemberId(stored.memberId);
+    } else {
+      setSessionMemberId(defaultSessionMemberId(membersRef.current));
+    }
+    setSessionReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !sessionReady || !sessionMemberId) return;
+    if (members.some((member) => member.id === sessionMemberId)) return;
+    const fallback = defaultSessionMemberId(members);
+    if (fallback) {
+      persistSession({ status: "in", memberId: fallback });
+      setSessionMemberId(fallback);
+      return;
+    }
+    persistSession({ status: "out" });
+    setSessionMemberId(null);
+  }, [ready, sessionReady, sessionMemberId, members]);
+
+  useEffect(() => {
     const supabase = createClient();
     if (!supabase) {
       setAccountId(LOCAL_ACCOUNT_ID);
       return;
     }
+    const ensureOperatorSession = (userId: string | undefined) => {
+      if (!userId) return;
+      setSessionMemberId((current) => {
+        if (current) return current;
+        const fallback = defaultSessionMemberId(membersRef.current);
+        if (!fallback) return current;
+        persistSession({ status: "in", memberId: fallback });
+        return fallback;
+      });
+    };
     let alive = true;
     supabase.auth.getUser().then(({ data }) => {
-      if (alive) setAccountId(data.user?.id ?? LOCAL_ACCOUNT_ID);
+      if (!alive) return;
+      setAccountId(data.user?.id ?? LOCAL_ACCOUNT_ID);
+      ensureOperatorSession(data.user?.id);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAccountId(session?.user?.id ?? LOCAL_ACCOUNT_ID);
+      ensureOperatorSession(session?.user?.id);
     });
     return () => {
       alive = false;
@@ -870,6 +923,26 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const signIn = useCallback((studentId: string, pin: string) => {
+    const result = authenticateMember(membersRef.current, studentId, pin);
+    if (!result.ok) return result;
+    persistSession({ status: "in", memberId: result.member.id });
+    setSessionMemberId(result.member.id);
+    return { ok: true as const };
+  }, []);
+
+  const signOut = useCallback(() => {
+    persistSession({ status: "out" });
+    setSessionMemberId(null);
+    const supabase = createClient();
+    if (supabase) void supabase.auth.signOut();
+  }, []);
+
+  const currentMember = useMemo(
+    () => members.find((member) => member.id === sessionMemberId) ?? null,
+    [members, sessionMemberId],
+  );
+
   const value = useMemo<ClubContextValue>(
     () => ({
       groups: seedGroups,
@@ -937,6 +1010,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       closeModal,
       duesOverrides,
       setDuesOverride,
+      sessionReady,
+      sessionMemberId,
+      currentMember,
+      signIn,
+      signOut,
     }),
     [
       members,
@@ -1002,6 +1080,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       closeModal,
       duesOverrides,
       setDuesOverride,
+      sessionReady,
+      sessionMemberId,
+      currentMember,
+      signIn,
+      signOut,
     ],
   );
 

@@ -1,7 +1,7 @@
 "use client";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
-import { OPERATOR_NAME, OPERATOR_ROLE } from "@/lib/constants";
 import { useClub } from "@/lib/store";
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
@@ -19,7 +19,7 @@ const NAV = [
 
 export function AppHeader() {
   const pathname = usePathname();
-  const { setSearchOpen } = useClub();
+  const { setSearchOpen, currentMember } = useClub();
   const [bellOpen, setBellOpen] = useState(false);
 
   return (
@@ -97,15 +97,29 @@ export function AppHeader() {
             ) : null}
           </div>
 
-          <div className="flex h-9 items-center gap-2 rounded-chip border border-line-soft px-2.5">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand-text">
-              김
-            </span>
-            <span className="text-[13px] text-ink">
-              <span className="text-faint">{OPERATOR_ROLE} · </span>
-              {OPERATOR_NAME}
-            </span>
-          </div>
+          {currentMember ? (
+            <Link
+              href="/mypage"
+              aria-label={`${currentMember.name} 마이페이지`}
+              className={cn(
+                "flex h-9 items-center gap-2 rounded-chip border px-2.5",
+                pathname.startsWith("/mypage") ? "border-brand bg-brand-soft" : "border-line-soft hover:bg-muted",
+              )}
+            >
+              <Avatar name={currentMember.name} size={24} />
+              <span className="text-[13px] text-ink">
+                <span className="text-faint">{currentMember.role} · </span>
+                {currentMember.name}
+              </span>
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="flex h-9 items-center rounded-chip border border-line-soft px-3 text-[13px] font-medium text-brand-text hover:bg-brand-soft"
+            >
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </header>

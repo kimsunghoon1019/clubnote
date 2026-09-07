@@ -66,6 +66,28 @@ function recordOf(attendance: Attendance[], eventId: string, memberId: string) {
   return attendance.find((row) => row.eventId === eventId && row.memberId === memberId);
 }
 
+export function memberPracticeRecords(
+  member: Member,
+  events: ClubEvent[],
+  attendance: Attendance[],
+  today = todayISO(),
+) {
+  return practiceEvents(events)
+    .filter((event) => event.date <= today && isScheduledFor(member, event))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((event) => ({
+      event,
+      status: recordOf(attendance, event.id, member.id)?.status ?? null,
+    }));
+}
+
+export function upcomingMemberPractices(member: Member, events: ClubEvent[], today = todayISO(), limit = 6) {
+  return practiceEvents(events)
+    .filter((event) => event.date >= today && isScheduledFor(member, event))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, limit);
+}
+
 /** 출석해야 하는 연습 중 제대로 출석(출석만)한 비율. 0~1 */
 export function diligenceScore(
   member: Member,
