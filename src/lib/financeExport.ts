@@ -17,7 +17,7 @@ export const LEDGER_HEADERS = [
 ] as const;
 
 export function isProofNumberedTx(row: Transaction) {
-  return row.type === "출금";
+  return row.amount < 0 || row.type === "출금" || row.type === "이체";
 }
 
 export function proofNumberedRows(rows: Transaction[]) {
