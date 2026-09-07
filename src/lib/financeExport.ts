@@ -16,9 +16,17 @@ export const LEDGER_HEADERS = [
   "증빙",
 ] as const;
 
+export function isProofNumberedTx(row: Transaction) {
+  return row.type === "출금";
+}
+
+export function proofNumberedRows(rows: Transaction[]) {
+  return [...rows].filter(isProofNumberedTx).sort(compareTxAsc);
+}
+
 export function proofNumberById(rows: Transaction[]) {
   const map = new Map<string, number>();
-  [...rows].sort(compareTxAsc).forEach((row, index) => {
+  proofNumberedRows(rows).forEach((row, index) => {
     map.set(row.id, index + 1);
   });
   return map;

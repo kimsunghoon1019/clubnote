@@ -15,7 +15,7 @@ import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
 import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { duesSemester, inSemester, previousSemester } from "@/lib/dues";
-import { downloadLedgerXlsx } from "@/lib/financeExport";
+import { downloadLedgerXlsx, isProofNumberedTx } from "@/lib/financeExport";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { txProofs } from "@/lib/proof";
@@ -122,7 +122,7 @@ export function FinanceView() {
   }
 
   async function exportProofs() {
-    if (periodRows.length === 0) {
+    if (!periodRows.some(isProofNumberedTx)) {
       toast("내보낼 거래가 없어요");
       setExportOpen(false);
       return;

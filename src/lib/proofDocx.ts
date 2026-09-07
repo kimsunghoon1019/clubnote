@@ -16,7 +16,6 @@ import {
   WidthType,
   type FileChild,
 } from "docx";
-import { compareTxAsc } from "./bankExcel";
 import { dataUrlToBlob, downloadBlob, proofKind, txProofs } from "./proof";
 import { getStoredProofBlob, peekProofBlob } from "./proofDb";
 import {
@@ -24,6 +23,7 @@ import {
   periodDateBounds,
   proofLabel,
   proofNumberById,
+  proofNumberedRows,
   proofsDocFileName,
 } from "./financeExport";
 import type { DuesSemester } from "./dues";
@@ -64,12 +64,13 @@ export async function downloadProofsDocx(
   period: string,
   range: Pick<DuesSemester, "start" | "end"> | null,
 ) {
-  if (rows.length === 0) {
+  const numberedRows = proofNumberedRows(rows);
+  if (numberedRows.length === 0) {
     throw new Error("내보낼 거래가 없어요");
   }
   const numbered = proofNumberById(rows);
   const items: ProofItem[] = [];
-  for (const row of [...rows].sort(compareTxAsc)) {
+  for (const row of numberedRows) {
     const n = numbered.get(row.id);
     if (!n) continue;
     const rasters: Raster[] = [];
