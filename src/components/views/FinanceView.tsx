@@ -15,12 +15,13 @@ import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
 import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { duesSemester, inSemester, previousSemester } from "@/lib/dues";
+import { downloadLedgerXlsx, rowsWithProofs } from "@/lib/financeExport";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { Transaction, TxType } from "@/lib/types";
-import { Upload, Wallet } from "lucide-react";
+import { ChevronDown, Download, Upload, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
@@ -50,7 +51,10 @@ export function FinanceView() {
   const [passwordError, setPasswordError] = useState("");
   const [unlocking, setUnlocking] = useState(false);
   const [duesOpen, setDuesOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState<"ledger" | "proofs" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const ordered = useMemo(() => [...transactions].sort(compareTxDesc), [transactions]);
   const currentSemester = useMemo(() => duesSemester(), []);
@@ -82,6 +86,58 @@ export function FinanceView() {
   useEffect(() => {
     if (inspectedTxId && !transactions.some((row) => row.id === inspectedTxId)) setInspectedTxId(null);
   }, [inspectedTxId, transactions]);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (exportRef.current?.contains(event.target as Node)) return;
+      setExportOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExportOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [exportOpen]);
+
+  async function exportLedger() {
+    if (periodRows.length === 0) {
+      toast("내보낼 거래가 없어요");
+      setExportOpen(false);
+      return;
+    }
+    setExporting("ledger");
+    try {
+      await downloadLedgerXlsx(periodRows, period);
+    } catch {
+      toast("내역을 내보내지 못했어요");
+    } finally {
+      setExporting(null);
+      setExportOpen(false);
+    }
+  }
+
+  async function exportProofs() {
+    if (rowsWithProofs(periodRows).length === 0) {
+      toast("내보낼 증빙이 없어요");
+      setExportOpen(false);
+      return;
+    }
+    setExporting("proofs");
+    try {
+      const { downloadProofsDocx } = await import("@/lib/proofDocx");
+      await downloadProofsDocx(periodRows, period, periodRange);
+    } catch (error: unknown) {
+      toast(error instanceof Error ? error.message : "증빙을 내보내지 못했어요");
+    } finally {
+      setExporting(null);
+      setExportOpen(false);
+    }
+  }
 
   function clearPendingExcel() {
     setPendingFile(null);
@@ -154,21 +210,36 @@ export function FinanceView() {
     {
       key: "when",
       header: "거래일시",
-      render: (row) => <span className="tabular-nums text-sub">{formatTxWhen(row.occurredOn, row.occurredAt)}</span>,
+      width: "128px",
+      render: (row) => (
+        <span className="block truncate tabular-nums text-sub">{formatTxWhen(row.occurredOn, row.occurredAt)}</span>
+      ),
     },
     {
       key: "type",
       header: "거래유형",
+      width: "72px",
       render: (row) => <span className={row.type === "입금" ? "text-up" : "text-down"}>{row.type}</span>,
     },
-    { key: "institution", header: "거래기관", render: (row) => row.institution },
-    { key: "account", header: "계좌번호", render: (row) => <span className="text-sub">{row.accountMasked}</span> },
+    {
+      key: "institution",
+      header: "거래기관",
+      width: "80px",
+      render: (row) => <span className="block truncate">{row.institution}</span>,
+    },
+    {
+      key: "account",
+      header: "계좌번호",
+      width: "120px",
+      render: (row) => <span className="block truncate text-sub">{row.accountMasked}</span>,
+    },
     {
       key: "amount",
       header: "거래금액",
+      width: "108px",
       align: "right",
       render: (row) => (
-        <span className={cn("tabular-nums font-medium", row.amount > 0 ? "text-up" : "text-down")}>
+        <span className={cn("block truncate tabular-nums font-medium", row.amount > 0 ? "text-up" : "text-down")}>
           {formatSignedWon(row.amount)}
         </span>
       ),
@@ -176,10 +247,16 @@ export function FinanceView() {
     {
       key: "balance",
       header: "거래후잔액",
+      width: "108px",
       align: "right",
-      render: (row) => <span className="tabular-nums">{formatWon(row.balanceAfter)}</span>,
+      render: (row) => <span className="block truncate tabular-nums">{formatWon(row.balanceAfter)}</span>,
     },
-    { key: "title", header: "적요", render: (row) => <span className="font-medium">{row.title}</span> },
+    {
+      key: "title",
+      header: "적요",
+      width: "132px",
+      render: (row) => <span className="block truncate font-medium">{row.title}</span>,
+    },
     {
       key: "category",
       header: (
@@ -191,12 +268,13 @@ export function FinanceView() {
           onMove={moveTxCategory}
         />
       ),
+      width: "108px",
       render: (row) => (
         <div onClick={(e) => e.stopPropagation()}>
           <select
             value={row.category}
             aria-label={`${row.title} 카테고리`}
-            className="h-7 rounded-btn border border-line bg-white px-1.5 text-[12px]"
+            className="h-7 w-full max-w-full rounded-btn border border-line bg-white px-1.5 text-[12px]"
             onChange={(e) => updateTransaction(row.id, { category: e.target.value })}
           >
             <option value="">선택</option>
@@ -210,11 +288,13 @@ export function FinanceView() {
     {
       key: "memo",
       header: "세부내역",
-      render: (row) => <span className="max-w-[200px] truncate text-sub">{row.memo || "-"}</span>,
+      width: "132px",
+      render: (row) => <span className="block truncate text-sub">{row.memo || "-"}</span>,
     },
     {
       key: "proof",
       header: "증빙",
+      width: "88px",
       render: (row) => (
         <div className="flex h-7 max-h-7 items-center overflow-hidden">
           <ProofThumbs proofs={txProofs(row)} />
@@ -267,6 +347,42 @@ export function FinanceView() {
                 if (file) void importExcel(file);
               }}
             />
+            <div ref={exportRef} className="relative">
+              <GhostButton
+                className="whitespace-nowrap"
+                disabled={Boolean(exporting)}
+                aria-label="내보내기"
+                aria-expanded={exportOpen}
+                onClick={() => setExportOpen((open) => !open)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                {exporting === "ledger" ? "내역 저장 중" : exporting === "proofs" ? "증빙 저장 중" : "내보내기"}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </GhostButton>
+              {exportOpen ? (
+                <div
+                  data-export-menu
+                  className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-btn border border-line bg-white py-1 shadow-[0_8px_24px_rgba(25,31,40,0.12)]"
+                >
+                  <button
+                    type="button"
+                    data-export-ledger
+                    className="flex w-full px-3 py-2 text-left text-[13px] hover:bg-muted"
+                    onClick={() => void exportLedger()}
+                  >
+                    내역 내보내기
+                  </button>
+                  <button
+                    type="button"
+                    data-export-proofs
+                    className="flex w-full px-3 py-2 text-left text-[13px] hover:bg-muted"
+                    onClick={() => void exportProofs()}
+                  >
+                    증빙 내보내기
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <GhostButton className="whitespace-nowrap" disabled={uploading} onClick={() => fileRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
               {uploading ? "읽는 중" : "엑셀 업로드"}
@@ -285,6 +401,7 @@ export function FinanceView() {
           <DataTable
             columns={columns}
             rows={filtered}
+            resizable
             selectedIds={inspectedTxId ? [inspectedTxId] : undefined}
             onRowClick={handleRowClick}
             empty={
