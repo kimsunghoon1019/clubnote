@@ -3,13 +3,14 @@
 import { formatDateKo, formatWon } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import { Search, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export function SearchOverlay() {
-  const { searchOpen, setSearchOpen, members, events, transactions } = useClub();
+  const { searchOpen, setSearchOpen, members, events, transactions, focusMember, focusEvent } = useClub();
   const [query, setQuery] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -32,9 +33,25 @@ export function SearchOverlay() {
 
   if (!searchOpen) return null;
 
-  const go = (href: string) => {
+  const close = () => {
     setSearchOpen(false);
     setQuery("");
+  };
+
+  const goMember = (id: string) => {
+    focusMember(id);
+    close();
+    if (pathname !== "/members") router.push("/members");
+  };
+
+  const goEvent = (id: string) => {
+    focusEvent(id);
+    close();
+    if (pathname !== "/calendar") router.push("/calendar");
+  };
+
+  const go = (href: string) => {
+    close();
     router.push(href);
   };
 
@@ -67,7 +84,7 @@ export function SearchOverlay() {
                   <Empty />
                 ) : (
                   results.members.map((m) => (
-                    <button key={m.id} type="button" className="flex w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] hover:bg-muted" onClick={() => go("/members")}>
+                    <button key={m.id} type="button" data-search-member={m.id} className="flex w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] hover:bg-muted" onClick={() => goMember(m.id)}>
                       <span>{m.name}</span>
                       <span className="text-faint">
                         {m.role} · {m.major}
@@ -81,7 +98,7 @@ export function SearchOverlay() {
                   <Empty />
                 ) : (
                   results.events.map((e) => (
-                    <button key={e.id} type="button" className="flex w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] hover:bg-muted" onClick={() => go("/calendar")}>
+                    <button key={e.id} type="button" data-search-event={e.id} className="flex w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-[13px] hover:bg-muted" onClick={() => goEvent(e.id)}>
                       <span>{e.title}</span>
                       <span className="text-faint">
                         {formatDateKo(e.date)} · {e.type}

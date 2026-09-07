@@ -110,6 +110,8 @@ type ClubContextValue = {
   txCategories: string[];
   selectedMemberIds: string[];
   inspectedMemberId: string | null;
+  memberFocusSeq: number;
+  pendingEventId: string | null;
   toasts: ToastItem[];
   modal: ModalKey;
   searchOpen: boolean;
@@ -118,6 +120,10 @@ type ClubContextValue = {
   selectAll: (ids: string[]) => void;
   clearSelection: () => void;
   inspectMember: (id: string | null) => void;
+  focusMember: (id: string) => void;
+  focusEvent: (id: string) => void;
+  consumePendingEvent: () => void;
+  resetRailsForRoute: (pathname: string) => void;
   setAttendanceStatus: (eventId: string, memberId: string, status: AttendanceStatus | null) => void;
   closeAttendance: (eventId: string) => boolean;
   updateMember: (id: string, patch: Partial<Member>) => void;
@@ -514,6 +520,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [txCategories, setTxCategories] = useState<string[]>([...TX_CATEGORIES]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [inspectedMemberId, setInspectedMemberId] = useState<string | null>(null);
+  const [memberFocusSeq, setMemberFocusSeq] = useState(0);
+  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
+  const keepRailOnPathRef = useRef<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [modal, setModal] = useState<ModalKey>(null);
   const [eventModalDate, setEventModalDate] = useState<string | null>(null);
@@ -1063,6 +1072,27 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const clearSelection = useCallback(() => setSelectedMemberIds([]), []);
   const inspectMember = useCallback((id: string | null) => setInspectedMemberId(id), []);
 
+  const focusMember = useCallback((id: string) => {
+    keepRailOnPathRef.current = "/members";
+    setInspectedMemberId(id);
+    setSelectedMemberIds([id]);
+    setMemberFocusSeq((value) => value + 1);
+  }, []);
+
+  const focusEvent = useCallback((id: string) => {
+    setPendingEventId(id);
+  }, []);
+
+  const consumePendingEvent = useCallback(() => setPendingEventId(null), []);
+
+  const resetRailsForRoute = useCallback((pathname: string) => {
+    if (pathname !== "/calendar") setPendingEventId(null);
+    if (keepRailOnPathRef.current === pathname) return;
+    keepRailOnPathRef.current = null;
+    setInspectedMemberId(null);
+    setSelectedMemberIds([]);
+  }, []);
+
   const setAttendanceStatus = useCallback(
     (eventId: string, memberId: string, status: AttendanceStatus | null) => {
       setAttendance((prev) => {
@@ -1466,6 +1496,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       txCategories,
       selectedMemberIds,
       inspectedMemberId,
+      memberFocusSeq,
+      pendingEventId,
       toasts,
       modal,
       searchOpen,
@@ -1474,6 +1506,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       selectAll,
       clearSelection,
       inspectMember,
+      focusMember,
+      focusEvent,
+      consumePendingEvent,
+      resetRailsForRoute,
       setAttendanceStatus,
       closeAttendance,
       updateMember,
@@ -1542,6 +1578,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       txCategories,
       selectedMemberIds,
       inspectedMemberId,
+      memberFocusSeq,
+      pendingEventId,
       toasts,
       modal,
       searchOpen,
@@ -1549,6 +1587,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       selectAll,
       clearSelection,
       inspectMember,
+      focusMember,
+      focusEvent,
+      consumePendingEvent,
+      resetRailsForRoute,
       setAttendanceStatus,
       closeAttendance,
       updateMember,

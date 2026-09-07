@@ -57,6 +57,7 @@ export function DataTable<T extends { id: string }>({
     return (
       <tr
         key={row.id}
+        data-row-id={row.id}
         className={cn(
           "border-b border-line-soft text-ink hover:bg-muted",
           selected && "bg-[#F7FBFF]",

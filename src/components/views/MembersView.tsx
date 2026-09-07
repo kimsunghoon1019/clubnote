@@ -184,6 +184,7 @@ export function MembersView() {
     categories,
     selectedMemberIds,
     inspectedMemberId,
+    memberFocusSeq,
     toggleSelect,
     selectAll,
     clearSelection,
@@ -217,6 +218,17 @@ export function MembersView() {
   useEffect(() => {
     if (!categories.includes(assignTo)) setAssignTo(categories[0] ?? "");
   }, [categories, assignTo]);
+
+  useEffect(() => {
+    if (memberFocusSeq === 0 || !inspectedMemberId) return;
+    setCategoryTab("전체");
+    setSelectionAnchorId(inspectedMemberId);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-row-id="${CSS.escape(inspectedMemberId)}"]`)?.scrollIntoView({
+        block: "nearest",
+      });
+    });
+  }, [memberFocusSeq, inspectedMemberId]);
 
   const activeMembers = useMemo(() => members.filter(isActive), [members]);
   const counts = categoryCounts(activeMembers, categories);

@@ -157,8 +157,20 @@ function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
 }
 
 export function CalendarView() {
-  const { events, weatherDays, addEvent, updateEvent, deleteEvent, deleteEvents, undoEventChange, openModal, modal, toast } =
-    useClub();
+  const {
+    events,
+    weatherDays,
+    addEvent,
+    updateEvent,
+    deleteEvent,
+    deleteEvents,
+    undoEventChange,
+    openModal,
+    modal,
+    toast,
+    pendingEventId,
+    consumePendingEvent,
+  } = useClub();
   const today = todayISO();
   const [cursor, setCursor] = useState(() => parseISODate(today));
   const [selected, setSelected] = useState<string | null>(null);
@@ -199,6 +211,18 @@ export function CalendarView() {
   const active = events.find((event) => event.id === activeId) ?? pickedEvents[0];
   const notice = practiceNoticeText(events, today);
   const multiSelected = pickedEvents.length > 1;
+
+  useEffect(() => {
+    if (!pendingEventId) return;
+    const event = events.find((item) => item.id === pendingEventId);
+    if (!event) return;
+    setCursor(parseISODate(event.date));
+    setSelected(event.date);
+    setActiveId(event.id);
+    setSelectedEventIds([event.id]);
+    setEditing(false);
+    consumePendingEvent();
+  }, [pendingEventId, events, consumePendingEvent]);
 
   const shiftMonth = (delta: number) => {
     setCursor(new Date(year, monthIndex + delta, 1));
@@ -531,6 +555,8 @@ export function CalendarView() {
       <aside
         className="flex min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft"
         data-event-selected-count={pickedEvents.length}
+        data-active-event-id={active?.id ?? undefined}
+        data-selected-date={selected ?? undefined}
       >
         <div className="flex-1 overflow-auto px-5 py-5 [scrollbar-gutter:stable] scrollbar-thin">
           {multiSelected ? (

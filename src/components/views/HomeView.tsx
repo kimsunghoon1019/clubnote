@@ -5,6 +5,7 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { MiniCalendar } from "@/components/ui/MiniCalendar";
 import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { ChartInbox } from "@/components/members/ChartInbox";
 import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction, transactionBalanceSpark } from "@/lib/bankExcel";
 import { duesStatus } from "@/lib/dues";
@@ -371,9 +372,14 @@ export function HomeView() {
         {inspectedMemberId ? (
           <MemberRail memberId={inspectedMemberId} />
         ) : (
-          <RailSection>
-            <MiniCalendar compact events={events} onSelect={() => router.push("/calendar")} />
-          </RailSection>
+          <>
+            <RailSection>
+              <ChartInbox />
+            </RailSection>
+            <RailSection>
+              <MiniCalendar compact events={events} onSelect={() => router.push("/calendar")} />
+            </RailSection>
+          </>
         )}
       </RightRail>
     </>

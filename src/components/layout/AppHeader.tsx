@@ -1,5 +1,6 @@
 "use client";
 
+import { ChartInbox, useUnreadChartNotes } from "@/components/members/ChartInbox";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { CLUB_NAME } from "@/lib/constants";
@@ -8,8 +9,7 @@ import { useClub } from "@/lib/store";
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { notifications } from "@/lib/seed";
+import { useEffect, useRef, useState } from "react";
 
 const NAV = [
   { href: "/", label: "홈" },
@@ -22,7 +22,30 @@ const NAV = [
 export function AppHeader() {
   const pathname = usePathname();
   const { setSearchOpen, currentMember } = useClub();
+  const unread = useUnreadChartNotes();
   const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setBellOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!bellOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (bellRef.current?.contains(event.target as Node)) return;
+      setBellOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBellOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [bellOpen]);
 
   return (
     <header className="sticky top-0 z-30 h-14 border-b border-line-soft bg-white">
@@ -76,25 +99,31 @@ export function AppHeader() {
             <Search className="h-4 w-4" />
           </button>
 
-          <div className="relative">
+          <div className="relative" ref={bellRef}>
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-btn text-sub hover:bg-muted"
+              className="relative z-10 flex h-9 w-9 items-center justify-center rounded-btn text-sub hover:bg-muted"
               aria-label="알림"
-              onClick={() => setBellOpen((v) => !v)}
+              aria-expanded={bellOpen}
+              aria-haspopup="dialog"
+              data-bell-open={bellOpen ? "true" : "false"}
+              data-bell-unread={unread.length}
+              onClick={() => setBellOpen((open) => !open)}
             >
               <Bell className="h-4 w-4" />
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up" />
+              {unread.length > 0 ? (
+                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up" data-bell-dot />
+              ) : null}
             </button>
             {bellOpen ? (
-              <div className="absolute right-0 top-11 w-80 rounded-card border border-line bg-white py-2">
+              <div
+                data-bell-panel
+                className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-card border border-line bg-white py-2"
+              >
                 <p className="px-3 pb-2 text-[12px] font-semibold text-faint">알림</p>
-                {notifications.map((item) => (
-                  <div key={item.id} className="px-3 py-2 hover:bg-muted">
-                    <p className="text-[13px] text-ink">{item.title}</p>
-                    <p className="mt-0.5 text-[11px] text-faint">{item.time}</p>
-                  </div>
-                ))}
+                <div className="max-h-[min(420px,70vh)] overflow-auto px-3 scrollbar-thin">
+                  <ChartInbox showHeader={false} />
+                </div>
               </div>
             ) : null}
           </div>

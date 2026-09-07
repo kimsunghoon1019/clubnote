@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { AppHeader } from "./AppHeader";
 import { SearchOverlay } from "./SearchOverlay";
 import { StatusBar } from "./StatusBar";
@@ -15,8 +15,13 @@ import { useClub } from "@/lib/store";
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { sessionReady, sessionMemberId } = useClub();
+  const { sessionReady, sessionMemberId, resetRailsForRoute } = useClub();
   const bare = pathname === "/login" || pathname.startsWith("/auth");
+
+  useLayoutEffect(() => {
+    if (bare) return;
+    resetRailsForRoute(pathname);
+  }, [bare, pathname, resetRailsForRoute]);
 
   useEffect(() => {
     if (!sessionReady || bare || sessionMemberId) return;

@@ -91,7 +91,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
   const memberNotes = notes.filter((note) => note.memberId === member.id);
 
   return (
-    <div>
+    <div data-member-rail={member.id}>
       <div className="mb-4 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <Avatar name={member.name} size={40} src={memberPhotoSrc(member)} />
