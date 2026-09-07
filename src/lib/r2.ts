@@ -32,20 +32,29 @@ async function r2Error(res: Response, fallback: string) {
   return message || text.slice(0, 240) || fallback;
 }
 
+function toArrayBuffer(body: Uint8Array) {
+  const copy = new Uint8Array(body.byteLength);
+  copy.set(body);
+  return copy.buffer;
+}
+
 async function signedR2Fetch(url: string, init: { method: string; headers?: Record<string, string>; body?: Uint8Array }) {
   const headers: Record<string, string> = { ...(init.headers ?? {}) };
-  if (init.body) headers["content-length"] = String(init.body.byteLength);
+  const payload = init.body
+    ? new Blob([toArrayBuffer(init.body)], { type: headers["content-type"] || "application/octet-stream" })
+    : undefined;
+  if (payload) headers["content-length"] = String(payload.size);
   const signed = await r2Client().sign(url, {
     method: init.method,
     headers,
-    body: init.body,
+    body: payload,
   });
   const out = new Headers(signed.headers);
-  if (init.body) out.set("content-length", String(init.body.byteLength));
+  if (payload) out.set("content-length", String(payload.size));
   return fetch(url, {
     method: init.method,
     headers: out,
-    body: init.body,
+    body: payload,
   });
 }
 
