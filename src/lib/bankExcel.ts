@@ -298,7 +298,7 @@ export async function parseBankExcelFile(file: File, password?: string): Promise
   if (isEncryptedOffice(bytes)) {
     if (!password) return { rows: [], needsPassword: true };
     try {
-      bytes = decryptOfficeWorkbook(bytes, password);
+      bytes = new Uint8Array(decryptOfficeWorkbook(bytes, password));
       unlocked = true;
     } catch (error) {
       if (error instanceof WrongPasswordError) return { rows: [], error: "비밀번호가 맞지 않아요" };

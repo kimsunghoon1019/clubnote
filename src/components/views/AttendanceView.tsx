@@ -64,7 +64,7 @@ export function AttendanceView() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   const [saveFlash, setSaveFlash] = useState(false);
-  const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | 0>(0);
+  const saveFlashTimer = useRef(0);
 
   useEffect(() => {
     if (!practiceList.some((item) => item.id === eventId) && fallback) {

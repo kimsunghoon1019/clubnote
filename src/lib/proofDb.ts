@@ -6,6 +6,11 @@ const memory = new Map<string, Blob>();
 const listeners = new Set<() => void>();
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let remoteFiles = false;
+
+export function setProofRemote(enabled: boolean) {
+  remoteFiles = enabled;
+}
 
 function notifyProofStore() {
   for (const listener of listeners) listener();
@@ -43,7 +48,7 @@ function openProofDb() {
   return dbPromise;
 }
 
-export async function putProofBlob(id: string, blob: Blob) {
+export async function putProofBlob(id: string, blob: Blob, meta?: { name?: string; mime?: string }) {
   memory.set(id, blob);
   notifyProofStore();
   try {
@@ -56,6 +61,14 @@ export async function putProofBlob(id: string, blob: Blob) {
     });
   } catch {
     /* keep the file in memory for this session */
+  }
+  if (remoteFiles) {
+    try {
+      const { putClubFile } = await import("./remoteClient");
+      await putClubFile(id, blob, meta?.name || id, meta?.mime || blob.type || "application/octet-stream");
+    } catch {
+      /* metadata is in club_state; retry on next get */
+    }
   }
 }
 
@@ -70,11 +83,38 @@ export async function getProofBlob(id: string): Promise<Blob | undefined> {
       req.onsuccess = () => resolve((req.result as Blob | undefined) ?? undefined);
       req.onerror = () => reject(req.error);
     });
-    if (blob) memory.set(id, blob);
-    return blob;
+    if (blob) {
+      memory.set(id, blob);
+      return blob;
+    }
   } catch {
-    return undefined;
+    /* fall through to remote */
   }
+  if (remoteFiles) {
+    try {
+      const { getClubFile } = await import("./remoteClient");
+      const remote = await getClubFile(id);
+      if (remote) {
+        memory.set(id, remote);
+        notifyProofStore();
+        try {
+          const db = await openProofDb();
+          await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE, "readwrite");
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.objectStore(STORE).put(remote, id);
+          });
+        } catch {
+          /* memory cache is enough */
+        }
+        return remote;
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 export async function deleteProofBlob(id: string) {
@@ -90,5 +130,13 @@ export async function deleteProofBlob(id: string) {
     });
   } catch {
     /* metadata removal still proceeds */
+  }
+  if (remoteFiles) {
+    try {
+      const { deleteClubFile } = await import("./remoteClient");
+      await deleteClubFile(id);
+    } catch {
+      /* metadata removal still proceeds */
+    }
   }
 }

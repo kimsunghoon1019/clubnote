@@ -56,7 +56,7 @@ import {
   persistableTransaction,
   txProofs,
 } from "./proof";
-import { deleteProofBlob, getProofBlob, putProofBlob } from "./proofDb";
+import { deleteProofBlob, getProofBlob, putProofBlob, setProofRemote } from "./proofDb";
 import {
   authenticateMember,
   canLogin,
@@ -65,7 +65,16 @@ import {
   loadSession,
   persistSession,
 } from "./session";
-import { createClient } from "./supabase/client";
+import type { ChartSeenByAccount, Persisted } from "./clubState";
+import { asPersisted } from "./clubState";
+import {
+  fetchAuthSession,
+  fetchClubState,
+  fetchDbHealth,
+  loginRemote,
+  logoutRemote,
+  putClubState,
+} from "./remoteClient";
 import type {
   Attendance,
   AttendanceStatus,
@@ -78,29 +87,9 @@ import type {
 } from "./types";
 
 const LOCAL_ACCOUNT_ID = "local";
-type ChartSeenByAccount = Record<string, string[]>;
 
 export type ToastItem = { id: string; message: string };
 export type ModalKey = "sms" | "transaction" | "event" | "member-add" | null;
-
-type Persisted = {
-  members: Member[];
-  events: ClubEvent[];
-  attendance: Attendance[];
-  notes: ChartNote[];
-  transactions: Transaction[];
-  categories: string[];
-  roles: string[];
-  eventTypes: string[];
-  places: string[];
-  txCategories?: string[];
-  chartSeenByAccount?: ChartSeenByAccount;
-  weatherDays?: WeatherDay[];
-  weatherFetchedAt?: string;
-  eventsClearedBefore?: string;
-  duesOverrides?: DuesOverride[];
-  legacyTaxonomyMerged?: boolean;
-};
 
 type ClubContextValue = {
   groups: typeof seedGroups;
@@ -173,7 +162,8 @@ type ClubContextValue = {
   sessionReady: boolean;
   sessionMemberId: string | null;
   currentMember: Member | null;
-  signIn: (studentId: string, pin: string) => { ok: true } | { ok: false; error: string };
+  remoteDb: boolean;
+  signIn: (studentId: string, pin: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   signOut: () => void;
 };
 
@@ -369,12 +359,54 @@ function loadPersisted(): Persisted | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as Persisted;
-    if (!Array.isArray(data.members) || !Array.isArray(data.events) || !Array.isArray(data.attendance)) return null;
-    return data;
+    return asPersisted(JSON.parse(raw));
   } catch {
     return null;
   }
+}
+
+function parsedClubSnapshot(data: Persisted, ignoreLegacy = false) {
+  const attendanceRows = data.attendance.flatMap((row) => {
+    const status = normalizeAttendanceStatus(String(row.status));
+    if (!status) return [];
+    return [{ ...row, status }];
+  });
+  const cutoff = data.eventsClearedBefore ?? "";
+  const loaded =
+    cutoff < EVENTS_KEEP_FROM
+      ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
+      : { events: data.events, attendance: attendanceRows };
+  const legacy = ignoreLegacy || data.legacyTaxonomyMerged ? null : loadLegacyTaxonomy();
+  const usedCategories = data.members.map((member) => member.category);
+  const usedRoles = data.members.map((member) => member.role);
+  return {
+    events: loaded.events.map(persistableEvent),
+    attendance: loaded.attendance,
+    members: withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance),
+    eventsClearedBefore: EVENTS_KEEP_FROM,
+    weatherDays: normalizeWeatherDays(data.weatherDays),
+    weatherFetchedAt: typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "",
+    notes: data.notes ?? [],
+    categories: pickTaxonomy(
+      data.categories,
+      legacy?.categories,
+      usedCategories,
+      DEFAULT_CATEGORIES,
+      Boolean(data.legacyTaxonomyMerged),
+    ),
+    roles: normalizeRoles(
+      pickTaxonomy(data.roles, legacy?.roles, usedRoles, DEFAULT_ROLES, Boolean(data.legacyTaxonomyMerged)),
+    ),
+    eventTypes: uniqueNames(EVENT_TYPES, data.eventTypes ?? [], (data.events ?? []).map((event) => event.type)),
+    places: uniqueNames(DEFAULT_PLACES, data.places ?? [], (data.events ?? []).map((event) => event.place)),
+    txCategories: uniqueNames(
+      data.txCategories?.length ? data.txCategories : TX_CATEGORIES,
+      (data.transactions ?? []).map((row) => row.category),
+    ),
+    chartSeenByAccount: normalizeChartSeen(data.chartSeenByAccount),
+    duesOverrides: normalizeDuesOverrides(data.duesOverrides),
+    transactions: data.transactions ?? [],
+  };
 }
 
 export function ClubProvider({ children }: { children: ReactNode }) {
@@ -401,8 +433,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
   const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
   const [duesOverrides, setDuesOverrides] = useState<DuesOverride[]>([]);
-  const [sessionMemberId, setSessionMemberId] = useState<string | null>(() => defaultSessionMemberId(seedMembers));
+  const [sessionMemberId, setSessionMemberId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [remoteDb, setRemoteDb] = useState(false);
   const eventsRef = useRef(events);
   const membersRef = useRef(members);
   membersRef.current = members;
@@ -415,6 +448,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   attendanceRef.current = attendance;
   const eventUndoRef = useRef<EventUndoSnap[]>([]);
   const orphanEventBlobsRef = useRef<Set<string>>(new Set());
+  const remoteDbRef = useRef(false);
+  const stateVersionRef = useRef(0);
+  const silencePersistRef = useRef(true);
+  const persistTimerRef = useRef(0);
+  const persistPayloadRef = useRef<Persisted | null>(null);
 
   const sweepOrphanEventBlobs = (live: ClubEvent[]) => {
     const used = eventAttachmentIds(live);
@@ -448,70 +486,74 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const applySnapshot = useCallback(async (data: Persisted) => {
+    const snap = parsedClubSnapshot(data, remoteDbRef.current);
+    const txs = await hydrateTransactionProofs(snap.transactions.length ? snap.transactions : seedTransactions);
+    setEvents(snap.events);
+    setAttendance(snap.attendance);
+    setMembers(snap.members);
+    setEventsClearedBefore(snap.eventsClearedBefore);
+    setWeatherDays(snap.weatherDays);
+    setWeatherFetchedAt(snap.weatherFetchedAt);
+    setNotes(snap.notes);
+    setCategories(snap.categories);
+    setRoles(snap.roles);
+    setEventTypes(snap.eventTypes);
+    setPlaces(snap.places);
+    setTxCategories(snap.txCategories);
+    setChartSeenByAccount(snap.chartSeenByAccount);
+    setDuesOverrides(snap.duesOverrides);
+    setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
+  }, []);
+
   useEffect(() => {
     let alive = true;
     void (async () => {
+      const health = await fetchDbHealth();
+      const remote = health.remote && health.ready;
+      if (!alive) return;
+      remoteDbRef.current = remote;
+      setRemoteDb(remote);
+      setProofRemote(remote);
+
+      if (remote) {
+        const session = await fetchAuthSession();
+        if (!alive) return;
+        if (session?.memberId) {
+          persistSession({ status: "in", memberId: session.memberId });
+          setSessionMemberId(session.memberId);
+          setAccountId(session.memberId);
+          const row = await fetchClubState();
+          if (!alive) return;
+          if (row?.payload) {
+            stateVersionRef.current = row.version;
+            await applySnapshot(row.payload);
+          }
+        } else {
+          persistSession({ status: "out" });
+          setSessionMemberId(null);
+          setAccountId(LOCAL_ACCOUNT_ID);
+        }
+        if (health.error) {
+          /* schema ping already failed into ready=false; this branch is remote+ready */
+        }
+        silencePersistRef.current = false;
+        setReady(true);
+        setSessionReady(true);
+        return;
+      }
+
+      if (health.remote && !health.ready) {
+        console.warn("클럽노트 DB 테이블이 없어요. supabase/schema.sql을 실행해 주세요.", health.error);
+      }
+
       const data = loadPersisted();
-      const txs = await hydrateTransactionProofs(data?.transactions ?? seedTransactions);
       if (!alive) return;
       if (data) {
-        const attendanceRows = data.attendance.flatMap((row) => {
-          const status = normalizeAttendanceStatus(String(row.status));
-          if (!status) return [];
-          return [{ ...row, status }];
-        });
-        const cutoff = data.eventsClearedBefore ?? "";
-        const loaded =
-          cutoff < EVENTS_KEEP_FROM
-            ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
-            : { events: data.events, attendance: attendanceRows };
-        setEvents(loaded.events.map(persistableEvent));
-        setAttendance(loaded.attendance);
-        setMembers(withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance));
-        setEventsClearedBefore(EVENTS_KEEP_FROM);
-        setWeatherDays(normalizeWeatherDays(data.weatherDays));
-        setWeatherFetchedAt(typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "");
-        setNotes(data.notes ?? []);
-        const legacy = data.legacyTaxonomyMerged ? null : loadLegacyTaxonomy();
-        const usedCategories = data.members.map((member) => member.category);
-        const usedRoles = data.members.map((member) => member.role);
-        setCategories(
-          pickTaxonomy(
-            data.categories,
-            legacy?.categories,
-            usedCategories,
-            DEFAULT_CATEGORIES,
-            Boolean(data.legacyTaxonomyMerged),
-          ),
-        );
-        setRoles(
-          normalizeRoles(
-            pickTaxonomy(data.roles, legacy?.roles, usedRoles, DEFAULT_ROLES, Boolean(data.legacyTaxonomyMerged)),
-          ),
-        );
-        setEventTypes(
-          uniqueNames(
-            EVENT_TYPES,
-            data.eventTypes ?? [],
-            (data.events ?? []).map((event) => event.type),
-          ),
-        );
-        setPlaces(
-          uniqueNames(
-            DEFAULT_PLACES,
-            data.places ?? [],
-            (data.events ?? []).map((event) => event.place),
-          ),
-        );
-        setTxCategories(
-          uniqueNames(
-            data.txCategories?.length ? data.txCategories : TX_CATEGORIES,
-            (data.transactions ?? []).map((row) => row.category),
-          ),
-        );
-        setChartSeenByAccount(normalizeChartSeen(data.chartSeenByAccount));
-        setDuesOverrides(normalizeDuesOverrides(data.duesOverrides));
+        await applySnapshot(data);
       } else {
+        const txs = await hydrateTransactionProofs(seedTransactions);
+        if (!alive) return;
         const legacy = loadLegacyTaxonomy();
         if (legacy) {
           setCategories(
@@ -535,29 +577,43 @@ export function ClubProvider({ children }: { children: ReactNode }) {
             ),
           );
         }
+        setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
       }
-      setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
+      const stored = loadSession();
+      if (stored?.status === "out") {
+        setSessionMemberId(null);
+      } else if (stored?.status === "in") {
+        setSessionMemberId(stored.memberId);
+        setAccountId(stored.memberId);
+      } else {
+        const fallback = defaultSessionMemberId(membersRef.current);
+        setSessionMemberId(fallback);
+        if (fallback) {
+          persistSession({ status: "in", memberId: fallback });
+          setAccountId(fallback);
+        }
+      }
+      silencePersistRef.current = false;
       setReady(true);
+      setSessionReady(true);
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [applySnapshot]);
 
   useEffect(() => {
-    const stored = loadSession();
-    if (stored?.status === "out") {
+    if (!ready || !sessionReady) return;
+    if (remoteDb) {
+      if (!sessionMemberId) return;
+      const member = members.find((item) => item.id === sessionMemberId);
+      if (member && canLogin(member)) return;
+      persistSession({ status: "out" });
       setSessionMemberId(null);
-    } else if (stored?.status === "in") {
-      setSessionMemberId(stored.memberId);
-    } else {
-      setSessionMemberId(defaultSessionMemberId(membersRef.current));
+      void logoutRemote();
+      return;
     }
-    setSessionReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready || !sessionReady || !sessionMemberId) return;
+    if (!sessionMemberId) return;
     const member = members.find((item) => item.id === sessionMemberId);
     if (member && canLogin(member)) return;
     if (member && !canLogin(member)) {
@@ -573,42 +629,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     }
     persistSession({ status: "out" });
     setSessionMemberId(null);
-  }, [ready, sessionReady, sessionMemberId, members]);
+  }, [ready, sessionReady, sessionMemberId, members, remoteDb]);
 
   useEffect(() => {
-    const supabase = createClient();
-    if (!supabase) {
-      setAccountId(LOCAL_ACCOUNT_ID);
-      return;
-    }
-    const ensureOperatorSession = (userId: string | undefined) => {
-      if (!userId) return;
-      setSessionMemberId((current) => {
-        if (current) return current;
-        const fallback = defaultSessionMemberId(membersRef.current);
-        if (!fallback) return current;
-        persistSession({ status: "in", memberId: fallback });
-        return fallback;
-      });
-    };
-    let alive = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!alive) return;
-      setAccountId(data.user?.id ?? LOCAL_ACCOUNT_ID);
-      ensureOperatorSession(data.user?.id);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAccountId(session?.user?.id ?? LOCAL_ACCOUNT_ID);
-      ensureOperatorSession(session?.user?.id);
-    });
-    return () => {
-      alive = false;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
+    if (!ready || silencePersistRef.current) return;
     const payload: Persisted = {
       members: withFineTallies(members, events, attendance),
       events: events.map(persistableEvent),
@@ -627,12 +651,60 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       duesOverrides,
       legacyTaxonomyMerged: true,
     };
+    persistPayloadRef.current = payload;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
       /* quota: keep in-memory state */
     }
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, duesOverrides]);
+    if (!remoteDbRef.current || !sessionMemberId) return;
+    window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      const next = persistPayloadRef.current;
+      if (!next) return;
+      const version = stateVersionRef.current;
+      void putClubState(next, version).then((result) => {
+        if (result.ok) {
+          stateVersionRef.current = result.version;
+          return;
+        }
+        if (result.conflict && result.payload) {
+          stateVersionRef.current = result.version;
+          silencePersistRef.current = true;
+          void applySnapshot(result.payload).finally(() => {
+            silencePersistRef.current = false;
+          });
+          setToasts((prev) => [
+            ...prev,
+            { id: uid("toast"), message: "다른 기기에서 먼저 저장해서 최신으로 맞췄어요." },
+          ]);
+        }
+      });
+    }, 500);
+    return () => window.clearTimeout(persistTimerRef.current);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, duesOverrides, sessionMemberId, applySnapshot]);
+
+  useEffect(() => {
+    if (!remoteDb || !ready || !sessionMemberId) return;
+    const onWake = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetchClubState().then((row) => {
+        if (!row?.payload) return;
+        if (row.version <= stateVersionRef.current) return;
+        stateVersionRef.current = row.version;
+        silencePersistRef.current = true;
+        void applySnapshot(row.payload).finally(() => {
+          silencePersistRef.current = false;
+        });
+      });
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
+  }, [remoteDb, ready, sessionMemberId, applySnapshot]);
 
   const practiceDaysKey = members.map((member) => `${member.id}:${member.practiceDays.join(",")}`).join("|");
   useEffect(() => {
@@ -961,7 +1033,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const addTransactionProof = useCallback(async (id: string, file: File) => {
     const { meta, blob } = await fileToProof(file);
-    await putProofBlob(meta.id, blob);
+    await putProofBlob(meta.id, blob, { name: meta.name, mime: meta.mime });
     setTransactions((prev) =>
       prev.map((row) => (row.id === id ? { ...row, proofs: [...txProofs(row), meta] } : row)),
     );
@@ -1005,7 +1077,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const addEventAttachment = useCallback(async (id: string, file: File) => {
     const { meta, blob } = await fileToProof(file);
-    await putProofBlob(meta.id, blob);
+    await putProofBlob(meta.id, blob, { name: meta.name, mime: meta.mime });
     pushEventUndo();
     orphanEventBlobsRef.current.add(meta.id);
     setEvents((prev) =>
@@ -1069,19 +1141,59 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const signIn = useCallback((studentId: string, pin: string) => {
+  const signIn = useCallback(async (studentId: string, pin: string) => {
+    const health = await fetchDbHealth();
+    const remote = health.remote && health.ready;
+    remoteDbRef.current = remote;
+    setRemoteDb(remote);
+    setProofRemote(remote);
+    if (remote) {
+      const result = await loginRemote(studentId, pin);
+      if (!result.ok) return result;
+      persistSession({ status: "in", memberId: result.memberId });
+      setSessionMemberId(result.memberId);
+      setAccountId(result.memberId);
+      silencePersistRef.current = true;
+      try {
+        if (result.bootstrapped) {
+          const local = loadPersisted();
+          if (local) {
+            const put = await putClubState(local, result.version);
+            if (put.ok) {
+              stateVersionRef.current = put.version;
+              await applySnapshot(local);
+              return { ok: true as const };
+            }
+            if (put.conflict && put.payload) {
+              stateVersionRef.current = put.version;
+              await applySnapshot(put.payload);
+              return { ok: true as const };
+            }
+          }
+        }
+        const row = await fetchClubState();
+        if (row?.payload) {
+          stateVersionRef.current = row.version;
+          await applySnapshot(row.payload);
+        }
+      } finally {
+        silencePersistRef.current = false;
+      }
+      return { ok: true as const };
+    }
     const result = authenticateMember(membersRef.current, studentId, pin);
     if (!result.ok) return result;
     persistSession({ status: "in", memberId: result.member.id });
     setSessionMemberId(result.member.id);
+    setAccountId(result.member.id);
     return { ok: true as const };
-  }, []);
+  }, [applySnapshot]);
 
   const signOut = useCallback(() => {
     persistSession({ status: "out" });
     setSessionMemberId(null);
-    const supabase = createClient();
-    if (supabase) void supabase.auth.signOut();
+    setAccountId(LOCAL_ACCOUNT_ID);
+    if (remoteDbRef.current) void logoutRemote();
   }, []);
 
   const currentMember = useMemo(
@@ -1161,6 +1273,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       sessionReady,
       sessionMemberId,
       currentMember,
+      remoteDb,
       signIn,
       signOut,
     }),
@@ -1233,6 +1346,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       sessionReady,
       sessionMemberId,
       currentMember,
+      remoteDb,
       signIn,
       signOut,
     ],

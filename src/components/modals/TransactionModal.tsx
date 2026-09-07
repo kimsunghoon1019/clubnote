@@ -144,7 +144,9 @@ export function TransactionModal() {
             const raw = Number(amount);
             const signed = type === "입금" ? raw : -Math.abs(raw);
             void (async () => {
-              for (const item of proofs) await putProofBlob(item.meta.id, item.blob);
+              for (const item of proofs) {
+                await putProofBlob(item.meta.id, item.blob, { name: item.meta.name, mime: item.meta.mime });
+              }
               addTransaction({
                 occurredOn,
                 title,

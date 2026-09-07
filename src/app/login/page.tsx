@@ -3,7 +3,6 @@
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { FieldLabel, TextInput } from "@/components/ui/Field";
 import { demoLogins, safeNextPath } from "@/lib/session";
-import { createClient, hasSupabaseEnv } from "@/lib/supabase/client";
 import { useClub } from "@/lib/store";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signOut, currentMember, members } = useClub();
+  const { signIn, signOut, currentMember, members, remoteDb, sessionReady } = useClub();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -22,14 +21,11 @@ export default function LoginPage() {
       window.history.replaceState(null, "", rest ? `/login?${rest}` : "/login");
     }
   }, [signOut]);
-  const demos = useMemo(() => demoLogins(members), [members]);
+  const demos = useMemo(() => (remoteDb ? [] : demoLogins(members)), [members, remoteDb]);
   const [studentId, setStudentId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [magicError, setMagicError] = useState("");
-  const configured = hasSupabaseEnv();
+  const [busy, setBusy] = useState(false);
 
   function goNext() {
     const next = new URLSearchParams(window.location.search).get("next");
@@ -37,32 +33,18 @@ export default function LoginPage() {
     router.refresh();
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy || !sessionReady) return;
     setError("");
-    const result = signIn(studentId, pin);
+    setBusy(true);
+    const result = await signIn(studentId, pin);
+    setBusy(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
     goNext();
-  }
-
-  async function sendMagicLink(e: React.FormEvent) {
-    e.preventDefault();
-    setMagicError("");
-    if (!configured) return;
-    const supabase = createClient();
-    if (!supabase) return;
-    const { error: sendError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (sendError) {
-      setMagicError(sendError.message);
-      return;
-    }
-    setSent(true);
   }
 
   return (
@@ -78,7 +60,11 @@ export default function LoginPage() {
           </div>
         </div>
         <h1 className="text-[20px] font-semibold">운영진 로그인</h1>
-        <p className="mt-1 text-[14px] text-sub">직책이 있는 회원만 학번 또는 아이디로 들어와요. 단원은 로그인할 수 없어요.</p>
+        <p className="mt-1 text-[14px] text-sub">
+          {remoteDb
+            ? "직책이 있는 회원만 학번 또는 아이디로 들어와요. 데이터는 서버 DB에 저장됩니다."
+            : "직책이 있는 회원만 학번 또는 아이디로 들어와요. 단원은 로그인할 수 없어요."}
+        </p>
         <form className="mt-6 space-y-3" onSubmit={submit}>
           <div>
             <FieldLabel>아이디 또는 학번</FieldLabel>
@@ -103,8 +89,8 @@ export default function LoginPage() {
               onChange={(e) => setPin(e.target.value.slice(0, 32))}
             />
           </div>
-          <PrimaryButton type="submit" className="h-11 w-full">
-            로그인
+          <PrimaryButton type="submit" className="h-11 w-full" disabled={busy || !sessionReady}>
+            {busy ? "확인 중…" : "로그인"}
           </PrimaryButton>
         </form>
         {error ? <p className="mt-3 text-[13px] text-up">{error}</p> : null}
@@ -145,27 +131,6 @@ export default function LoginPage() {
               홈으로
             </Link>
           </p>
-        ) : null}
-
-        {configured ? (
-          <div className="mt-8 border-t border-line-soft pt-6">
-            <h2 className="text-[14px] font-semibold">운영진 매직링크</h2>
-            <p className="mt-1 text-[12px] text-faint">등록된 이메일로 로그인 링크를 보내 드려요.</p>
-            <form className="mt-3 space-y-3" onSubmit={sendMagicLink}>
-              <TextInput
-                type="email"
-                required
-                placeholder="you@university.ac.kr"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <PrimaryButton type="submit" className="h-11 w-full">
-                매직링크 보내기
-              </PrimaryButton>
-            </form>
-            {sent ? <p className="mt-3 text-[13px] text-brand-text">메일함을 확인해 주세요. 링크는 잠시 후 만료돼요.</p> : null}
-            {magicError ? <p className="mt-3 text-[13px] text-up">{magicError}</p> : null}
-          </div>
         ) : null}
       </div>
     </div>

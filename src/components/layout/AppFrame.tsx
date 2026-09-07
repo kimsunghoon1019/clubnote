@@ -28,7 +28,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (sessionReady && !sessionMemberId) {
+  if (!sessionReady || !sessionMemberId) {
     return <div className="h-screen bg-white" />;
   }
 
