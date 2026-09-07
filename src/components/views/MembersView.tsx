@@ -18,7 +18,7 @@ import { cn } from "@/lib/cn";
 import { CLUB_NAME } from "@/lib/constants";
 import { formatChartStamp, formatDateDot, formatRatio, tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
-import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
+import { categoryCounts, diligenceScore, isActive, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ChartNote, Member } from "@/lib/types";
 import { Download, UserPlus } from "lucide-react";
@@ -60,6 +60,16 @@ function compareMembers(a: Member, b: Member, key: SortKey, scores: MemberScores
 
 function sortColumnKey(columnKey: string): SortKey | undefined {
   return SORT_KEYS.find((key) => SORT_COLUMN[key] === columnKey);
+}
+
+function sortMemberList(list: Member[], sort: SortState, scores: MemberScores) {
+  const key = sort?.key ?? DEFAULT_SORT_KEY;
+  const dir = sort?.dir ?? "asc";
+  return [...list].sort((a, b) => {
+    const raw = compareMembers(a, b, key, scores);
+    const signed = dir === "desc" ? -raw : raw;
+    return signed || a.name.localeCompare(b.name, "ko") || a.id.localeCompare(b.id);
+  });
 }
 
 function SortChip({
@@ -225,16 +235,14 @@ export function MembersView() {
     return members.filter((m) => m.category === categoryTab);
   }, [members, categoryTab]);
 
-  const sorted = useMemo(() => {
-    const key = sort?.key ?? DEFAULT_SORT_KEY;
-    const dir = sort?.dir ?? "asc";
-    const copy = [...filtered];
-    copy.sort((a, b) => {
-      const raw = compareMembers(a, b, key, scores);
-      const signed = dir === "desc" ? -raw : raw;
-      return signed || a.name.localeCompare(b.name, "ko") || a.id.localeCompare(b.id);
-    });
-    return copy;
+  const { activeSorted, inactiveSorted, sorted } = useMemo(() => {
+    const active = sortMemberList(filtered.filter(isActive), sort, scores);
+    const inactive = sortMemberList(
+      filtered.filter((member) => !isActive(member)),
+      sort,
+      scores,
+    );
+    return { activeSorted: active, inactiveSorted: inactive, sorted: [...active, ...inactive] };
   }, [filtered, sort, scores]);
 
   const selectedEnabled = selectedMemberIds.length > 0;
@@ -479,6 +487,18 @@ export function MembersView() {
           <DataTable
             columns={columns}
             rows={sorted}
+            groups={
+              inactiveSorted.length
+                ? [
+                    { key: "active", rows: activeSorted },
+                    {
+                      key: "inactive",
+                      label: `비활동 ${inactiveSorted.length}명`,
+                      rows: inactiveSorted,
+                    },
+                  ]
+                : undefined
+            }
             sortKey={sort ? SORT_COLUMN[sort.key] : undefined}
             sortDir={sort?.dir}
             onSort={(columnKey) => {
