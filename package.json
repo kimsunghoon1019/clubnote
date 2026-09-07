@@ -2,7 +2,7 @@
   "name": "clubnote",
   "version": "1.0.0",
   "private": true,
-  "description": "클럽노트 — 글리클럽 동아리 운영 콘솔",
+  "description": "글리클럽 동아리 운영 콘솔",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

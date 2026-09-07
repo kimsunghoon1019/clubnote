@@ -1,5 +1,5 @@
 export function AiInsightCard({
-  title = "클럽노트 AI",
+  title = "글리클럽 AI",
   text,
   onClick,
 }: {

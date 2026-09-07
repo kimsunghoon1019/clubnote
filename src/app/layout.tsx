@@ -5,7 +5,7 @@ import { AppFrame } from "@/components/layout/AppFrame";
 import { CLUB_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
-  title: `클럽노트 — ${CLUB_NAME}`,
+  title: `${CLUB_NAME} — 동아리 운영`,
   description: "출석·회원·회계·일정을 한 화면에서 보는 동아리 운영 콘솔",
 };
 

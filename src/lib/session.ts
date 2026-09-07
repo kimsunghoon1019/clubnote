@@ -104,21 +104,6 @@ export function authenticateMember(members: Member[], login: string, pin: string
   return { ok: true as const, member };
 }
 
-export function demoLogins(members: Member[]) {
-  const officers = members.filter(canLogin);
-  const preferred = officers.find((member) => isOperatorMember(member));
-  const rest = officers.filter((member) => member.id !== preferred?.id);
-  return [preferred, ...rest]
-    .filter((member): member is Member => Boolean(member))
-    .slice(0, 2)
-    .map((member) => ({
-      name: member.name,
-      role: member.role,
-      studentId: member.studentId,
-      pin: memberPassword(member),
-    }));
-}
-
 export function safeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/";
   return value;

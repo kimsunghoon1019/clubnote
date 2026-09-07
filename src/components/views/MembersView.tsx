@@ -15,6 +15,7 @@ import { PropertySelect } from "@/components/ui/PropertySelect";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
 import { cn } from "@/lib/cn";
+import { CLUB_NAME } from "@/lib/constants";
 import { formatChartStamp, formatDateDot, formatRatio, tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats";
@@ -293,7 +294,7 @@ export function MembersView() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "클럽노트_회원.csv";
+    a.download = `${CLUB_NAME}_회원.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast("CSV를 내려받았어요");

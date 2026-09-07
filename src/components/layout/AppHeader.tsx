@@ -2,6 +2,7 @@
 
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
+import { CLUB_NAME } from "@/lib/constants";
 import { useClub } from "@/lib/store";
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
@@ -32,7 +33,7 @@ export function AppHeader() {
             </svg>
           </span>
           <span className="leading-tight">
-            <span className="block text-[15px] font-bold text-ink">클럽노트</span>
+            <span className="block text-[15px] font-bold text-ink">{CLUB_NAME}</span>
             <span className="block text-[11px] text-faint">동아리 운영</span>
           </span>
         </Link>
