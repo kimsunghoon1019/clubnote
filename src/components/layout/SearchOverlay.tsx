@@ -57,6 +57,7 @@ export function SearchOverlay() {
     }
 
     const onPop = () => {
+      if (window.history.state?.[HISTORY_FLAG]) return;
       pushedRef.current = false;
       finishClose();
     };

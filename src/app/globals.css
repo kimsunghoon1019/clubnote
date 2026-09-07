@@ -76,6 +76,7 @@ textarea {
   background: transparent;
 }
 
-html[data-detail-open] [data-bottom-nav] {
+html[data-detail-open] [data-bottom-nav],
+html[data-modal-open] [data-bottom-nav] {
   display: none;
 }
