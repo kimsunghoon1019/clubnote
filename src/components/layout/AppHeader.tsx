@@ -3,6 +3,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { CLUB_NAME } from "@/lib/constants";
+import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
@@ -107,7 +108,7 @@ export function AppHeader() {
                 pathname.startsWith("/mypage") ? "border-brand bg-brand-soft" : "border-line-soft hover:bg-muted",
               )}
             >
-              <Avatar name={currentMember.name} size={24} src={currentMember.photoDataUrl} />
+              <Avatar name={currentMember.name} size={24} src={memberPhotoSrc(currentMember)} />
               <span className="text-[13px] text-ink">
                 <span className="text-faint">{currentMember.role} · </span>
                 {currentMember.name}

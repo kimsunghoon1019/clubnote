@@ -11,6 +11,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { tallyMemberPresents } from "@/lib/attendanceSheet";
 import { FINE_STATUSES, GENDER_OPTIONS, emptyFineTally } from "@/lib/constants";
 import { ageFromBirthDate, collegeFromMajor, formatDateDot, tenureLabel } from "@/lib/format";
+import { memberPhotoSrc } from "@/lib/proof";
 import { diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { Gender } from "@/lib/types";
@@ -93,7 +94,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
     <div>
       <div className="mb-4 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <Avatar name={member.name} size={40} src={member.photoDataUrl} />
+          <Avatar name={member.name} size={40} src={memberPhotoSrc(member)} />
           <div>
             <p className="flex items-baseline gap-1.5">
               <span className="text-[15px] font-semibold">{member.name}</span>

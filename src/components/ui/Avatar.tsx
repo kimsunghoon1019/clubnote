@@ -1,5 +1,8 @@
+"use client";
+
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/format";
+import { useState } from "react";
 
 const PALETTE = [
   { bg: "#E8F3FF", fg: "#1B64DA" },
@@ -10,15 +13,21 @@ const PALETTE = [
 ];
 
 export function Avatar({ name, size = 28, src }: { name: string; size?: number; src?: string }) {
+  const [failedSrc, setFailedSrc] = useState("");
   const palette = PALETTE[name.charCodeAt(0) % PALETTE.length];
-  if (src) {
+  if (src && failedSrc !== src) {
     return (
       <span
         className="inline-flex shrink-0 overflow-hidden rounded-full bg-muted"
         style={{ width: size, height: size }}
         aria-hidden
       >
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setFailedSrc(src)}
+        />
       </span>
     );
   }

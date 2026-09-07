@@ -1,4 +1,4 @@
-import type { ClubEvent, EventAttachment, Transaction, TxProof } from "./types";
+import type { ClubEvent, EventAttachment, Member, Transaction, TxProof } from "./types";
 
 const MAX_PROOF_BYTES = 8 * 1024 * 1024;
 const IMAGE_MAX_EDGE = 1280;
@@ -31,6 +31,20 @@ export function eventAttachments(event: Pick<ClubEvent, "id" | "attachments" | "
 export function persistableEvent(event: ClubEvent): ClubEvent {
   const { attachmentName: _legacy, ...rest } = event;
   return { ...rest, attachments: eventAttachments(event) };
+}
+
+export function persistableMember(member: Member): Member {
+  const embedded = typeof member.photoDataUrl === "string" && member.photoDataUrl.startsWith("data:");
+  const photoId = member.photoId || (embedded ? `photo-${member.id}` : undefined);
+  const { photoDataUrl: _photo, ...rest } = member;
+  return photoId ? { ...rest, photoId } : rest;
+}
+
+export function memberPhotoSrc(member: Pick<Member, "photoDataUrl" | "photoId"> | null | undefined) {
+  if (!member) return undefined;
+  if (member.photoDataUrl) return member.photoDataUrl;
+  if (member.photoId) return `/api/files/${encodeURIComponent(member.photoId)}`;
+  return undefined;
 }
 
 export function downloadBlob(blob: Blob, name: string) {

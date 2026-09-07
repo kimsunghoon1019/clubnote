@@ -9,11 +9,11 @@
 | 환경 | 원본 |
 | --- | --- |
 | 로컬 `npm run dev` (환경변수 없음) | 이 브라우저 `localStorage` `clubnote-db-v5` + IndexedDB 증빙 |
-| Vercel 배포 | Supabase `club_state` (회원·출석·회계·일정 JSON) + Cloudflare R2 (영수증·PDF·첨부) |
+| Vercel 배포 | Supabase `club_state` (회원·출석·회계·일정 JSON) + Cloudflare R2 (프로필 사진·영수증·PDF·첨부) |
 
 운영진이 회원·분류·직책·출석·회계·일정을 바꾸면 같은 DB를 보는 모든 기기에 반영됩니다. 첫 로그인 때 이 브라우저에 남아 있던 로컬 데이터가 있으면 서버가 비어 있을 때만 한 번 올립니다.
 
-프로필 사진은 용량이 작아서 JSON 안에 둡니다. 영수증·첨부만 R2입니다.
+프로필 사진·영수증·첨부는 Cloudflare R2에 두고, 회원·출석·회계·일정 JSON만 Supabase에 둡니다. 저장 API는 서울(icn1)에서 돌아갑니다.
 
 ## 로컬 실행
 
@@ -100,7 +100,8 @@ git push -u origin master
 | `CLUB_SESSION_SECRET` | (선택) 긴 무작위 문자열. 없으면 service_role로 세션 서명 |
 
 4. Deploy 끝나면 주소가 나옵니다. 예: `https://clubnote.vercel.app`
-5. 그 주소 뒤에 `/api/db/health` 를 붙여 확인
+5. GitHub `master`에 푸시하면 그 주소가 자동으로 다시 배포됩니다
+6. 그 주소 뒤에 `/api/db/health` 를 붙여 확인
 
 ```json
 {"remote":true,"ready":true,"files":true}

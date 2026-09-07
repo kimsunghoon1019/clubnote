@@ -1,5 +1,9 @@
+import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { clampWeatherPastDays, openMeteoForecastUrl, parseOpenMeteoDaily, SINCHON } from "@/lib/weather";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const preferredRegion = PREFERRED_REGION;
 
 export async function GET(req: Request) {
   const pastDays = clampWeatherPastDays(new URL(req.url).searchParams.get("past"));

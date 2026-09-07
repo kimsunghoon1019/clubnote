@@ -1,0 +1,9 @@
+tmp
+test-results
+screenshots
+이미지
+.git
+node_modules
+.env
+.env.local
+.env*.local

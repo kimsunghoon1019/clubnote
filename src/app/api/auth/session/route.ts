@@ -1,8 +1,10 @@
 import { readSessionMemberId } from "@/lib/auth/requestSession";
 import { remoteDbConfigured } from "@/lib/db/clubRepo";
+import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const preferredRegion = PREFERRED_REGION;
 
 export async function GET() {
   if (!remoteDbConfigured()) {

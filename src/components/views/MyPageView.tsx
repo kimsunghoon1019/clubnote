@@ -6,7 +6,8 @@ import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { Pill, RolePill } from "@/components/ui/Pill";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { fileToAvatarDataUrl } from "@/lib/proof";
+import { dataUrlToBlob, fileToAvatarDataUrl, memberPhotoSrc } from "@/lib/proof";
+import { putProofBlob } from "@/lib/proofDb";
 import { loginIdTaken, phonePin } from "@/lib/session";
 import { useClub } from "@/lib/store";
 import type { Member } from "@/lib/types";
@@ -15,7 +16,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 
 export function MyPageView() {
-  const { currentMember, members, updateMember, toast } = useClub();
+  const { currentMember, members, updateMember, toast, remoteDb } = useClub();
 
   if (!currentMember) {
     return (
@@ -32,6 +33,7 @@ export function MyPageView() {
       members={members}
       updateMember={updateMember}
       toast={toast}
+      remoteDb={remoteDb}
     />
   );
 }
@@ -41,14 +43,17 @@ function MyPageEditor({
   members,
   updateMember,
   toast,
+  remoteDb,
 }: {
   member: Member;
   members: Member[];
   updateMember: (id: string, patch: Partial<Member>) => void;
   toast: (message: string) => void;
+  remoteDb: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [photo, setPhoto] = useState(member.photoDataUrl ?? "");
+  const [photo, setPhoto] = useState(memberPhotoSrc(member) ?? "");
+  const [photoId, setPhotoId] = useState(member.photoId ?? "");
   const [bio, setBio] = useState(member.bio ?? "");
   const [phone, setPhone] = useState(member.phone ?? "");
   const [loginId, setLoginId] = useState(member.loginId?.trim() ?? "");
@@ -63,6 +68,12 @@ function MyPageEditor({
     try {
       const dataUrl = await fileToAvatarDataUrl(file);
       setPhoto(dataUrl);
+      if (remoteDb) {
+        const blob = dataUrlToBlob(dataUrl);
+        const id = `photo-${member.id}-${Date.now().toString(36)}`;
+        await putProofBlob(id, blob, { name: file.name, mime: blob.type || "image/jpeg" });
+        setPhotoId(id);
+      }
     } catch (error) {
       toast(error instanceof Error ? error.message : "사진을 읽지 못했어요");
     }
@@ -93,7 +104,8 @@ function MyPageEditor({
     updateMember(member.id, {
       phone: nextPhone,
       bio: bio.trim(),
-      photoDataUrl: photo,
+      photoDataUrl: photo.startsWith("data:") ? photo : "",
+      photoId: photoId || undefined,
       loginId: nextLogin === member.studentId ? "" : nextLogin,
       ...(nextPassword ? { password: nextPassword } : {}),
     });
@@ -252,7 +264,8 @@ function MyPageEditor({
             <GhostButton
               type="button"
               onClick={() => {
-                setPhoto(member.photoDataUrl ?? "");
+                setPhoto(memberPhotoSrc(member) ?? "");
+                setPhotoId(member.photoId ?? "");
                 setBio(member.bio ?? "");
                 setPhone(member.phone);
                 setLoginId(member.loginId?.trim() ?? "");

@@ -1,4 +1,8 @@
+import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const preferredRegion = PREFERRED_REGION;
 
 export async function GET(request: Request) {
   const next = new URL(request.url).searchParams.get("next") ?? "/";

@@ -55,10 +55,11 @@ import {
   eventAttachments,
   fileToProof,
   persistableEvent,
+  persistableMember,
   persistableTransaction,
   txProofs,
 } from "./proof";
-import { deleteProofBlob, getProofBlob, putProofBlob, setProofRemote } from "./proofDb";
+import { deleteProofBlob, getProofBlob, peekProofBlob, putProofBlob, setProofRemote } from "./proofDb";
 import {
   authenticateMember,
   canLogin,
@@ -92,6 +93,7 @@ const LOCAL_ACCOUNT_ID = "local";
 
 export type ToastItem = { id: string; message: string };
 export type ModalKey = "sms" | "transaction" | "event" | "member-add" | null;
+export type PersistStatus = "idle" | "pending" | "saving" | "saved" | "error";
 
 type ClubContextValue = {
   groups: typeof seedGroups;
@@ -166,6 +168,7 @@ type ClubContextValue = {
   sessionMemberId: string | null;
   currentMember: Member | null;
   remoteDb: boolean;
+  persistStatus: PersistStatus;
   signIn: (studentId: string, pin: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   signOut: () => void;
 };
@@ -213,36 +216,54 @@ function mergeProofsDuringHydrate(prev: Transaction[], hydrated: Transaction[]):
 }
 
 async function hydrateTransactionProofs(rows: Transaction[]): Promise<Transaction[]> {
-  const out: Transaction[] = [];
-  for (const row of rows) {
-    const proofs = txProofs(row);
-    for (let i = 0; i < proofs.length; i += 1) {
-      const proof = proofs[i];
-      if (await getProofBlob(proof.id)) continue;
-      if (i === 0 && row.proofDataUrl) {
-        try {
-          await putProofBlob(proof.id, dataUrlToBlob(row.proofDataUrl));
-        } catch {
-          /* local cache is enough for this session */
-        }
-        continue;
+  return Promise.all(
+    rows.map(async (row) => {
+      const proofs = txProofs(row);
+      await Promise.all(
+        proofs.map(async (proof, i) => {
+          if (await getProofBlob(proof.id)) return;
+          if (i === 0 && row.proofDataUrl) {
+            try {
+              await putProofBlob(proof.id, dataUrlToBlob(row.proofDataUrl));
+            } catch {
+              /* local cache is enough for this session */
+            }
+            return;
+          }
+          const seed = seedTransactions.find((item) => item.id === row.id);
+          if (!seed?.proofDataUrl) return;
+          const seedProofs = txProofs(seed);
+          const seedMatch = seedProofs.find((item) => item.id === proof.id) ?? (i === 0 ? seedProofs[0] : undefined);
+          if (!seedMatch) return;
+          try {
+            await putProofBlob(proof.id, dataUrlToBlob(seed.proofDataUrl));
+          } catch {
+            /* local cache is enough for this session */
+          }
+        }),
+      );
+      const { proofName: _name, proofMime: _mime, proofDataUrl: _data, ...rest } = row;
+      return { ...rest, proofs };
+    }),
+  );
+}
+
+async function offloadMemberPhotos(members: Member[]): Promise<Member[]> {
+  return Promise.all(
+    members.map(async (member) => {
+      const slim = persistableMember(member);
+      const dataUrl = member.photoDataUrl;
+      if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:") || !slim.photoId) return slim;
+      if (peekProofBlob(slim.photoId)) return slim;
+      try {
+        const blob = dataUrlToBlob(dataUrl);
+        await putProofBlob(slim.photoId, blob, { name: `${member.name}.jpg`, mime: blob.type || "image/jpeg" });
+        return slim;
+      } catch {
+        return member;
       }
-      const seed = seedTransactions.find((item) => item.id === row.id);
-      if (!seed?.proofDataUrl) continue;
-      const seedProofs = txProofs(seed);
-      const seedMatch = seedProofs.find((item) => item.id === proof.id) ?? (i === 0 ? seedProofs[0] : undefined);
-      if (seedMatch) {
-        try {
-          await putProofBlob(proof.id, dataUrlToBlob(seed.proofDataUrl));
-        } catch {
-          /* local cache is enough for this session */
-        }
-      }
-    }
-    const { proofName: _name, proofMime: _mime, proofDataUrl: _data, ...rest } = row;
-    out.push({ ...rest, proofs });
-  }
-  return out;
+    }),
+  );
 }
 
 function normalizeDuesOverrides(raw: unknown): DuesOverride[] {
@@ -352,6 +373,7 @@ function normalizeMember(member: Member): Member {
     loginId: typeof member.loginId === "string" ? member.loginId : "",
     password: typeof member.password === "string" ? member.password : "",
     photoDataUrl: typeof member.photoDataUrl === "string" ? member.photoDataUrl : "",
+    photoId: typeof member.photoId === "string" && member.photoId ? member.photoId : undefined,
     bio: typeof member.bio === "string" ? member.bio : "",
     active: member.active !== false,
     practiceDays: member.practiceDays ?? ["화", "목", "토"],
@@ -396,9 +418,11 @@ function toPersistPayload(input: {
   eventsClearedBefore: string;
   seedPracticesKeptDate: string;
   duesOverrides: DuesOverride[];
+  stripPhotos?: boolean;
 }): Persisted {
+  const members = withFineTallies(input.members, input.events, input.attendance);
   return {
-    members: withFineTallies(input.members, input.events, input.attendance),
+    members: input.stripPhotos ? members.map(persistableMember) : members,
     events: input.events.map(persistableEvent),
     attendance: input.attendance,
     notes: input.notes,
@@ -501,6 +525,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [sessionMemberId, setSessionMemberId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [remoteDb, setRemoteDb] = useState(false);
+  const [persistStatus, setPersistStatus] = useState<PersistStatus>("idle");
   const sessionMemberIdRef = useRef(sessionMemberId);
   sessionMemberIdRef.current = sessionMemberId;
   const eventsRef = useRef(events);
@@ -578,28 +603,32 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setChartSeenByAccount(snap.chartSeenByAccount);
     setDuesOverrides(snap.duesOverrides);
     setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
-    lastPushedJsonRef.current = JSON.stringify(
-      toPersistPayload({
-        members: snap.members,
-        events: snap.events,
-        attendance: snap.attendance,
-        notes: snap.notes,
-        transactions: txs,
-        categories: snap.categories,
-        roles: snap.roles,
-        eventTypes: snap.eventTypes,
-        places: snap.places,
-        txCategories: snap.txCategories,
-        chartSeenByAccount: snap.chartSeenByAccount,
-        weatherDays: snap.weatherDays,
-        weatherFetchedAt: snap.weatherFetchedAt,
-        eventsClearedBefore: snap.eventsClearedBefore,
-        seedPracticesKeptDate: snap.seedPracticesKeptDate,
-        duesOverrides: snap.duesOverrides,
-      }),
+    const pushed = toPersistPayload({
+      members: snap.members,
+      events: snap.events,
+      attendance: snap.attendance,
+      notes: snap.notes,
+      transactions: txs,
+      categories: snap.categories,
+      roles: snap.roles,
+      eventTypes: snap.eventTypes,
+      places: snap.places,
+      txCategories: snap.txCategories,
+      chartSeenByAccount: snap.chartSeenByAccount,
+      weatherDays: snap.weatherDays,
+      weatherFetchedAt: snap.weatherFetchedAt,
+      eventsClearedBefore: snap.eventsClearedBefore,
+      seedPracticesKeptDate: snap.seedPracticesKeptDate,
+      duesOverrides: snap.duesOverrides,
+      stripPhotos: remoteDbRef.current,
+    });
+    const hadEmbeddedPhotos = data.members.some(
+      (member) => typeof member.photoDataUrl === "string" && member.photoDataUrl.startsWith("data:"),
     );
-    persistDirtyRef.current = false;
+    lastPushedJsonRef.current = hadEmbeddedPhotos ? "" : JSON.stringify(pushed);
+    persistDirtyRef.current = hadEmbeddedPhotos;
     persistRetryRef.current = 0;
+    if (remoteDbRef.current) setPersistStatus(hadEmbeddedPhotos ? "pending" : "saved");
   }, []);
 
   useEffect(() => {
@@ -730,43 +759,70 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   persistFlushRef.current = () => {
     if (!remoteDbRef.current || !sessionMemberIdRef.current) return;
     if (silencePersistRef.current) return;
-    const next = persistPayloadRef.current;
-    if (!next) return;
-    let json: string;
-    try {
-      json = JSON.stringify(next);
-    } catch {
-      return;
-    }
-    if (json === lastPushedJsonRef.current) {
-      persistDirtyRef.current = false;
-      persistQueuedRef.current = false;
-      persistRetryRef.current = 0;
-      return;
-    }
     if (persistInFlightRef.current) {
       persistQueuedRef.current = true;
       return;
     }
+    const snapshot = persistPayloadRef.current;
+    if (!snapshot) return;
     persistInFlightRef.current = true;
     persistQueuedRef.current = false;
-    const version = stateVersionRef.current;
-    void putClubState(next, version)
-      .then((result) => {
-        if (result.ok) {
-          stateVersionRef.current = result.version;
-          lastPushedJsonRef.current = json;
-          persistRetryRef.current = 0;
-          const latest = persistPayloadRef.current;
-          persistDirtyRef.current = Boolean(latest) && JSON.stringify(latest) !== json;
-          return;
+    setPersistStatus("saving");
+
+    void (async () => {
+      let payload = snapshot;
+      try {
+        payload = { ...snapshot, members: await offloadMemberPhotos(snapshot.members) };
+      } catch {
+        payload = { ...snapshot, members: snapshot.members.map(persistableMember) };
+      }
+      let json: string;
+      try {
+        json = JSON.stringify(payload);
+      } catch {
+        setPersistStatus("error");
+        return;
+      }
+      if (json === lastPushedJsonRef.current) {
+        persistDirtyRef.current = false;
+        persistRetryRef.current = 0;
+        setPersistStatus("saved");
+        return;
+      }
+      const result = await putClubState(payload, stateVersionRef.current);
+      if (result.ok) {
+        stateVersionRef.current = result.version;
+        lastPushedJsonRef.current = json;
+        persistRetryRef.current = 0;
+        const latest = persistPayloadRef.current;
+        persistDirtyRef.current = Boolean(
+          latest && JSON.stringify({
+            ...latest,
+            members: latest.members.map(persistableMember),
+          }) !== json,
+        );
+        setPersistStatus(persistDirtyRef.current ? "pending" : "saved");
+        if (payload.members.some((member) => member.photoId)) {
+          setMembers((prev) =>
+            prev.map((member) => {
+              const saved = payload.members.find((row) => row.id === member.id);
+              if (!saved?.photoId) return member;
+              if (member.photoDataUrl?.startsWith("data:")) {
+                return { ...member, photoId: saved.photoId, photoDataUrl: "" };
+              }
+              return member.photoId === saved.photoId ? member : { ...member, photoId: saved.photoId };
+            }),
+          );
         }
-        if (!result.conflict || !result.payload) return;
+        return;
+      }
+      if (result.conflict && result.payload) {
         stateVersionRef.current = result.version;
         persistRetryRef.current += 1;
         if (persistRetryRef.current > 5) {
           persistRetryRef.current = 0;
           persistQueuedRef.current = false;
+          persistDirtyRef.current = false;
           silencePersistRef.current = true;
           void applySnapshot(result.payload).finally(() => {
             silencePersistRef.current = false;
@@ -776,17 +832,27 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           window.setTimeout(() => {
             setToasts((prev) => prev.filter((item) => item.id !== id));
           }, 2400);
+          setPersistStatus("saved");
           return;
         }
         persistQueuedRef.current = true;
-      })
-      .finally(() => {
-        persistInFlightRef.current = false;
-        if (persistQueuedRef.current) {
-          persistQueuedRef.current = false;
-          persistFlushRef.current();
-        }
-      });
+        return;
+      }
+      persistRetryRef.current += 1;
+      persistQueuedRef.current = persistRetryRef.current <= 8;
+      setPersistStatus("error");
+      if (persistQueuedRef.current) {
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, Math.min(800 * persistRetryRef.current, 6000));
+        });
+      }
+    })().finally(() => {
+      persistInFlightRef.current = false;
+      if (persistQueuedRef.current) {
+        persistQueuedRef.current = false;
+        persistFlushRef.current();
+      }
+    });
   };
 
   useEffect(() => {
@@ -808,29 +874,47 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventsClearedBefore,
       seedPracticesKeptDate,
       duesOverrides,
+      stripPhotos: false,
     });
     persistPayloadRef.current = payload;
+    if (!remoteDbRef.current) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch {
+        /* quota: keep in-memory state */
+      }
+      return;
+    }
+    if (!sessionMemberId) return;
     let json = "";
     try {
-      json = JSON.stringify(payload);
-      window.localStorage.setItem(STORAGE_KEY, json);
+      json = JSON.stringify({ ...payload, members: payload.members.map(persistableMember) });
     } catch {
-      /* quota: keep in-memory state */
+      return;
     }
-    if (!remoteDbRef.current || !sessionMemberId) return;
-    persistDirtyRef.current = Boolean(json) && json !== lastPushedJsonRef.current;
-    if (!persistDirtyRef.current) return;
+    persistDirtyRef.current = json !== lastPushedJsonRef.current;
+    if (!persistDirtyRef.current) {
+      if (!persistInFlightRef.current) setPersistStatus("saved");
+      return;
+    }
+    setPersistStatus((status) => (status === "saving" ? status : "pending"));
     window.clearTimeout(persistTimerRef.current);
     persistTimerRef.current = window.setTimeout(() => {
       persistFlushRef.current();
-    }, 500);
+    }, 280);
     return () => window.clearTimeout(persistTimerRef.current);
   }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, seedPracticesKeptDate, duesOverrides, sessionMemberId]);
 
   useEffect(() => {
     if (!remoteDb || !ready || !sessionMemberId) return;
+    const flushIfDirty = () => {
+      if (persistDirtyRef.current || persistQueuedRef.current) persistFlushRef.current();
+    };
     const onWake = () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState === "hidden") {
+        flushIfDirty();
+        return;
+      }
       if (persistInFlightRef.current || persistQueuedRef.current || persistDirtyRef.current) return;
       void fetchClubState().then((row) => {
         if (!row?.payload) return;
@@ -843,11 +927,21 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         });
       });
     };
+    const onLeave = (event: BeforeUnloadEvent) => {
+      if (!persistDirtyRef.current && !persistInFlightRef.current) return;
+      flushIfDirty();
+      event.preventDefault();
+      event.returnValue = "";
+    };
     document.addEventListener("visibilitychange", onWake);
     window.addEventListener("focus", onWake);
+    window.addEventListener("pagehide", flushIfDirty);
+    window.addEventListener("beforeunload", onLeave);
     return () => {
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
+      window.removeEventListener("pagehide", flushIfDirty);
+      window.removeEventListener("beforeunload", onLeave);
     };
   }, [remoteDb, ready, sessionMemberId, applySnapshot]);
 
@@ -1428,6 +1522,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       sessionMemberId,
       currentMember,
       remoteDb,
+      persistStatus,
       signIn,
       signOut,
     }),
@@ -1502,6 +1597,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       sessionMemberId,
       currentMember,
       remoteDb,
+      persistStatus,
       signIn,
       signOut,
     ],

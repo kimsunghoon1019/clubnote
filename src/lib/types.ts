@@ -39,6 +39,8 @@ export type Member = {
   /** 비우면 전화번호 뒷 4자리. */
   password?: string;
   photoDataUrl?: string;
+  /** R2 프로필 사진. 원격 저장 시 photoDataUrl 대신 이 아이디만 JSON에 남긴다. */
+  photoId?: string;
   bio?: string;
 };
 
