@@ -102,7 +102,9 @@ export async function putClubFile(id: string, blob: Blob, name: string, mime: st
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "파일을 서버에 올리지 못했어요");
+    const message = typeof data.error === "string" && data.error ? data.error : "";
+    if (res.status === 413) throw new Error("파일이 너무 커서 올리지 못했어요");
+    throw new Error(message || "파일을 서버에 올리지 못했어요");
   }
 }
 

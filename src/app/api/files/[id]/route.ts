@@ -4,6 +4,7 @@ import { hasR2, readR2File, removeR2File, writeR2File } from "@/lib/r2";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const preferredRegion = "icn1";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -59,7 +60,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   } catch {
     name = rawName;
   }
-  await writeR2File(id, name, mime, buffer);
+  try {
+    await writeR2File(id, name, mime, buffer);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "파일을 올리지 못했어요.";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
   return NextResponse.json({ ok: true, id });
 }
 

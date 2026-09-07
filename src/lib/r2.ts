@@ -28,7 +28,25 @@ function objectUrl(id: string) {
 
 async function r2Error(res: Response, fallback: string) {
   const text = (await res.text().catch(() => "")).replace(/\s+/g, " ").trim();
-  return text.slice(0, 240) || fallback;
+  const message = text.match(/<Message>([^<]+)<\/Message>/)?.[1]?.trim();
+  return message || text.slice(0, 240) || fallback;
+}
+
+async function signedR2Fetch(url: string, init: { method: string; headers?: Record<string, string>; body?: Uint8Array }) {
+  const headers: Record<string, string> = { ...(init.headers ?? {}) };
+  if (init.body) headers["content-length"] = String(init.body.byteLength);
+  const signed = await r2Client().sign(url, {
+    method: init.method,
+    headers,
+    body: init.body,
+  });
+  const out = new Headers(signed.headers);
+  if (init.body) out.set("content-length", String(init.body.byteLength));
+  return fetch(url, {
+    method: init.method,
+    headers: out,
+    body: init.body,
+  });
 }
 
 export async function pingR2() {
@@ -68,13 +86,14 @@ export async function readR2File(id: string) {
 }
 
 export async function writeR2File(id: string, name: string, mime: string, body: Buffer) {
-  const res = await r2Client().fetch(objectUrl(id), {
+  const bytes = new Uint8Array(body);
+  const res = await signedR2Fetch(objectUrl(id), {
     method: "PUT",
     headers: {
       "content-type": mime || "application/octet-stream",
       "x-amz-meta-name": encodeURIComponent(name || id),
     },
-    body: new Uint8Array(body),
+    body: bytes,
   });
   if (!res.ok) throw new Error(await r2Error(res, "파일을 올리지 못했어요."));
 }
