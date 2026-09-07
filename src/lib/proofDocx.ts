@@ -16,15 +16,15 @@ import {
   WidthType,
   type FileChild,
 } from "docx";
+import { compareTxAsc } from "./bankExcel";
 import { dataUrlToBlob, downloadBlob, proofKind, txProofs } from "./proof";
-import { getProofBlob } from "./proofDb";
+import { getStoredProofBlob, peekProofBlob } from "./proofDb";
 import {
   formatProofPeriodLine,
   periodDateBounds,
   proofLabel,
   proofNumberById,
   proofsDocFileName,
-  rowsWithProofs,
 } from "./financeExport";
 import type { DuesSemester } from "./dues";
 import type { Transaction, TxProof } from "./types";
@@ -64,20 +64,20 @@ export async function downloadProofsDocx(
   period: string,
   range: Pick<DuesSemester, "start" | "end"> | null,
 ) {
+  if (rows.length === 0) {
+    throw new Error("내보낼 거래가 없어요");
+  }
   const numbered = proofNumberById(rows);
   const items: ProofItem[] = [];
-  for (const row of rowsWithProofs(rows)) {
+  for (const row of [...rows].sort(compareTxAsc)) {
     const n = numbered.get(row.id);
     if (!n) continue;
     const rasters: Raster[] = [];
     for (const proof of txProofs(row)) {
-      const raster = (await rasterizeProof(row, proof)) ?? placeholderRaster(proofLabel(n), proof.name);
-      rasters.push(raster);
+      const raster = await rasterizeProof(row, proof);
+      if (raster) rasters.push(raster);
     }
     items.push({ label: proofLabel(n), rasters });
-  }
-  if (items.length === 0) {
-    throw new Error("내보낼 증빙이 없어요");
   }
 
   const bounds = periodDateBounds(rows, range);
@@ -152,7 +152,7 @@ function proofPairTable(left: ProofItem, right: ProofItem | undefined, bodyDxa: 
       new TableRow({
         cantSplit: true,
         height: { value: Math.max(2400, bodyDxa), rule: HeightRule.EXACT },
-        children: [bodyCell(left.rasters, bodyDxa), bodyCell(right?.rasters ?? [], bodyDxa)],
+        children: [bodyCell(left, bodyDxa), bodyCell(right, bodyDxa)],
       }),
     ],
   });
@@ -174,35 +174,47 @@ function headerCell(text: string) {
   });
 }
 
-function bodyCell(rasters: Raster[], bodyDxa: number) {
+function bodyCell(item: ProofItem | undefined, bodyDxa: number) {
+  if (!item || item.rasters.length === 0) {
+    return new TableCell({
+      borders: BORDERS,
+      width: { size: COL_W, type: WidthType.DXA },
+      verticalAlign: VerticalAlign.CENTER,
+      margins: { top: CELL_PAD, bottom: CELL_PAD, left: CELL_PAD, right: CELL_PAD },
+      children: [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: item
+            ? [new TextRun({ text: "증빙없음", size: 22, font: FONT, color: "8B95A1" })]
+            : [],
+        }),
+      ],
+    });
+  }
+
   const innerW = COL_W - CELL_PAD * 2;
   const innerH = Math.max(400, bodyDxa - CELL_PAD * 2);
-  const fitted = fitRasters(rasters, innerW, innerH);
-  const children =
-    fitted.length > 0
-      ? fitted.map(
-          (img) =>
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              spacing: { after: 80 },
-              children: [
-                new ImageRun({
-                  type: "png",
-                  data: img.data,
-                  transformation: { width: img.width, height: img.height },
-                  altText: { name: "증빙", description: "증빙 자료", title: "증빙" },
-                }),
-              ],
-            }),
-        )
-      : [new Paragraph({ children: [] })];
-
+  const fitted = fitRasters(item.rasters, innerW, innerH);
   return new TableCell({
     borders: BORDERS,
     width: { size: COL_W, type: WidthType.DXA },
     verticalAlign: VerticalAlign.TOP,
     margins: { top: CELL_PAD, bottom: CELL_PAD, left: CELL_PAD, right: CELL_PAD },
-    children,
+    children: fitted.map(
+      (img) =>
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 80 },
+          children: [
+            new ImageRun({
+              type: "png",
+              data: img.data,
+              transformation: { width: img.width, height: img.height },
+              altText: { name: "증빙", description: "증빙 자료", title: "증빙" },
+            }),
+          ],
+        }),
+    ),
   });
 }
 
@@ -233,9 +245,7 @@ function dxaToPx(dxa: number) {
   return Math.max(1, Math.round((dxa * 96) / 1440));
 }
 
-async function loadProofBlob(id: string): Promise<Blob | undefined> {
-  const cached = await getProofBlob(id);
-  if (cached) return cached;
+async function fetchRemoteProof(id: string): Promise<Blob | undefined> {
   try {
     const res = await fetch(`/api/files/${encodeURIComponent(id)}`, { cache: "no-store", credentials: "same-origin" });
     if (!res.ok) return undefined;
@@ -246,29 +256,52 @@ async function loadProofBlob(id: string): Promise<Blob | undefined> {
   }
 }
 
+async function proofBlobs(row: Transaction, proof: TxProof): Promise<Blob[]> {
+  const fallback = row.proofDataUrl ? dataUrlToBlob(row.proofDataUrl) : undefined;
+  const blobs = [await getStoredProofBlob(proof.id), await fetchRemoteProof(proof.id), peekProofBlob(proof.id), fallback];
+  const seen = new Set<Blob>();
+  const unique: Blob[] = [];
+  for (const blob of blobs) {
+    if (!blob || seen.has(blob)) continue;
+    seen.add(blob);
+    unique.push(blob);
+  }
+  return unique;
+}
+
 async function rasterizeProof(row: Transaction, proof: TxProof): Promise<Raster | null> {
-  const blob =
-    (await loadProofBlob(proof.id)) ?? (row.proofDataUrl ? dataUrlToBlob(row.proofDataUrl) : undefined);
-  if (!blob) return null;
-  const kind = proofKind(proof.name, proof.mime || blob.type);
-  const isImage = blob.type.startsWith("image/") || kind === "image";
-  const isPdf = kind === "pdf" || blob.type === "application/pdf";
-  try {
-    if (isPdf && !blob.type.startsWith("image/")) {
+  const blobs = await proofBlobs(row, proof);
+  for (const blob of blobs) {
+    if (!(await blobHasPdfMagic(blob))) continue;
+    try {
       return await pdfFirstPage(blob);
+    } catch {
+      // try the next candidate
     }
-    if (isImage) return await blobToRaster(blob);
-    if (isPdf) return await blobToRaster(blob);
-  } catch {
-    if (isPdf) {
-      try {
-        return await blobToRaster(blob);
-      } catch {
-        return null;
-      }
+  }
+  for (const blob of blobs) {
+    const kind = proofKind(proof.name, proof.mime || blob.type);
+    if (!blob.type.startsWith("image/") && kind !== "image") continue;
+    try {
+      return await blobToRaster(blob);
+    } catch {
+      // try the next candidate
     }
   }
   return null;
+}
+
+function headerLooksLikePdf(bytes: Uint8Array) {
+  let i = 0;
+  while (i < bytes.length && (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0d || bytes[i] === 0x0a)) {
+    i += 1;
+  }
+  return bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46;
+}
+
+async function blobHasPdfMagic(blob: Blob) {
+  const head = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  return headerLooksLikePdf(head);
 }
 
 async function blobToRaster(blob: Blob): Promise<Raster> {
@@ -302,32 +335,6 @@ function loadImage(url: string) {
   });
 }
 
-function placeholderRaster(label: string, name: string): Raster {
-  const canvas = document.createElement("canvas");
-  canvas.width = 640;
-  canvas.height = 360;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { data: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), width: 1, height: 1 };
-  ctx.fillStyle = "#f2f4f6";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = "#d1d6db";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
-  ctx.fillStyle = "#191f28";
-  ctx.textAlign = "center";
-  ctx.font = "600 28px Pretendard, Malgun Gothic, sans-serif";
-  ctx.fillText(label, canvas.width / 2, 150);
-  ctx.fillStyle = "#8b95a1";
-  ctx.font = "16px Pretendard, Malgun Gothic, sans-serif";
-  ctx.fillText(name ? name.slice(0, 42) : "파일을 불러오지 못했어요", canvas.width / 2, 200);
-  const dataUrl = canvas.toDataURL("image/png");
-  const body = dataUrl.slice(dataUrl.indexOf(",") + 1);
-  const binary = atob(body);
-  const data = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) data[i] = binary.charCodeAt(i);
-  return { data, width: canvas.width, height: canvas.height };
-}
-
 function canvasToPng(canvas: HTMLCanvasElement) {
   return new Promise<Uint8Array>((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -344,10 +351,7 @@ let pdfjsLoader: Promise<typeof import("pdfjs-dist")> | null = null;
 
 async function loadPdfjs() {
   if (!pdfjsLoader) {
-    pdfjsLoader = import("pdfjs-dist").then((mod) => {
-      mod.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${mod.version}/build/pdf.worker.min.mjs`;
-      return mod;
-    });
+    pdfjsLoader = import("pdfjs-dist/webpack.mjs") as Promise<typeof import("pdfjs-dist")>;
   }
   return pdfjsLoader;
 }
@@ -355,7 +359,14 @@ async function loadPdfjs() {
 async function pdfFirstPage(blob: Blob): Promise<Raster> {
   const pdfjs = await loadPdfjs();
   const data = new Uint8Array(await blob.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data, verbosity: 0 }).promise;
+  const doc = await pdfjs.getDocument({
+    data,
+    verbosity: 0,
+    isEvalSupported: false,
+    disableAutoFetch: true,
+    disableStream: true,
+    disableRange: true,
+  }).promise;
   try {
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
@@ -368,7 +379,7 @@ async function pdfFirstPage(blob: Blob): Promise<Raster> {
     if (!ctx) throw new Error("canvas");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvasContext: ctx, viewport, background: "#ffffff" }).promise;
     return { data: await canvasToPng(canvas), width: canvas.width, height: canvas.height };
   } finally {
     await doc.destroy();

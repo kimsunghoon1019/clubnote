@@ -68,23 +68,27 @@ export async function putProofBlob(id: string, blob: Blob, meta?: { name?: strin
   }
 }
 
-export async function getProofBlob(id: string): Promise<Blob | undefined> {
-  const cached = memory.get(id);
-  if (cached) return cached;
+export async function getStoredProofBlob(id: string): Promise<Blob | undefined> {
   try {
     const db = await openProofDb();
-    const blob = await new Promise<Blob | undefined>((resolve, reject) => {
+    return await new Promise<Blob | undefined>((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
       const req = tx.objectStore(STORE).get(id);
       req.onsuccess = () => resolve((req.result as Blob | undefined) ?? undefined);
       req.onerror = () => reject(req.error);
     });
-    if (blob) {
-      memory.set(id, blob);
-      return blob;
-    }
   } catch {
-    /* fall through to remote */
+    return undefined;
+  }
+}
+
+export async function getProofBlob(id: string): Promise<Blob | undefined> {
+  const cached = memory.get(id);
+  if (cached) return cached;
+  const stored = await getStoredProofBlob(id);
+  if (stored) {
+    memory.set(id, stored);
+    return stored;
   }
   if (remoteFiles) {
     try {

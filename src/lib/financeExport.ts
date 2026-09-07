@@ -1,7 +1,6 @@
 import { compareTxAsc, compareTxDesc } from "./bankExcel";
 import { CLUB_NAME } from "./constants";
 import { formatTxWhen, todayISO } from "./format";
-import { txProofs } from "./proof";
 import type { Transaction } from "./types";
 
 export const LEDGER_HEADERS = [
@@ -27,10 +26,6 @@ export function proofNumberById(rows: Transaction[]) {
 
 export function proofLabel(n: number) {
   return `증빙${n}`;
-}
-
-export function rowsWithProofs(rows: Transaction[]) {
-  return [...rows].sort(compareTxAsc).filter((row) => txProofs(row).length > 0);
 }
 
 export function buildLedgerAoa(rows: Transaction[]) {
