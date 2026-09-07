@@ -176,6 +176,7 @@ export function TaxonomyEditor({
         ? createPortal(
             <div
               ref={menuRef}
+              data-taxonomy-menu
               className="fixed z-50 w-60 rounded-card border border-line bg-white p-2"
               style={{ top: pos.top, left: pos.left }}
               onMouseDown={(e) => e.stopPropagation()}
