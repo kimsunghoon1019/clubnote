@@ -8,6 +8,7 @@ import { FieldLabel, TextInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { tallyMemberPresents } from "@/lib/attendanceSheet";
 import { FINE_STATUSES, GENDER_OPTIONS, emptyFineTally } from "@/lib/constants";
 import { ageFromBirthDate, collegeFromMajor, formatDateDot, tenureLabel } from "@/lib/format";
 import { diligenceScore, participationScore } from "@/lib/stats";
@@ -85,6 +86,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
 
   const diligence = diligenceScore(member, events, attendance);
   const participation = participationScore(member, events, attendance);
+  const presentCount = tallyMemberPresents(member, events, attendance);
   const memberNotes = notes.filter((note) => note.memberId === member.id);
 
   return (
@@ -229,7 +231,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
           <Info label="생년월일" value={member.birthDate ? formatDateDot(member.birthDate) : "-"} />
           <Info label="근속" value={tenureLabel(member.joinedAt)} />
           <Info label="학번" value={member.studentId} />
-          <Info label="가입" value={formatDateDot(member.joinedAt)} />
+          <Info label="가입" value={member.joinedAt ? formatDateDot(member.joinedAt) : "-"} />
           <Info label="연락처" value={member.phone || "-"} />
         </dl>
       )}
@@ -243,7 +245,12 @@ export function MemberRail({ memberId }: { memberId: string }) {
       </div>
 
       <div className="mb-4">
-        <p className="mb-1.5 text-[12px] text-sub">출결 누계</p>
+        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+          <p className="text-[12px] text-sub">출결 누계</p>
+          <p className="text-[12px] text-sub">
+            출석 <span className="font-medium tabular-nums text-ink">{presentCount}회</span>
+          </p>
+        </div>
         <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]">
           {FINE_STATUSES.map((status) => (
             <li key={status} className="flex items-center justify-between gap-2">

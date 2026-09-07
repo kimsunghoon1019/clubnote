@@ -1,5 +1,5 @@
 import { MEMBER_ROLE, OPERATOR_NAME, OPERATOR_ROLE, PLACE, emptyFineTally } from "./constants";
-import { collegeFromMajor, inferredBirthDate, parseISODate, toISODate, todayISO } from "./format";
+import { collegeFromMajor, parseISODate, toISODate, todayISO } from "./format";
 import { placeholderImageDataUrl } from "./proof";
 import type {
   Attendance,
@@ -28,7 +28,7 @@ function withProfile(
   return {
     ...member,
     college: member.college ?? collegeFromMajor(member.major),
-    birthDate: member.birthDate ?? inferredBirthDate(member.age, member.name),
+    birthDate: member.birthDate ?? "",
   };
 }
 
@@ -39,40 +39,39 @@ const roster: Array<{
   age: number;
   studentId: string;
   phone: string;
-  joinedAt: string;
 }> = [
-  { name: "김호준", gender: "남", age: 21, studentId: "2024190308", phone: "010-8820-3134", joinedAt: "2026-03-31" },
-  { name: "이재동", gender: "남", age: 24, studentId: "2021197007", phone: "010-4199-3445", joinedAt: "2026-03-31" },
-  { name: "김기수", gender: "남", age: 22, studentId: "2023145077", phone: "010-4124-1254", joinedAt: "2026-03-01" },
-  { name: "손예지", gender: "여", age: 19, studentId: "2026172105", phone: "010-2946-8671", joinedAt: "2026-03-01" },
-  { name: "김준석", gender: "남", age: 21, studentId: "2024142262", phone: "010-9916-8161", joinedAt: "2026-03-01" },
-  { name: "이효수", gender: "남", age: 19, studentId: "2026172112", phone: "010-6760-1426", joinedAt: "2026-03-01" },
-  { name: "이기찬", gender: "남", age: 22, studentId: "2023146125", phone: "010-9513-7943", joinedAt: "2026-03-01" },
-  { name: "이장은", gender: "여", age: 20, studentId: "2025110043", phone: "010-3056-3892", joinedAt: "2026-03-01" },
-  { name: "차민서", gender: "여", age: 24, studentId: "2021123065", phone: "010-5929-5161", joinedAt: "2026-03-01" },
-  { name: "이태우", gender: "남", age: 23, studentId: "2022124045", phone: "010-2520-5993", joinedAt: "2026-03-01" },
-  { name: "김민석", gender: "남", age: 24, studentId: "2021182027", phone: "010-7561-1051", joinedAt: "2026-03-01" },
-  { name: "한건희", gender: "남", age: 23, studentId: "2022146059", phone: "010-2386-8320", joinedAt: "2026-03-01" },
-  { name: "김정헌", gender: "남", age: 24, studentId: "2021145092", phone: "010-2415-6617", joinedAt: "2026-03-01" },
-  { name: "박상학", gender: "남", age: 22, studentId: "2023146123", phone: "010-3927-3176", joinedAt: "2026-03-01" },
-  { name: "최진혁", gender: "남", age: 22, studentId: "2023114026", phone: "010-5710-8763", joinedAt: "2026-03-01" },
-  { name: "정래광", gender: "남", age: 25, studentId: "2020141128", phone: "010-4409-9749", joinedAt: "2026-03-31" },
-  { name: "이재서", gender: "남", age: 24, studentId: "2021121068", phone: "010-9335-5824", joinedAt: "2026-03-31" },
-  { name: "임승우", gender: "남", age: 22, studentId: "2023145031", phone: "010-9692-1711", joinedAt: "2026-03-31" },
-  { name: "이승훈", gender: "남", age: 23, studentId: "2022191092", phone: "010-6868-5833", joinedAt: "2025-09-01" },
-  { name: "이희수", gender: "남", age: 22, studentId: "2023243027", phone: "010-5436-1784", joinedAt: "2025-09-01" },
-  { name: "박종선", gender: "남", age: 22, studentId: "2023143523", phone: "010-8494-7980", joinedAt: "2025-09-07" },
-  { name: "장정인", gender: "여", age: 22, studentId: "2023143514", phone: "010-8209-1670", joinedAt: "2025-09-07" },
-  { name: "최호성", gender: "남", age: 24, studentId: "2021121051", phone: "010-4069-3150", joinedAt: "2025-09-06" },
-  { name: "박도현", gender: "남", age: 25, studentId: "2020182047", phone: "010-9766-4617", joinedAt: "2025-08-06" },
-  { name: "이웅빈", gender: "남", age: 25, studentId: "2020172536", phone: "010-2394-3630", joinedAt: "2025-08-05" },
-  { name: "최재원", gender: "남", age: 22, studentId: "2023146126", phone: "010-2748-2789", joinedAt: "2025-03-08" },
-  { name: "이명수", gender: "남", age: 25, studentId: "2020191027", phone: "010-3303-0240", joinedAt: "2024-09-07" },
-  { name: "박성민", gender: "남", age: 24, studentId: "2021142050", phone: "010-2725-5663", joinedAt: "2024-03-09" },
-  { name: "박리나", gender: "여", age: 20, studentId: "2025172110", phone: "010-5715-3133", joinedAt: "2025-03-08" },
-  { name: "김환욱", gender: "남", age: 25, studentId: "2020147578", phone: "010-7113-2273", joinedAt: "2025-03-08" },
-  { name: "김범석", gender: "남", age: 20, studentId: "2025172109", phone: "010-2534-8886", joinedAt: "2025-03-08" },
-  { name: "장성원", gender: "남", age: 25, studentId: "2020113026", phone: "010-4152-5457", joinedAt: "2024-03-09" },
+  { name: "김호준", gender: "남", age: 21, studentId: "2024190308", phone: "010-8820-3134" },
+  { name: "이재동", gender: "남", age: 24, studentId: "2021197007", phone: "010-4199-3445" },
+  { name: "김기수", gender: "남", age: 22, studentId: "2023145077", phone: "010-4124-1254" },
+  { name: "손예지", gender: "여", age: 19, studentId: "2026172105", phone: "010-2946-8671" },
+  { name: "김준석", gender: "남", age: 21, studentId: "2024142262", phone: "010-9916-8161" },
+  { name: "이효수", gender: "남", age: 19, studentId: "2026172112", phone: "010-6760-1426" },
+  { name: "이기찬", gender: "남", age: 22, studentId: "2023146125", phone: "010-9513-7943" },
+  { name: "이장은", gender: "여", age: 20, studentId: "2025110043", phone: "010-3056-3892" },
+  { name: "차민서", gender: "여", age: 24, studentId: "2021123065", phone: "010-5929-5161" },
+  { name: "이태우", gender: "남", age: 23, studentId: "2022124045", phone: "010-2520-5993" },
+  { name: "김민석", gender: "남", age: 24, studentId: "2021182027", phone: "010-7561-1051" },
+  { name: "한건희", gender: "남", age: 23, studentId: "2022146059", phone: "010-2386-8320" },
+  { name: "김정헌", gender: "남", age: 24, studentId: "2021145092", phone: "010-2415-6617" },
+  { name: "박상학", gender: "남", age: 22, studentId: "2023146123", phone: "010-3927-3176" },
+  { name: "최진혁", gender: "남", age: 22, studentId: "2023114026", phone: "010-5710-8763" },
+  { name: "정래광", gender: "남", age: 25, studentId: "2020141128", phone: "010-4409-9749" },
+  { name: "이재서", gender: "남", age: 24, studentId: "2021121068", phone: "010-9335-5824" },
+  { name: "임승우", gender: "남", age: 22, studentId: "2023145031", phone: "010-9692-1711" },
+  { name: "이승훈", gender: "남", age: 23, studentId: "2022191092", phone: "010-6868-5833" },
+  { name: "이희수", gender: "남", age: 22, studentId: "2023243027", phone: "010-5436-1784" },
+  { name: "박종선", gender: "남", age: 22, studentId: "2023143523", phone: "010-8494-7980" },
+  { name: "장정인", gender: "여", age: 22, studentId: "2023143514", phone: "010-8209-1670" },
+  { name: "최호성", gender: "남", age: 24, studentId: "2021121051", phone: "010-4069-3150" },
+  { name: "박도현", gender: "남", age: 25, studentId: "2020182047", phone: "010-9766-4617" },
+  { name: "이웅빈", gender: "남", age: 25, studentId: "2020172536", phone: "010-2394-3630" },
+  { name: "최재원", gender: "남", age: 22, studentId: "2023146126", phone: "010-2748-2789" },
+  { name: "이명수", gender: "남", age: 25, studentId: "2020191027", phone: "010-3303-0240" },
+  { name: "박성민", gender: "남", age: 24, studentId: "2021142050", phone: "010-2725-5663" },
+  { name: "박리나", gender: "여", age: 20, studentId: "2025172110", phone: "010-5715-3133" },
+  { name: "김환욱", gender: "남", age: 25, studentId: "2020147578", phone: "010-7113-2273" },
+  { name: "김범석", gender: "남", age: 20, studentId: "2025172109", phone: "010-2534-8886" },
+  { name: "장성원", gender: "남", age: 25, studentId: "2020113026", phone: "010-4152-5457" },
 ];
 
 function pad(n: number, size = 2) {
@@ -89,6 +88,7 @@ const featured: SeedMember[] = roster.map((row) =>
     major: "",
     unpaidFee: 0,
     practiceDays: DEFAULT_PRACTICE,
+    joinedAt: "",
     ...row,
   }),
 );
@@ -120,8 +120,8 @@ function generatePracticeEvents(): ClubEvent[] {
         type: "정기연습",
         place: PLACE,
         preview: isSat ? "주말 전체 합주" : "주중 분강 연습",
-        startTime: isSat ? "14:00" : "19:00",
-        endTime: isSat ? "17:00" : "21:00",
+        startTime: isSat ? "10:00" : "19:00",
+        endTime: isSat ? "13:00" : "21:00",
       });
       n += 1;
     }
@@ -147,6 +147,16 @@ const extraEvents: ClubEvent[] = [
 export const events: ClubEvent[] = [...extraEvents, ...generatePracticeEvents()].sort((a, b) =>
   a.date.localeCompare(b.date),
 );
+
+/** 예전 토요일 정기연습 14:00–17:00을 10:00–13:00으로 맞춘다. */
+export function migrateSaturdayPracticeHours(events: ClubEvent[]) {
+  return events.map((event) => {
+    if (event.type !== "연습" && event.type !== "정기연습") return event;
+    if (parseISODate(event.date).getDay() !== 6) return event;
+    if (event.startTime !== "14:00" || event.endTime !== "17:00") return event;
+    return { ...event, startTime: "10:00", endTime: "13:00" };
+  });
+}
 
 export function dropEventsBefore(events: ClubEvent[], attendance: Attendance[], cutoff: string) {
   const kept = events.filter((event) => event.date >= cutoff);

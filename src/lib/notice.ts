@@ -1,8 +1,24 @@
-import { formatDateKo, formatEventTime, formatWeekday, startOfWeekMonday, toISODate, todayISO } from "./format";
+import { formatDateKo, formatNoticeClock, formatWeekday, parseISODate, startOfWeekMonday, toISODate, todayISO } from "./format";
 import { expectedMembersForEvent, membersForEvent, practiceEvents, upcomingPractice } from "./stats";
 import type { AttendanceStatus, ClubEvent, Member } from "./types";
 
 const NOTICE_FOOTER = `⚠ 연습 시간에 늦지 않게 도착해주세요!\n: 지각/결석 등 출결 관련 이슈가 있으신 분은 각 파트장에게 알려주세요`;
+
+function noticeEventTitle(event: ClubEvent) {
+  if (!event.title || event.title === "정기연습") return "연습";
+  return event.title;
+}
+
+function formatNoticeDate(iso: string) {
+  const date = parseISODate(iso);
+  return `${date.getMonth() + 1}/${date.getDate()}(${formatWeekday(iso)})`;
+}
+
+function formatNoticeEvent(event: ClubEvent) {
+  const time = event.allDay ? "하루 종일" : formatNoticeClock(event.startTime);
+  const place = event.place || "-";
+  return `✅ ${formatNoticeDate(event.date)} ${noticeEventTitle(event)}\n|  시각  |  ${time}\n|  장소  |  ${place}`;
+}
 
 function weekBounds(today: string, weekOffset: number) {
   const start = startOfWeekMonday(today);
@@ -31,11 +47,7 @@ function formatPracticeNotice(header: string, emptyLine: string, week: ClubEvent
   if (week.length === 0) {
     return `${header}\n\n${emptyLine}\n\n${NOTICE_FOOTER}`;
   }
-  const lines = week.map((event) => {
-    const time = formatEventTime(event);
-    return `${formatDateKo(event.date)} (${formatWeekday(event.date)}) ${time} ${event.place}`.replace(/\s+/g, " ").trim();
-  });
-  return `${header}\n\n${lines.join("\n")}\n\n${NOTICE_FOOTER}`;
+  return `${header}\n\n${week.map(formatNoticeEvent).join("\n\n")}\n\n\n${NOTICE_FOOTER}`;
 }
 
 export function practiceNoticeText(events: ClubEvent[], today = todayISO()) {

@@ -21,6 +21,7 @@ import {
 } from "@/lib/calendarLayout";
 import { cn } from "@/lib/cn";
 import {
+  defaultPracticeRange,
   eachISODate,
   eventEndDate,
   formatDateKo,
@@ -144,11 +145,12 @@ function EventBarFace({ event }: { event: ClubEvent }) {
 }
 
 function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
+  const fallback = defaultPracticeRange(event.date);
   return {
     startDate: event.date,
     endDate: event.endDate ?? event.date,
-    startTime: event.startTime || "19:00",
-    endTime: event.endTime || "21:00",
+    startTime: event.startTime || fallback.startTime,
+    endTime: event.endTime || fallback.endTime,
     allDay: Boolean(event.allDay),
   };
 }
@@ -401,15 +403,17 @@ export function CalendarView() {
       >
         <div className="mb-4 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-2">
-            <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(-1)} aria-label="이전 달">
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <h1 className="text-[18px] font-semibold">
-              {year}년 {monthIndex + 1}월
-            </h1>
-            <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(1)} aria-label="다음 달">
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            <div className="flex h-8 w-[176px] min-w-[176px] max-w-[176px] shrink-0 items-center justify-between overflow-hidden">
+              <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(-1)} aria-label="이전 달">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <h1 className="min-w-0 flex-1 whitespace-nowrap text-center text-[18px] font-semibold tabular-nums">
+                {year}년 {monthIndex + 1}월
+              </h1>
+              <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(1)} aria-label="다음 달">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
             <GhostButton className="ml-1 h-8 px-2.5 text-[12px]" onClick={goToday}>
               오늘
             </GhostButton>

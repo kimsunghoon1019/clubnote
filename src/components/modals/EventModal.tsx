@@ -8,16 +8,17 @@ import { InlineTaxonomySelect } from "@/components/ui/InlineTaxonomySelect";
 import { Modal } from "@/components/ui/Modal";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { PLACE } from "@/lib/constants";
-import { todayISO } from "@/lib/format";
+import { defaultPracticeRange, todayISO } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import { useEffect, useState } from "react";
 
 function defaultRange(date = todayISO()): DateTimeRangeValue {
+  const times = defaultPracticeRange(date);
   return {
     startDate: date,
     endDate: date,
-    startTime: "19:00",
-    endTime: "21:00",
+    startTime: times.startTime,
+    endTime: times.endTime,
     allDay: false,
   };
 }
@@ -126,7 +127,24 @@ export function EventModal() {
         </div>
         <div>
           <FieldLabel>일시</FieldLabel>
-          <DateTimeRangeField value={range} onChange={setRange} />
+          <DateTimeRangeField
+            value={range}
+            onChange={(next) => {
+              if (next.startDate === range.startDate) {
+                setRange(next);
+                return;
+              }
+              const prevDefault = defaultPracticeRange(range.startDate);
+              const stillDefault =
+                range.startTime === prevDefault.startTime && range.endTime === prevDefault.endTime;
+              if (!stillDefault) {
+                setRange(next);
+                return;
+              }
+              const times = defaultPracticeRange(next.startDate);
+              setRange({ ...next, startTime: times.startTime, endTime: times.endTime });
+            }}
+          />
         </div>
         <div>
           <FieldLabel>장소</FieldLabel>

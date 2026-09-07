@@ -25,7 +25,7 @@ import {
   normalizeAttendanceStatus,
 } from "./constants";
 import { closePastPracticeEvents, withFineTallies } from "./attendanceSheet";
-import { collegeFromMajor, inferredBirthDate, msUntilNextLocalMidnight, todayISO } from "./format";
+import { collegeFromMajor, msUntilNextLocalMidnight, todayISO } from "./format";
 import { isPracticeEvent } from "./stats";
 import {
   attendance as seedAttendance,
@@ -33,6 +33,7 @@ import {
   dropEventsBefore,
   EVENTS_KEEP_FROM,
   events as seedEvents,
+  migrateSaturdayPracticeHours,
   groups as seedGroups,
   members as seedMembers,
   transactions as seedTransactions,
@@ -343,7 +344,8 @@ function normalizeMember(member: Member): Member {
     active: member.active !== false,
     practiceDays: member.practiceDays ?? ["화", "목", "토"],
     college: typeof member.college === "string" ? member.college : collegeFromMajor(member.major),
-    birthDate: typeof member.birthDate === "string" ? member.birthDate : inferredBirthDate(member.age, member.id || member.name),
+    birthDate: typeof member.birthDate === "string" ? member.birthDate : "",
+    joinedAt: typeof member.joinedAt === "string" ? member.joinedAt : "",
     fineTally: member.fineTally ?? emptyFineTally(),
   };
   if (isOperatorMember(next) && !canLogin(next)) next.role = OPERATOR_ROLE;
@@ -376,13 +378,19 @@ function parsedClubSnapshot(data: Persisted, ignoreLegacy = false) {
     cutoff < EVENTS_KEEP_FROM
       ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
       : { events: data.events, attendance: attendanceRows };
+  const events = migrateSaturdayPracticeHours(loaded.events).map(persistableEvent);
   const legacy = ignoreLegacy || data.legacyTaxonomyMerged ? null : loadLegacyTaxonomy();
   const usedCategories = data.members.map((member) => member.category);
   const usedRoles = data.members.map((member) => member.role);
+  const members = data.members.map((member) => {
+    const next = normalizeMember(member);
+    if (data.profileDatesCleared) return next;
+    return { ...next, birthDate: "", joinedAt: "" };
+  });
   return {
-    events: loaded.events.map(persistableEvent),
+    events,
     attendance: loaded.attendance,
-    members: withFineTallies(data.members.map(normalizeMember), loaded.events, loaded.attendance),
+    members: withFineTallies(members, events, loaded.attendance),
     eventsClearedBefore: EVENTS_KEEP_FROM,
     weatherDays: normalizeWeatherDays(data.weatherDays),
     weatherFetchedAt: typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "",
@@ -650,6 +658,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventsClearedBefore,
       duesOverrides,
       legacyTaxonomyMerged: true,
+      profileDatesCleared: true,
     };
     persistPayloadRef.current = payload;
     try {

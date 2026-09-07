@@ -43,6 +43,8 @@ export type Persisted = {
   eventsClearedBefore?: string;
   duesOverrides?: DuesOverride[];
   legacyTaxonomyMerged?: boolean;
+  /** 시드에 넣었던 생년월일·가입일을 한 번 비운 뒤 true. */
+  profileDatesCleared?: boolean;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -72,6 +74,7 @@ export function seedPersisted(): Persisted {
     eventsClearedBefore: EVENTS_KEEP_FROM,
     duesOverrides: [],
     legacyTaxonomyMerged: true,
+    profileDatesCleared: true,
   };
 }
 

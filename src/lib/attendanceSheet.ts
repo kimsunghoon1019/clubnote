@@ -51,6 +51,20 @@ export function tallyMemberFines(
   return tally;
 }
 
+export function tallyMemberPresents(
+  member: Member,
+  events: ClubEvent[],
+  attendance: Attendance[],
+) {
+  const map = attendanceRecordMap(attendance);
+  let count = 0;
+  for (const event of practiceSheetEvents(events)) {
+    if (!isAttendanceClosed(event) || !isFineSheetCell(member, event)) continue;
+    if (map.get(`${event.id}:${member.id}`) === "출석") count += 1;
+  }
+  return count;
+}
+
 export function withFineTallies(
   members: Member[],
   events: ClubEvent[],

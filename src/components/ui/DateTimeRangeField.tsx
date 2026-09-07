@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { formatDateWeekday, formatTimeKo, parseISODate, toISODate } from "@/lib/format";
+import { defaultPracticeRange, formatDateWeekday, formatTimeKo, parseISODate, toISODate } from "@/lib/format";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -160,7 +160,12 @@ export function DateTimeRangeField({
               ) : (
                 <TimeWheel
                   key={open ?? "time"}
-                  time={activeTime || (open === "end-time" ? "21:00" : "19:00")}
+                  time={
+                    activeTime ||
+                    (open === "end-time"
+                      ? defaultPracticeRange(value.startDate).endTime
+                      : defaultPracticeRange(value.startDate).startTime)
+                  }
                   onChange={(next) => {
                     if (open === "end-time") emit({ endTime: next });
                     else emit({ startTime: next });

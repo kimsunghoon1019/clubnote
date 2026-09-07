@@ -86,6 +86,25 @@ export function formatTimeKo(hhmm: string) {
   return `${period} ${hour12}:${mStr.padStart(2, "0")}`;
 }
 
+/** 카톡 공지용. 정각은 `오후 7시`, 아니면 `오후 7시 30분`. */
+export function formatNoticeClock(hhmm: string) {
+  if (!hhmm) return "";
+  const [hStr, mStr = "00"] = hhmm.split(":");
+  const hour = Number(hStr);
+  if (!Number.isFinite(hour)) return hhmm;
+  const period = hour < 12 ? "오전" : "오후";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const minutes = Number(mStr);
+  if (!minutes) return `${period} ${hour12}시`;
+  return `${period} ${hour12}시 ${minutes}분`;
+}
+
+export function defaultPracticeRange(iso: string) {
+  const day = parseISODate(iso).getDay();
+  if (day === 6) return { startTime: "10:00", endTime: "13:00" };
+  return { startTime: "19:00", endTime: "21:00" };
+}
+
 export function formatEventTime(event: { startTime: string; endTime: string; allDay?: boolean }) {
   if (event.allDay) return "하루 종일";
   return formatTimeRange(event.startTime, event.endTime);
@@ -133,6 +152,7 @@ export function formatChartStamp(iso: string) {
 }
 
 export function tenureLabel(joinedAt: string, today = todayISO()) {
+  if (!joinedAt) return "-";
   const start = parseISODate(joinedAt);
   const now = parseISODate(today);
   let months =
@@ -147,6 +167,7 @@ export function tenureLabel(joinedAt: string, today = todayISO()) {
 }
 
 export function tenureMonths(joinedAt: string, today = todayISO()) {
+  if (!joinedAt) return 0;
   const start = parseISODate(joinedAt);
   const now = parseISODate(today);
   let months =
@@ -200,15 +221,6 @@ export function ageFromBirthDate(iso: string, today = todayISO()) {
     age -= 1;
   }
   return Math.max(0, age);
-}
-
-export function inferredBirthDate(age: number, seed = "0") {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  const year = new Date().getFullYear() - Math.max(0, age);
-  const month = (hash % 8) + 1;
-  const day = (hash % 27) + 1;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 export function initials(name: string) {

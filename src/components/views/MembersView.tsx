@@ -149,8 +149,8 @@ function buildMemberCsv(members: Member[], notes: ChartNote[], scores: MemberSco
       member.college || "",
       member.major,
       member.studentId,
-      formatDateDot(member.joinedAt),
-      tenureLabel(member.joinedAt),
+      member.joinedAt ? formatDateDot(member.joinedAt) : "",
+      member.joinedAt ? tenureLabel(member.joinedAt) : "",
       member.phone || "",
       member.practiceDays.join("/"),
       member.active !== false ? "활동" : "비활동",
@@ -352,9 +352,15 @@ export function MembersView() {
         <span className="inline-flex items-center gap-2">
           <Avatar name={row.name} size={24} />
           <span className="font-medium">{row.name}</span>
-          {row.active === false ? (
-            <span className="rounded-[6px] bg-[#F2F4F6] px-1.5 py-0.5 text-[11px] font-medium text-sub">비활동</span>
-          ) : null}
+          <span
+            className={cn(
+              "rounded-[6px] bg-[#F2F4F6] px-1.5 py-0.5 text-[11px] font-medium text-sub",
+              row.active === false ? "" : "invisible",
+            )}
+            aria-hidden={row.active !== false}
+          >
+            비활동
+          </span>
         </span>
       ),
     },
