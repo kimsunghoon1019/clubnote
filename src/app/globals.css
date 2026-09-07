@@ -18,11 +18,22 @@
   --up: #f04452;
   --down: #3182f6;
   --warn: #ffb800;
+  --touch: 44px;
+  --motion: 280ms;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
 }
 
 html,
 body {
   min-height: 100%;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: Pretendard, Pretendard Variable, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;

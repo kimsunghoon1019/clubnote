@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect } from "react";
 import { AppHeader } from "./AppHeader";
+import { BottomNav } from "./BottomNav";
 import { SearchOverlay } from "./SearchOverlay";
 import { StatusBar } from "./StatusBar";
 import { ToastViewport } from "@/components/ui/Toast";
@@ -34,14 +35,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   }
 
   if (!sessionReady || !sessionMemberId) {
-    return <div className="h-screen bg-white" />;
+    return <div className="h-dvh bg-white" />;
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-white">
+    <div className="flex h-dvh flex-col overflow-hidden bg-white">
       <AppHeader />
       <div className="flex min-h-0 flex-1 overflow-hidden">{children}</div>
       <StatusBar />
+      <BottomNav />
       <SearchOverlay />
       <ToastViewport />
       <SmsModal />

@@ -27,7 +27,10 @@ export function StatusBar() {
           : "서버와 동기화";
 
   return (
-    <footer className="sticky bottom-0 z-20 flex h-9 items-center justify-between border-t border-line-soft bg-white px-5 text-[12px] text-sub">
+    <footer
+      data-status-bar
+      className="sticky bottom-0 z-20 hidden h-9 items-center justify-between border-t border-line-soft bg-white px-5 text-[12px] text-sub lg:flex"
+    >
       <span>{saveLabel}</span>
       <span>
         오늘 출석 {rate.toFixed(1)}%

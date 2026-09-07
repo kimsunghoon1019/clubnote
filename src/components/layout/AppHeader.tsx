@@ -10,21 +10,16 @@ import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-
-const NAV = [
-  { href: "/", label: "홈" },
-  { href: "/members", label: "회원관리" },
-  { href: "/attendance", label: "출석체크" },
-  { href: "/finance", label: "회계" },
-  { href: "/calendar", label: "캘린더" },
-];
+import { NAV_ITEMS, navItemActive } from "./nav";
 
 export function AppHeader() {
   const pathname = usePathname();
-  const { setSearchOpen, currentMember } = useClub();
+  const { setSearchOpen, currentMember, persistStatus } = useClub();
   const unread = useUnreadChartNotes();
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
+  const saving = persistStatus === "saving" || persistStatus === "pending";
+  const saveFailed = persistStatus === "error";
 
   useEffect(() => {
     setBellOpen(false);
@@ -48,8 +43,8 @@ export function AppHeader() {
   }, [bellOpen]);
 
   return (
-    <header className="sticky top-0 z-30 h-14 border-b border-line-soft bg-white">
-      <div className="flex h-full items-center gap-6 px-5">
+    <header className="sticky top-0 z-30 border-b border-line-soft bg-white pt-[env(safe-area-inset-top)]">
+      <div className="flex h-14 items-center gap-6 px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <span className="flex h-6 w-6 items-center justify-center">
             <svg viewBox="0 0 16 16" className="h-5 w-5" aria-hidden>
@@ -62,13 +57,14 @@ export function AppHeader() {
           </span>
         </Link>
 
-        <nav className="flex h-full items-center gap-1">
-          {NAV.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        <nav data-console-nav className="hidden h-full items-center gap-1 lg:flex">
+          {NAV_ITEMS.map((item) => {
+            const active = navItemActive(pathname, item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex h-full items-center px-3 text-[14px]",
                   active ? "font-semibold text-ink" : "text-sub hover:text-ink",
@@ -85,24 +81,33 @@ export function AppHeader() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="hidden h-9 w-[280px] items-center gap-2 rounded-chip border border-line bg-white px-3 text-[13px] text-faint hover:border-[#d1d6db] md:flex"
+            className="hidden h-9 w-[280px] items-center gap-2 rounded-chip border border-line bg-white px-3 text-[13px] text-faint hover:border-[#d1d6db] lg:flex"
           >
             <Search className="h-3.5 w-3.5" />
             이름, 일정, 거래내역을 검색하세요
           </button>
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-btn text-sub hover:bg-muted md:hidden"
+            className="flex h-touch w-touch items-center justify-center rounded-btn text-sub hover:bg-muted lg:hidden"
             onClick={() => setSearchOpen(true)}
             aria-label="검색"
           >
             <Search className="h-4 w-4" />
           </button>
 
+          {saving || saveFailed ? (
+            <span
+              data-save-dot
+              className={cn("h-3 w-3 shrink-0 rounded-full lg:hidden", saveFailed ? "bg-up" : "bg-brand")}
+              title={saveFailed ? "저장 실패" : "저장 중"}
+              aria-label={saveFailed ? "저장 실패" : "저장 중"}
+            />
+          ) : null}
+
           <div className="relative" ref={bellRef}>
             <button
               type="button"
-              className="relative z-10 flex h-9 w-9 items-center justify-center rounded-btn text-sub hover:bg-muted"
+              className="relative z-10 flex h-touch w-touch items-center justify-center rounded-btn text-sub hover:bg-muted lg:h-9 lg:w-9"
               aria-label="알림"
               aria-expanded={bellOpen}
               aria-haspopup="dialog"
@@ -112,13 +117,13 @@ export function AppHeader() {
             >
               <Bell className="h-4 w-4" />
               {unread.length > 0 ? (
-                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up" data-bell-dot />
+                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up lg:right-1.5 lg:top-1.5" data-bell-dot />
               ) : null}
             </button>
             {bellOpen ? (
               <div
                 data-bell-panel
-                className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-card border border-line bg-white py-2"
+                className="absolute right-0 top-full z-20 mt-1.5 w-80 max-w-[calc(100vw-24px)] rounded-card border border-line bg-white py-2"
               >
                 <p className="px-3 pb-2 text-[12px] font-semibold text-faint">알림</p>
                 <div className="max-h-[min(420px,70vh)] overflow-auto px-3 scrollbar-thin">
@@ -133,12 +138,14 @@ export function AppHeader() {
               href="/mypage"
               aria-label={`${currentMember.name} 마이페이지`}
               className={cn(
-                "flex h-9 items-center gap-2 rounded-chip border px-2.5",
-                pathname.startsWith("/mypage") ? "border-brand bg-brand-soft" : "border-line-soft hover:bg-muted",
+                "flex h-touch w-touch items-center justify-center rounded-full lg:h-9 lg:w-auto lg:gap-2 lg:rounded-chip lg:border lg:px-2.5",
+                pathname.startsWith("/mypage")
+                  ? "bg-brand-soft lg:border-brand"
+                  : "hover:bg-muted lg:border-line-soft",
               )}
             >
               <Avatar name={currentMember.name} size={24} src={memberPhotoSrc(currentMember)} />
-              <span className="text-[13px] text-ink">
+              <span className="hidden text-[13px] text-ink lg:inline">
                 <span className="text-faint">{currentMember.role} · </span>
                 {currentMember.name}
               </span>

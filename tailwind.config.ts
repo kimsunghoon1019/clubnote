@@ -50,6 +50,24 @@ const config: Config = {
         body: ["14px", { lineHeight: "20px", letterSpacing: "-0.02em" }],
         table: ["13px", { lineHeight: "18px", letterSpacing: "-0.02em" }],
         title: ["18px", { lineHeight: "26px", letterSpacing: "-0.02em" }],
+        compact: ["16px", { lineHeight: "22px", letterSpacing: "-0.02em" }],
+        "compact-title": ["20px", { lineHeight: "28px", letterSpacing: "-0.02em" }],
+        "compact-caption": ["13px", { lineHeight: "18px", letterSpacing: "-0.02em" }],
+      },
+      minHeight: {
+        touch: "var(--touch)",
+      },
+      minWidth: {
+        touch: "var(--touch)",
+      },
+      height: {
+        touch: "var(--touch)",
+      },
+      width: {
+        touch: "var(--touch)",
+      },
+      transitionDuration: {
+        motion: "var(--motion)",
       },
     },
   },
