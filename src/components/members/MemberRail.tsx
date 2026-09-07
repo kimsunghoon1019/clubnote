@@ -91,7 +91,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
     <div>
       <div className="mb-4 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <Avatar name={member.name} size={40} />
+          <Avatar name={member.name} size={40} src={member.photoDataUrl} />
           <div>
             <p className="flex items-baseline gap-1.5">
               <span className="text-[15px] font-semibold">{member.name}</span>

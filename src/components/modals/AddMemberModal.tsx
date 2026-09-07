@@ -5,7 +5,7 @@ import { GhostButton } from "@/components/ui/GhostButton";
 import { Modal } from "@/components/ui/Modal";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { GENDER_OPTIONS } from "@/lib/constants";
+import { GENDER_OPTIONS, MEMBER_ROLE } from "@/lib/constants";
 import { ageFromBirthDate, collegeFromMajor, inferredBirthDate, todayISO } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import type { Gender, PracticeDay } from "@/lib/types";
@@ -16,7 +16,7 @@ export function AddMemberModal() {
   const open = modal === "member-add";
   const [name, setName] = useState("");
   const [category, setCategory] = useState(categories[0] ?? "기악");
-  const [role, setRole] = useState(roles.includes("회원") ? "회원" : roles[0] ?? "회원");
+  const [role, setRole] = useState(roles.includes(MEMBER_ROLE) ? MEMBER_ROLE : roles[0] ?? MEMBER_ROLE);
   const [gender, setGender] = useState<Gender>("여");
   const [age, setAge] = useState("21");
   const [birthDate, setBirthDate] = useState("");

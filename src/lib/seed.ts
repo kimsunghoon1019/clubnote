@@ -1,4 +1,4 @@
-import { PLACE, emptyFineTally } from "./constants";
+import { MEMBER_ROLE, OPERATOR_NAME, OPERATOR_ROLE, PLACE, emptyFineTally } from "./constants";
 import { collegeFromMajor, inferredBirthDate, parseISODate, toISODate, todayISO } from "./format";
 import { placeholderImageDataUrl } from "./proof";
 import type {
@@ -85,7 +85,7 @@ const featured: SeedMember[] = roster.map((row) =>
   withProfile({
     groupId: "g1",
     category: "기악",
-    role: "회원",
+    role: row.name === OPERATOR_NAME ? OPERATOR_ROLE : MEMBER_ROLE,
     major: "",
     unpaidFee: 0,
     practiceDays: DEFAULT_PRACTICE,

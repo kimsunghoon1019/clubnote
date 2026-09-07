@@ -34,6 +34,12 @@ export type Member = {
   active: boolean;
   /** 출석표 연습 칸 기준 누계. 벌금 산정용. */
   fineTally: FineTally;
+  /** 비우면 학번으로 로그인. */
+  loginId?: string;
+  /** 비우면 전화번호 뒷 4자리. */
+  password?: string;
+  photoDataUrl?: string;
+  bio?: string;
 };
 
 export type ChartNote = {

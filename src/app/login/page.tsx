@@ -77,32 +77,30 @@ export default function LoginPage() {
             <p className="text-[12px] text-faint">동아리 운영</p>
           </div>
         </div>
-        <h1 className="text-[20px] font-semibold">학번으로 로그인</h1>
-        <p className="mt-1 text-[14px] text-sub">내 학번과 전화번호 뒷 4자리로 들어와요.</p>
+        <h1 className="text-[20px] font-semibold">운영진 로그인</h1>
+        <p className="mt-1 text-[14px] text-sub">직책이 있는 회원만 학번 또는 아이디로 들어와요. 단원은 로그인할 수 없어요.</p>
         <form className="mt-6 space-y-3" onSubmit={submit}>
           <div>
-            <FieldLabel>학번</FieldLabel>
+            <FieldLabel>아이디 또는 학번</FieldLabel>
             <TextInput
               type="text"
-              inputMode="numeric"
               autoComplete="username"
               required
-              placeholder="학번 10자리"
+              placeholder="학번 또는 아이디"
               value={studentId}
-              onChange={(e) => setStudentId(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              onChange={(e) => setStudentId(e.target.value.replace(/\s/g, "").slice(0, 32))}
             />
           </div>
           <div>
-            <FieldLabel hint="전화번호 뒷 4자리">비밀번호</FieldLabel>
+            <FieldLabel hint="기본은 전화번호 뒷 4자리">비밀번호</FieldLabel>
             <TextInput
               type="password"
-              inputMode="numeric"
               autoComplete="current-password"
               required
-              maxLength={4}
+              maxLength={32}
               placeholder="••••"
               value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) => setPin(e.target.value.slice(0, 32))}
             />
           </div>
           <PrimaryButton type="submit" className="h-11 w-full">
@@ -113,7 +111,7 @@ export default function LoginPage() {
 
         {demos.length > 0 ? (
           <div className="mt-5 rounded-card border border-line-soft bg-muted px-3 py-3">
-            <p className="text-[12px] font-semibold text-faint">목업 계정</p>
+            <p className="text-[12px] font-semibold text-faint">운영진 계정</p>
             <ul className="mt-2 space-y-1.5">
               {demos.map((demo) => (
                 <li key={demo.studentId}>

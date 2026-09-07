@@ -2,11 +2,13 @@ import type { AttendanceStatus, FineStatus, FineTally } from "./types";
 
 export const CLUB_NAME = "글리클럽";
 export const PLACE = "학생회관 404호";
-export const OPERATOR_NAME = "김호준";
-export const OPERATOR_ROLE = "운영진";
+export const OPERATOR_NAME = "최호성";
+export const OPERATOR_ROLE = "회장";
+export const OPERATOR_STUDENT_ID = "2021121051";
+export const MEMBER_ROLE = "단원";
 
 export const DEFAULT_CATEGORIES = ["기악", "보컬", "스태프"];
-export const DEFAULT_ROLES = ["회장", "부회장", "총무", "파트장", "회원", "스태프"];
+export const DEFAULT_ROLES = ["회장", "부회장", "총무", "파트장", "단원", "스태프"];
 export const GENDER_OPTIONS = ["여", "남"] as const;
 
 export const ATTENDANCE_STATUSES = ["출석", "통보지각", "미통보지각", "통보결석", "미통보결석"] as const;

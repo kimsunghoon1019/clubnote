@@ -106,7 +106,7 @@ export function AppHeader() {
                 pathname.startsWith("/mypage") ? "border-brand bg-brand-soft" : "border-line-soft hover:bg-muted",
               )}
             >
-              <Avatar name={currentMember.name} size={24} />
+              <Avatar name={currentMember.name} size={24} src={currentMember.photoDataUrl} />
               <span className="text-[13px] text-ink">
                 <span className="text-faint">{currentMember.role} · </span>
                 {currentMember.name}

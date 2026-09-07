@@ -9,8 +9,19 @@ const PALETTE = [
   { bg: "#EEF2F6", fg: "#191F28" },
 ];
 
-export function Avatar({ name, size = 28 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 28, src }: { name: string; size?: number; src?: string }) {
   const palette = PALETTE[name.charCodeAt(0) % PALETTE.length];
+  if (src) {
+    return (
+      <span
+        className="inline-flex shrink-0 overflow-hidden rounded-full bg-muted"
+        style={{ width: size, height: size }}
+        aria-hidden
+      >
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      </span>
+    );
+  }
   return (
     <span
       className={cn(

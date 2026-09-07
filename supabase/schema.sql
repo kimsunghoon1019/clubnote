@@ -41,6 +41,10 @@ alter table public.members add column if not exists late_notified int default 0;
 alter table public.members add column if not exists late_unnotified int default 0;
 alter table public.members add column if not exists absent_notified int default 0;
 alter table public.members add column if not exists absent_unnotified int default 0;
+alter table public.members add column if not exists login_id text;
+alter table public.members add column if not exists password text;
+alter table public.members add column if not exists photo_data_url text;
+alter table public.members add column if not exists bio text;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

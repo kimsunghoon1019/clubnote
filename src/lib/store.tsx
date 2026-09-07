@@ -15,7 +15,9 @@ import {
   DEFAULT_PLACES,
   DEFAULT_ROLES,
   EVENT_TYPES,
+  MEMBER_ROLE,
   OPERATOR_NAME,
+  OPERATOR_ROLE,
   LEGACY_STORAGE_KEYS,
   STORAGE_KEY,
   TX_CATEGORIES,
@@ -57,7 +59,9 @@ import {
 import { deleteProofBlob, getProofBlob, putProofBlob } from "./proofDb";
 import {
   authenticateMember,
+  canLogin,
   defaultSessionMemberId,
+  isOperatorMember,
   loadSession,
   persistSession,
 } from "./session";
@@ -338,14 +342,26 @@ function pickTaxonomy(
 }
 
 function normalizeMember(member: Member): Member {
-  return {
+  const role = member.role === "회원" ? MEMBER_ROLE : member.role;
+  const next: Member = {
     ...member,
+    role,
+    loginId: typeof member.loginId === "string" ? member.loginId : "",
+    password: typeof member.password === "string" ? member.password : "",
+    photoDataUrl: typeof member.photoDataUrl === "string" ? member.photoDataUrl : "",
+    bio: typeof member.bio === "string" ? member.bio : "",
     active: member.active !== false,
     practiceDays: member.practiceDays ?? ["화", "목", "토"],
     college: typeof member.college === "string" ? member.college : collegeFromMajor(member.major),
     birthDate: typeof member.birthDate === "string" ? member.birthDate : inferredBirthDate(member.age, member.id || member.name),
     fineTally: member.fineTally ?? emptyFineTally(),
   };
+  if (isOperatorMember(next) && !canLogin(next)) next.role = OPERATOR_ROLE;
+  return next;
+}
+
+function normalizeRoles(list: string[]) {
+  return uniqueNames(list.map((name) => (name === "회원" ? MEMBER_ROLE : name)));
 }
 
 function loadPersisted(): Persisted | null {
@@ -469,7 +485,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
           ),
         );
         setRoles(
-          pickTaxonomy(data.roles, legacy?.roles, usedRoles, DEFAULT_ROLES, Boolean(data.legacyTaxonomyMerged)),
+          normalizeRoles(
+            pickTaxonomy(data.roles, legacy?.roles, usedRoles, DEFAULT_ROLES, Boolean(data.legacyTaxonomyMerged)),
+          ),
         );
         setEventTypes(
           uniqueNames(
@@ -506,12 +524,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
             ),
           );
           setRoles(
-            pickTaxonomy(
-              undefined,
-              legacy.roles,
-              seedMembers.map((member) => member.role),
-              DEFAULT_ROLES,
-              false,
+            normalizeRoles(
+              pickTaxonomy(
+                undefined,
+                legacy.roles,
+                seedMembers.map((member) => member.role),
+                DEFAULT_ROLES,
+                false,
+              ),
             ),
           );
         }
@@ -538,7 +558,13 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready || !sessionReady || !sessionMemberId) return;
-    if (members.some((member) => member.id === sessionMemberId)) return;
+    const member = members.find((item) => item.id === sessionMemberId);
+    if (member && canLogin(member)) return;
+    if (member && !canLogin(member)) {
+      persistSession({ status: "out" });
+      setSessionMemberId(null);
+      return;
+    }
     const fallback = defaultSessionMemberId(members);
     if (fallback) {
       persistSession({ status: "in", memberId: fallback });

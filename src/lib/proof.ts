@@ -2,6 +2,8 @@ import type { ClubEvent, EventAttachment, Transaction, TxProof } from "./types";
 
 const MAX_PROOF_BYTES = 8 * 1024 * 1024;
 const IMAGE_MAX_EDGE = 1280;
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_MAX_EDGE = 320;
 
 export type ProofKind = "image" | "pdf" | "other" | "none";
 
@@ -63,7 +65,7 @@ export async function fileToProof(file: File): Promise<{ meta: TxProof; blob: Bl
   }
   const mime = file.type || guessMime(file.name);
   const kind = proofKind(file.name, mime);
-  const blob = kind === "image" ? await compressImage(file) : file.slice(0, file.size, mime);
+  const blob = kind === "image" ? await compressImage(file, IMAGE_MAX_EDGE, 0.78) : file.slice(0, file.size, mime);
   return {
     meta: {
       id: newProofId(),
@@ -115,7 +117,28 @@ function guessMime(name: string) {
   return "application/octet-stream";
 }
 
-function compressImage(file: File) {
+export function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("이미지를 읽지 못했어요"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function fileToAvatarDataUrl(file: File) {
+  if (file.size > AVATAR_MAX_BYTES) {
+    throw new Error("사진은 2MB 이하만 올릴 수 있어요");
+  }
+  const mime = file.type || guessMime(file.name);
+  if (proofKind(file.name, mime) !== "image") {
+    throw new Error("이미지 파일만 올릴 수 있어요");
+  }
+  const blob = await compressImage(file, AVATAR_MAX_EDGE, 0.82);
+  return blobToDataUrl(blob);
+}
+
+function compressImage(file: File, maxEdge = IMAGE_MAX_EDGE, quality = 0.78) {
   if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
     return Promise.resolve(file.slice(0, file.size, "image/svg+xml"));
   }
@@ -123,7 +146,7 @@ function compressImage(file: File) {
     const objectUrl = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
-      const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(image.width, image.height));
+      const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
       const width = Math.max(1, Math.round(image.width * scale));
       const height = Math.max(1, Math.round(image.height * scale));
       const canvas = document.createElement("canvas");
@@ -148,7 +171,7 @@ function compressImage(file: File) {
           resolve(blob);
         },
         "image/jpeg",
-        0.78,
+        quality,
       );
     };
     image.onerror = () => {
