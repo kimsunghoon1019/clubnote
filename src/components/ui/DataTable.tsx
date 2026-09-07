@@ -9,6 +9,7 @@ export type Column<T> = {
   width?: string;
   align?: "left" | "right" | "center";
   sortable?: boolean;
+  className?: string;
   render: (row: T) => ReactNode;
 };
 
@@ -84,7 +85,10 @@ export function DataTable<T extends { id: string }>({
               "whitespace-nowrap px-3 py-[9px]",
               col.align === "right" && "text-right",
               col.align === "center" && "text-center",
+              col.width && "overflow-hidden",
+              col.className,
             )}
+            style={col.width ? { width: col.width, minWidth: col.width, maxWidth: col.width } : undefined}
           >
             {col.render(row)}
           </td>
@@ -121,8 +125,10 @@ export function DataTable<T extends { id: string }>({
                   col.align === "right" && "text-right",
                   col.align === "center" && "text-center",
                   col.align !== "right" && col.align !== "center" && "text-left",
+                  col.width && "overflow-hidden",
+                  col.className,
                 )}
-                style={col.width ? { width: col.width } : undefined}
+                style={col.width ? { width: col.width, minWidth: col.width, maxWidth: col.width } : undefined}
               >
                 {col.sortable && onSort ? (
                   <button

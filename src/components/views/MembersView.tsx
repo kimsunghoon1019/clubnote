@@ -218,7 +218,9 @@ export function MembersView() {
     if (!categories.includes(assignTo)) setAssignTo(categories[0] ?? "");
   }, [categories, assignTo]);
 
-  const counts = categoryCounts(members, categories);
+  const activeMembers = useMemo(() => members.filter(isActive), [members]);
+  const counts = categoryCounts(activeMembers, categories);
+  const memberCount = activeMembers.length;
   const scores = useMemo(() => {
     const map = new Map<string, { diligence: number; participation: number }>();
     members.forEach((member) => {
@@ -333,6 +335,7 @@ export function MembersView() {
     },
     {
       key: "role",
+      width: "88px",
       header: (
         <TaxonomyEditor
           label="직책"
@@ -345,11 +348,12 @@ export function MembersView() {
       ),
       render: (row) => (
         <PropertySelect
+          className="block w-full"
           value={row.role}
           options={roles.includes(row.role) ? roles : [row.role, ...roles]}
           onChange={(value) => updateMember(row.id, { role: value })}
         >
-          <RolePill role={row.role} />
+          <RolePill role={row.role} className="w-[52px] px-1.5" />
         </PropertySelect>
       ),
     },
@@ -406,7 +410,7 @@ export function MembersView() {
           <div className="row-span-2 flex flex-col justify-between border-b border-r border-line-soft p-4 md:border-b-0">
             <div>
               <p className="text-[12px] text-sub">회원수</p>
-              <p className="mt-1 text-[28px] font-semibold leading-8">{members.length}</p>
+              <p className="mt-1 text-[28px] font-semibold leading-8">{memberCount}</p>
             </div>
             <div className="mt-4">
               <p className="mb-2 text-[12px] text-sub">분류 비율</p>
@@ -442,7 +446,7 @@ export function MembersView() {
                         <span className="truncate">{item.name}</span>
                       </span>
                       <span className="tabular-nums text-ink">
-                        {members.length ? Math.round((item.count / members.length) * 100) : 0}%
+                        {memberCount ? Math.round((item.count / memberCount) * 100) : 0}%
                       </span>
                     </li>
                   ))}

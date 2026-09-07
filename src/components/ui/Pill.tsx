@@ -36,15 +36,17 @@ export function Pill({
   );
 }
 
-export function RolePill({ role }: { role: string }) {
+export function RolePill({ role, className }: { role: string; className?: string }) {
   return (
     <span
+      title={role}
       className={cn(
-        "inline-flex h-[22px] items-center rounded-chip px-2 text-[11px] font-medium",
+        "inline-flex h-[22px] max-w-full items-center justify-center overflow-hidden rounded-chip px-2 text-[11px] font-medium",
         roleStyle(role),
+        className,
       )}
     >
-      {role}
+      <span className="truncate">{role}</span>
     </span>
   );
 }
