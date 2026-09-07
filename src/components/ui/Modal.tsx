@@ -44,8 +44,8 @@ export function Modal({
         role="dialog"
         aria-modal
         aria-label={title}
-        className="flex max-h-[86vh] flex-col overflow-hidden rounded-card border border-line bg-white"
-        style={{ width }}
+        className="flex max-h-[86vh] w-full flex-col overflow-hidden rounded-card border border-line bg-white"
+        style={{ width, maxWidth: "min(100%, calc(100vw - 32px))" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line-soft px-5 py-3.5">

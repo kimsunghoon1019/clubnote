@@ -67,6 +67,8 @@ export function DetailSurface({
   onClose,
   onSave,
   saveLabel = "저장",
+  footer,
+  railClassName = "lg:w-[300px]",
   children,
   className,
 }: {
@@ -75,6 +77,8 @@ export function DetailSurface({
   onClose?: () => void;
   onSave?: () => void;
   saveLabel?: string;
+  footer?: ReactNode;
+  railClassName?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -259,7 +263,8 @@ export function DetailSurface({
         aria-labelledby={compactOpen && title ? titleId : undefined}
         className={cn(
           "min-h-0 bg-white",
-          "lg:static lg:z-auto lg:flex lg:w-[300px] lg:shrink-0 lg:flex-col lg:overflow-hidden lg:border-l lg:border-line-soft lg:translate-y-0",
+          "lg:static lg:z-auto lg:flex lg:shrink-0 lg:flex-col lg:overflow-hidden lg:border-l lg:border-line-soft lg:translate-y-0",
+          railClassName,
           open
             ? "fixed inset-0 z-40 flex flex-col overscroll-contain"
             : "hidden",
@@ -312,6 +317,11 @@ export function DetailSurface({
           )}
         </header>
         <div className="min-h-0 flex-1 overflow-auto px-5 py-5 scrollbar-thin lg:px-4 lg:py-4">{children}</div>
+        {footer ? (
+          <div data-detail-footer className="shrink-0 border-t border-line-soft px-5 py-3 lg:px-4">
+            {footer}
+          </div>
+        ) : null}
       </aside>
     </>
   );

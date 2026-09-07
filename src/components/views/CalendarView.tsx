@@ -1,6 +1,7 @@
 "use client";
 
 import { EventAttachmentList } from "@/components/calendar/EventAttachments";
+import { DetailSurface } from "@/components/layout/DetailSurface";
 import { DateTimeRangeField, type DateTimeRangeValue } from "@/components/ui/DateTimeRangeField";
 import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
@@ -38,7 +39,7 @@ import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
-import { ChevronLeft, ChevronRight, Copy, Paperclip, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, MoreHorizontal, Paperclip, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 
@@ -182,6 +183,8 @@ export function CalendarView() {
   const [dropIsos, setDropIsos] = useState<string[]>([]);
   const [dragGhost, setDragGhost] = useState<DragGhost | null>(null);
   const [eventMenu, setEventMenu] = useState<EventMenu | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -357,6 +360,23 @@ export function CalendarView() {
   }, [draggingId]);
 
   useEffect(() => {
+    if (!moreOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (moreRef.current?.contains(event.target as Node)) return;
+      setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
+  useEffect(() => {
     if (!eventMenu) return;
     const close = () => setEventMenu(null);
     const onPointerDown = (event: PointerEvent) => {
@@ -378,6 +398,7 @@ export function CalendarView() {
   }, [eventMenu]);
 
   const onEventPointerDown = (pointer: ReactPointerEvent, event: ClubEvent) => {
+    if (window.matchMedia("(max-width: 1023px)").matches) return;
     if (pointer.button !== 0) return;
     if (pointer.ctrlKey || pointer.metaKey) return;
     setEventMenu(null);
@@ -465,13 +486,96 @@ export function CalendarView() {
     });
   };
 
+  const saveEdit = () => {
+    const form = document.getElementById(EDIT_FORM_ID);
+    if (form instanceof HTMLFormElement) form.requestSubmit();
+  };
+
+  const sheetTitle = multiSelected
+    ? `${pickedEvents.length}개 선택`
+    : selected
+      ? formatDateKo(selected)
+      : "일정";
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <main
-        className="min-h-0 min-w-0 flex-[7] overflow-auto p-5 scrollbar-thin"
-        onClick={resetPanel}
-      >
-        <div className="mb-4 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-[7]" onClick={resetPanel}>
+        <div
+          data-calendar-compact-head
+          className="relative flex shrink-0 items-center gap-1 border-b border-line-soft px-2 py-1.5 lg:hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex min-w-0 flex-1 items-center">
+            <button
+              type="button"
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
+              onClick={() => shiftMonth(-1)}
+              aria-label="이전 달"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h1 className="min-w-0 flex-1 truncate text-center text-compact font-semibold tabular-nums">
+              {year}년 {monthIndex + 1}월
+            </h1>
+            <button
+              type="button"
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
+              onClick={() => shiftMonth(1)}
+              aria-label="다음 달"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+          <GhostButton className="h-touch shrink-0 px-3 text-[13px] touch-manipulation" onClick={goToday}>
+            오늘
+          </GhostButton>
+          <button
+            type="button"
+            data-calendar-add
+            aria-label="일정 생성"
+            className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
+            onClick={() => openCreate(selected)}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+          <div className="relative" ref={moreRef}>
+            <button
+              type="button"
+              data-calendar-more
+              aria-label="더보기"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+            {moreOpen ? (
+              <div
+                data-calendar-more-menu
+                role="menu"
+                className="absolute right-0 top-full z-20 mt-1.5 w-48 rounded-card border border-line bg-white p-2"
+              >
+                <GhostButton
+                  className="h-touch w-full text-[13px]"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    void copyNotice();
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  카톡 공지 복사
+                </GhostButton>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div
+          data-calendar-console-head
+          className="mb-4 hidden items-center justify-between px-5 pt-5 lg:flex"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-[176px] min-w-[176px] max-w-[176px] shrink-0 items-center justify-between overflow-hidden">
               <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(-1)} aria-label="이전 달">
@@ -493,76 +597,117 @@ export function CalendarView() {
         </div>
 
         <div
-          className={cn("border-l border-t border-line-soft", draggingId && "select-none")}
+          data-calendar-grid
+          className={cn(
+            "min-h-0 flex-1 overflow-auto px-4 pb-3 lg:px-5 lg:pb-5",
+            "max-lg:flex max-lg:flex-col max-lg:overflow-hidden",
+            draggingId && "select-none",
+          )}
           data-calendar-dragging={draggingId ? "true" : undefined}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="grid grid-cols-7">
-            {WEEKDAYS.map((d) => (
-              <div key={d} className="border-b border-r border-line-soft bg-muted px-2 py-2 text-[12px] text-faint">
-                {d}
-              </div>
-            ))}
+          <div className="border-l border-t border-line-soft max-lg:flex max-lg:h-full max-lg:min-h-0 max-lg:flex-col">
+            <div className="grid shrink-0 grid-cols-7">
+              {WEEKDAYS.map((d) => (
+                <div
+                  key={d}
+                  className="border-b border-r border-line-soft bg-muted px-1 py-1.5 text-center text-[11px] text-faint lg:px-2 lg:py-2 lg:text-left lg:text-[12px]"
+                >
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col">
+              {weeks.map((week) => (
+                <WeekRow
+                  key={week[0].iso}
+                  week={week}
+                  events={events}
+                  today={today}
+                  selected={selected}
+                  activeId={activeId}
+                  selectedEventIds={selectedEventIds}
+                  draggingId={draggingId}
+                  dropIsos={dropIsos}
+                  forecast={forecast}
+                  onSelectDay={(iso) => {
+                    const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
+                    setSelected(iso);
+                    setActiveId(first);
+                    setSelectedEventIds(first ? [first] : []);
+                    setEditing(false);
+                  }}
+                  onSelectEvent={(iso, id, additive) => {
+                    setSelected(iso);
+                    setEditing(false);
+                    if (additive) {
+                      setSelectedEventIds((prev) => {
+                        const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+                        setActiveId(next.includes(id) ? id : (next[next.length - 1] ?? null));
+                        return next;
+                      });
+                      return;
+                    }
+                    setActiveId(id);
+                    setSelectedEventIds([id]);
+                  }}
+                  onCreateDay={(iso) => {
+                    const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
+                    setSelected(iso);
+                    setActiveId(first);
+                    setSelectedEventIds(first ? [first] : []);
+                    setEditing(false);
+                    openCreate(iso);
+                  }}
+                  onEventPointerDown={onEventPointerDown}
+                  onEventContextMenu={onEventContextMenu}
+                />
+              ))}
+            </div>
           </div>
-          {weeks.map((week) => (
-            <WeekRow
-              key={week[0].iso}
-              week={week}
-              events={events}
-              today={today}
-              selected={selected}
-              activeId={activeId}
-              selectedEventIds={selectedEventIds}
-              draggingId={draggingId}
-              dropIsos={dropIsos}
-              forecast={forecast}
-              onSelectDay={(iso) => {
-                const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
-                setSelected(iso);
-                setActiveId(first);
-                setSelectedEventIds(first ? [first] : []);
-                setEditing(false);
-              }}
-              onSelectEvent={(iso, id, additive) => {
-                setSelected(iso);
-                setEditing(false);
-                if (additive) {
-                  setSelectedEventIds((prev) => {
-                    const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
-                    setActiveId(next.includes(id) ? id : (next[next.length - 1] ?? null));
-                    return next;
-                  });
-                  return;
-                }
-                setActiveId(id);
-                setSelectedEventIds([id]);
-              }}
-              onCreateDay={(iso) => {
-                const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
-                setSelected(iso);
-                setActiveId(first);
-                setSelectedEventIds(first ? [first] : []);
-                setEditing(false);
-                openCreate(iso);
-              }}
-              onEventPointerDown={onEventPointerDown}
-              onEventContextMenu={onEventContextMenu}
-            />
-          ))}
         </div>
       </main>
 
-      <aside
-        className="flex min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft"
-        data-event-selected-count={pickedEvents.length}
-        data-active-event-id={active?.id ?? undefined}
-        data-selected-date={selected ?? undefined}
+      <DetailSurface
+        open={Boolean(selected)}
+        title={sheetTitle}
+        onClose={resetPanel}
+        onSave={editing ? saveEdit : undefined}
+        railClassName="lg:w-[32%] lg:min-w-[300px] lg:max-w-[360px]"
+        footer={
+          <div className="flex gap-2">
+            <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
+              일정 생성
+            </PrimaryButton>
+            {editing ? (
+              <PrimaryButton className="hidden flex-1 lg:inline-flex" type="submit" form={EDIT_FORM_ID} disabled={!active}>
+                저장
+              </PrimaryButton>
+            ) : (
+              <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
+                수정
+              </GhostButton>
+            )}
+            <GhostButton
+              className="px-3"
+              disabled={pickedEvents.length === 0 && !active}
+              onClick={confirmDeleteSelected}
+              aria-label="일정 삭제"
+            >
+              <Trash2 className="h-4 w-4" />
+            </GhostButton>
+          </div>
+        }
       >
-        <div className="flex-1 overflow-auto px-5 py-5 [scrollbar-gutter:stable] scrollbar-thin">
+        <div
+          data-event-selected-count={pickedEvents.length}
+          data-active-event-id={active?.id ?? undefined}
+          data-selected-date={selected ?? undefined}
+        >
           {multiSelected ? (
             <>
-              <p className="text-[28px] font-semibold leading-8">{pickedEvents.length}개 선택</p>
-              <p className="mt-1 text-[13px] text-faint">Delete 키로 한 번에 지울 수 있어요.</p>
+              <p className="hidden text-[28px] font-semibold leading-8 lg:block">{pickedEvents.length}개 선택</p>
+              <p className="text-[13px] text-faint lg:mt-1">Delete 키로 한 번에 지울 수 있어요.</p>
               <ul className="mt-5 space-y-2">
                 {pickedEvents
                   .slice()
@@ -579,11 +724,11 @@ export function CalendarView() {
             </>
           ) : selected ? (
             <>
-              <p className="text-[28px] font-semibold leading-8">{formatDateKo(selected)}</p>
-              <p className="mt-1 text-[13px] text-faint">{formatWeekday(selected)}요일</p>
+              <p className="hidden text-[28px] font-semibold leading-8 lg:block">{formatDateKo(selected)}</p>
+              <p className="hidden text-[13px] text-faint lg:mt-1 lg:block">{formatWeekday(selected)}요일</p>
 
               {selectedEvents.length > 1 ? (
-                <div className="mt-3 flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1 lg:mt-3">
                   {selectedEvents.map((event) => (
                     <button
                       key={event.id}
@@ -593,7 +738,7 @@ export function CalendarView() {
                         setSelectedEventIds([event.id]);
                       }}
                       className={cn(
-                        "rounded-chip px-2 py-1 text-[12px]",
+                        "min-h-touch rounded-chip px-3 py-1.5 text-[13px] touch-manipulation lg:min-h-0 lg:px-2 lg:py-1 lg:text-[12px]",
                         (active?.id ?? "") === event.id ? "bg-brand-soft text-brand-text" : "bg-muted text-sub",
                       )}
                     >
@@ -604,7 +749,7 @@ export function CalendarView() {
               ) : null}
 
               {active ? (
-                <div className="mt-5">
+                <div className={cn(selectedEvents.length > 1 ? "mt-5" : "lg:mt-5")}>
                   {editing ? (
                     <EditEvent
                       key={active.id}
@@ -632,29 +777,7 @@ export function CalendarView() {
             <NoticePanel text={notice} onCopy={copyNotice} />
           )}
         </div>
-        <div className="flex gap-2 border-t border-line-soft px-5 py-3">
-          <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
-            일정 생성
-          </PrimaryButton>
-          {editing ? (
-            <PrimaryButton className="flex-1" type="submit" form={EDIT_FORM_ID} disabled={!active}>
-              저장
-            </PrimaryButton>
-          ) : (
-            <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
-              수정
-            </GhostButton>
-          )}
-          <GhostButton
-            className="px-3"
-            disabled={pickedEvents.length === 0 && !active}
-            onClick={confirmDeleteSelected}
-            aria-label="일정 삭제"
-          >
-            <Trash2 className="h-4 w-4" />
-          </GhostButton>
-        </div>
-      </aside>
+      </DetailSurface>
       {dragGhost ? <EventDragGhost ghost={dragGhost} /> : null}
       {eventMenu ? (
         <EventContextMenu
@@ -723,10 +846,10 @@ function WeekRow({
   return (
     <div
       ref={ref}
-      className="grid border-b border-line-soft"
+      className="grid min-h-[96px] border-b border-line-soft max-lg:flex-1"
       style={{
         gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-        gridTemplateRows: `${CALENDAR_DAY_HEAD}px minmax(${bodyMin}px, auto)`,
+        gridTemplateRows: `${CALENDAR_DAY_HEAD}px minmax(${bodyMin}px, 1fr)`,
       }}
     >
       {week.map((cell, index) => {
@@ -851,7 +974,7 @@ function EventBar({
         onContextMenu(e.clientX, e.clientY, event);
       }}
       className={cn(
-        "pointer-events-auto flex h-[18px] cursor-grab items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px] touch-none active:cursor-grabbing",
+        "pointer-events-auto flex h-[18px] items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px] touch-manipulation lg:cursor-grab lg:touch-none lg:active:cursor-grabbing",
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
         continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
         barClass(event.type),
