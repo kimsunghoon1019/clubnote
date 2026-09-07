@@ -3,9 +3,8 @@ import "./globals.css";
 import { ClubProvider } from "@/lib/store";
 import { AppFrame } from "@/components/layout/AppFrame";
 import { CLUB_NAME } from "@/lib/constants";
-import { PREFERRED_REGION } from "@/lib/serverRegion";
 
-export const preferredRegion = PREFERRED_REGION;
+export const preferredRegion = "icn1";
 
 export const metadata: Metadata = {
   title: `${CLUB_NAME} — 동아리 운영`,

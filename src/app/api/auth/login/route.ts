@@ -1,12 +1,11 @@
 import { applySessionCookie } from "@/lib/auth/requestSession";
 import { seedPersisted } from "@/lib/clubState";
 import { insertClubState, readClubState, remoteDbConfigured } from "@/lib/db/clubRepo";
-import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { authenticateMember } from "@/lib/session";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const preferredRegion = PREFERRED_REGION;
+export const preferredRegion = "icn1";
 
 export async function POST(request: Request) {
   if (!remoteDbConfigured()) {

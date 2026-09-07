@@ -1,11 +1,10 @@
 import { readSessionMemberId } from "@/lib/auth/requestSession";
 import { asPersisted } from "@/lib/clubState";
 import { readClubState, remoteDbConfigured, writeClubState } from "@/lib/db/clubRepo";
-import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const preferredRegion = PREFERRED_REGION;
+export const preferredRegion = "icn1";
 
 async function requireMember() {
   if (!remoteDbConfigured()) {

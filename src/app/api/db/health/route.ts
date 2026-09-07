@@ -1,10 +1,9 @@
 import { pingClubDb, remoteDbConfigured } from "@/lib/db/clubRepo";
 import { pingR2 } from "@/lib/r2";
-import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const preferredRegion = PREFERRED_REGION;
+export const preferredRegion = "icn1";
 
 export async function GET() {
   if (!remoteDbConfigured()) {

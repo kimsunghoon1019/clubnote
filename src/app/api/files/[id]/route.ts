@@ -1,11 +1,10 @@
 import { readSessionMemberId } from "@/lib/auth/requestSession";
 import { remoteDbConfigured } from "@/lib/db/clubRepo";
 import { hasR2, readR2File, removeR2File, writeR2File } from "@/lib/r2";
-import { PREFERRED_REGION } from "@/lib/serverRegion";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const preferredRegion = PREFERRED_REGION;
+export const preferredRegion = "icn1";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
