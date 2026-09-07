@@ -2,7 +2,7 @@ import type { AttendanceStatus, FineStatus, FineTally } from "./types";
 
 export const CLUB_NAME = "글리클럽";
 export const PLACE = "학생회관 404호";
-export const OPERATOR_NAME = "김서연";
+export const OPERATOR_NAME = "김호준";
 export const OPERATOR_ROLE = "운영진";
 
 export const DEFAULT_CATEGORIES = ["기악", "보컬", "스태프"];
@@ -63,4 +63,4 @@ export const SMS_TEMPLATES = {
   "직접 작성": "",
 } as const;
 
-export const STORAGE_KEY = "clubnote-db-v4";
+export const STORAGE_KEY = "clubnote-db-v5";

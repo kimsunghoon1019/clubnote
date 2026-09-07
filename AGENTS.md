@@ -1,6 +1,6 @@
 # ClubNote
 
-글리클럽 동아리 운영 콘솔. Next.js App Router + Tailwind + Pretendard. 로컬 DB는 `localStorage` 키 `clubnote-db-v4`.
+글리클럽 동아리 운영 콘솔. Next.js App Router + Tailwind + Pretendard. 로컬 DB는 `localStorage` 키 `clubnote-db-v5`.
 
 ## 작업 루프 (필수)
 
