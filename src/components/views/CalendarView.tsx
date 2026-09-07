@@ -43,6 +43,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { createPortal } from "react-dom";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const EDIT_FORM_ID = "calendar-event-edit";
 
 function barClass(type: string) {
   if (type === "공연") return "bg-[#FFF1F1] text-up";
@@ -587,7 +588,6 @@ export function CalendarView() {
                         setEditing(false);
                         toast("일정을 수정했어요");
                       }}
-                      onCancel={() => setEditing(false)}
                     />
                   ) : (
                     <EventDetail key={active.id} event={active} />
@@ -610,9 +610,15 @@ export function CalendarView() {
           <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
             일정 생성
           </PrimaryButton>
-          <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
-            수정
-          </GhostButton>
+          {editing ? (
+            <PrimaryButton className="flex-1" type="submit" form={EDIT_FORM_ID} disabled={!active}>
+              저장
+            </PrimaryButton>
+          ) : (
+            <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
+              수정
+            </GhostButton>
+          )}
           <GhostButton
             className="px-3"
             disabled={pickedEvents.length === 0 && !active}
@@ -1025,11 +1031,9 @@ function EventFields({
 function EditEvent({
   event,
   onSave,
-  onCancel,
 }: {
   event: ClubEvent;
   onSave: (patch: Partial<ClubEvent>) => void;
-  onCancel: () => void;
 }) {
   const [title, setTitle] = useState(event.title);
   const [type, setType] = useState(event.type);
@@ -1037,7 +1041,24 @@ function EditEvent({
   const [preview, setPreview] = useState(event.preview);
   const [range, setRange] = useState<DateTimeRangeValue>(eventRangeOf(event));
   return (
-    <div className="space-y-3">
+    <form
+      id={EDIT_FORM_ID}
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({
+          title,
+          type,
+          place,
+          preview,
+          startTime: range.startTime,
+          endTime: range.endTime,
+          date: range.startDate,
+          endDate: range.endDate !== range.startDate ? range.endDate : undefined,
+          allDay: range.allDay,
+        });
+      }}
+    >
       <EventFields
         eventId={event.id}
         title={title}
@@ -1051,26 +1072,6 @@ function EditEvent({
         onPreview={setPreview}
         onRange={setRange}
       />
-      <div className="flex gap-2">
-        <PrimaryButton
-          onClick={() =>
-            onSave({
-              title,
-              type,
-              place,
-              preview,
-              startTime: range.startTime,
-              endTime: range.endTime,
-              date: range.startDate,
-              endDate: range.endDate !== range.startDate ? range.endDate : undefined,
-              allDay: range.allDay,
-            })
-          }
-        >
-          저장
-        </PrimaryButton>
-        <GhostButton onClick={onCancel}>취소</GhostButton>
-      </div>
-    </div>
+    </form>
   );
 }
