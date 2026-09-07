@@ -220,14 +220,24 @@ async function hydrateTransactionProofs(rows: Transaction[]): Promise<Transactio
       const proof = proofs[i];
       if (await getProofBlob(proof.id)) continue;
       if (i === 0 && row.proofDataUrl) {
-        await putProofBlob(proof.id, dataUrlToBlob(row.proofDataUrl));
+        try {
+          await putProofBlob(proof.id, dataUrlToBlob(row.proofDataUrl));
+        } catch {
+          /* local cache is enough for this session */
+        }
         continue;
       }
       const seed = seedTransactions.find((item) => item.id === row.id);
       if (!seed?.proofDataUrl) continue;
       const seedProofs = txProofs(seed);
       const seedMatch = seedProofs.find((item) => item.id === proof.id) ?? (i === 0 ? seedProofs[0] : undefined);
-      if (seedMatch) await putProofBlob(proof.id, dataUrlToBlob(seed.proofDataUrl));
+      if (seedMatch) {
+        try {
+          await putProofBlob(proof.id, dataUrlToBlob(seed.proofDataUrl));
+        } catch {
+          /* local cache is enough for this session */
+        }
+      }
     }
     const { proofName: _name, proofMime: _mime, proofDataUrl: _data, ...rest } = row;
     out.push({ ...rest, proofs });

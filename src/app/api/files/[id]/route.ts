@@ -1,5 +1,6 @@
 import { readSessionMemberId } from "@/lib/auth/requestSession";
-import { readClubFile, remoteDbConfigured, removeClubFile, writeClubFile } from "@/lib/db/clubRepo";
+import { remoteDbConfigured } from "@/lib/db/clubRepo";
+import { hasR2, readR2File, removeR2File, writeR2File } from "@/lib/r2";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -9,6 +10,9 @@ const MAX_BYTES = 8 * 1024 * 1024;
 async function requireMember() {
   if (!remoteDbConfigured()) {
     return { error: NextResponse.json({ error: "원격 DB가 설정되지 않았어요." }, { status: 503 }) };
+  }
+  if (!hasR2()) {
+    return { error: NextResponse.json({ error: "Cloudflare R2가 설정되지 않았어요." }, { status: 503 }) };
   }
   const memberId = await readSessionMemberId();
   if (!memberId) {
@@ -26,10 +30,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (auth.error) return auth.error;
   const id = fileId(await context.params);
   if (!id) return NextResponse.json({ error: "파일이 없어요." }, { status: 400 });
-  const row = await readClubFile(id);
+  const row = await readR2File(id);
   if (!row) return NextResponse.json({ error: "파일이 없어요." }, { status: 404 });
-  const bytes = Buffer.from(row.content, "base64");
-  return new NextResponse(new Uint8Array(bytes), {
+  return new NextResponse(new Uint8Array(row.body), {
     headers: {
       "content-type": row.mime || "application/octet-stream",
       "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(row.name || id)}`,
@@ -55,7 +58,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   } catch {
     name = rawName;
   }
-  await writeClubFile(id, name, mime, buffer.toString("base64"));
+  await writeR2File(id, name, mime, buffer);
   return NextResponse.json({ ok: true, id });
 }
 
@@ -63,6 +66,6 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   const auth = await requireMember();
   if (auth.error) return auth.error;
   const id = fileId(await context.params);
-  if (id) await removeClubFile(id);
+  if (id) await removeR2File(id);
   return NextResponse.json({ ok: true });
 }

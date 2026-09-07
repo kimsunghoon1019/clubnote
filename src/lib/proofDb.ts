@@ -63,12 +63,8 @@ export async function putProofBlob(id: string, blob: Blob, meta?: { name?: strin
     /* keep the file in memory for this session */
   }
   if (remoteFiles) {
-    try {
-      const { putClubFile } = await import("./remoteClient");
-      await putClubFile(id, blob, meta?.name || id, meta?.mime || blob.type || "application/octet-stream");
-    } catch {
-      /* metadata is in club_state; retry on next get */
-    }
+    const { putClubFile } = await import("./remoteClient");
+    await putClubFile(id, blob, meta?.name || id, meta?.mime || blob.type || "application/octet-stream");
   }
 }
 

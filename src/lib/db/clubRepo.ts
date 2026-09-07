@@ -71,31 +71,3 @@ export async function ensureClubState(): Promise<ClubStateRow> {
   if (existing) return existing;
   return insertClubState(seedPersisted());
 }
-
-export async function readClubFile(id: string) {
-  const admin = createAdminClient();
-  if (!admin) return null;
-  const { data, error } = await admin
-    .from("club_files")
-    .select("id, name, mime, content")
-    .eq("id", id)
-    .maybeSingle();
-  if (error || !data) return null;
-  return { id: data.id as string, name: data.name as string, mime: data.mime as string, content: data.content as string };
-}
-
-export async function writeClubFile(id: string, name: string, mime: string, content: string) {
-  const admin = createAdminClient();
-  if (!admin) throw new Error("원격 DB가 설정되지 않았어요");
-  const { error } = await admin.from("club_files").upsert(
-    { id, name, mime, content },
-    { onConflict: "id" },
-  );
-  if (error) throw new Error(error.message);
-}
-
-export async function removeClubFile(id: string) {
-  const admin = createAdminClient();
-  if (!admin) return;
-  await admin.from("club_files").delete().eq("id", id);
-}

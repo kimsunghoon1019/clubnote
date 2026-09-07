@@ -144,23 +144,27 @@ export function TransactionModal() {
             const raw = Number(amount);
             const signed = type === "입금" ? raw : -Math.abs(raw);
             void (async () => {
-              for (const item of proofs) {
-                await putProofBlob(item.meta.id, item.blob, { name: item.meta.name, mime: item.meta.mime });
+              try {
+                for (const item of proofs) {
+                  await putProofBlob(item.meta.id, item.blob, { name: item.meta.name, mime: item.meta.mime });
+                }
+                addTransaction({
+                  occurredOn,
+                  title,
+                  type,
+                  institution,
+                  accountMasked: account,
+                  amount: signed,
+                  memo,
+                  category,
+                  proofs: proofs.map((item) => item.meta),
+                });
+                toast("거래를 등록했어요");
+                reset();
+                closeModal();
+              } catch (error: unknown) {
+                toast(error instanceof Error ? error.message : "증빙을 올리지 못했어요");
               }
-              addTransaction({
-                occurredOn,
-                title,
-                type,
-                institution,
-                accountMasked: account,
-                amount: signed,
-                memo,
-                category,
-                proofs: proofs.map((item) => item.meta),
-              });
-              toast("거래를 등록했어요");
-              reset();
-              closeModal();
             })();
           }}
         >

@@ -2,7 +2,7 @@
 
 글리클럽 동아리 운영 콘솔. Next.js App Router + Tailwind + Pretendard.
 로컬(환경변수 없음) DB는 `localStorage` 키 `clubnote-db-v5`.
-배포는 Supabase 테이블 `club_state`(앱 JSON) + `club_files`(증빙·첨부)가 원본. `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` 필요.
+배포는 Supabase 테이블 `club_state`(앱 JSON) + Cloudflare R2(증빙·첨부)가 원본. `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` + `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` 필요.
 
 ## 작업 루프 (필수)
 

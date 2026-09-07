@@ -13,6 +13,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "aes-js": "^3.1.2",
+    "aws4fetch": "^1.0.20",
     "cfb": "^1.2.2",
     "js-sha1": "^0.7.0",
     "js-sha256": "^1.0.0",

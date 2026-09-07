@@ -1,6 +1,6 @@
 import type { Persisted } from "./clubState";
 
-export type DbHealth = { remote: boolean; ready: boolean; error?: string };
+export type DbHealth = { remote: boolean; ready: boolean; error?: string; files?: boolean; filesError?: string };
 
 let healthCache: DbHealth | null = null;
 
@@ -12,7 +12,9 @@ export async function fetchDbHealth(force = false): Promise<DbHealth> {
     healthCache = {
       remote: Boolean(data.remote),
       ready: Boolean(data.ready),
+      files: Boolean(data.files),
       error: typeof data.error === "string" ? data.error : undefined,
+      filesError: typeof data.filesError === "string" ? data.filesError : undefined,
     };
   } catch {
     healthCache = { remote: false, ready: false };
@@ -98,7 +100,10 @@ export async function putClubFile(id: string, blob: Blob, name: string, mime: st
     },
     body: blob,
   });
-  if (!res.ok) throw new Error("파일을 서버에 올리지 못했어요");
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "파일을 서버에 올리지 못했어요");
+  }
 }
 
 export async function getClubFile(id: string): Promise<Blob | undefined> {
