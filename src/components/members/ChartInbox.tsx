@@ -24,7 +24,7 @@ export function useUnreadChartNotes() {
   );
 }
 
-export function ChartInbox({ showHeader = true }: { showHeader?: boolean }) {
+export function ChartInbox({ showHeader = true, compact = false }: { showHeader?: boolean; compact?: boolean }) {
   const { members, acknowledgeChartNote } = useClub();
   const unread = useUnreadChartNotes();
   const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
@@ -66,9 +66,11 @@ export function ChartInbox({ showHeader = true }: { showHeader?: boolean }) {
         </div>
       ) : null}
       {unread.length === 0 ? (
-        <p className="text-[12px] text-faint">확인할 차트가 없어요</p>
+        <p className={cn("text-faint", compact ? "px-1 py-6 text-center text-compact-caption" : "text-[12px]")}>
+          확인할 차트가 없어요
+        </p>
       ) : (
-        <ol className="flex flex-col gap-2">
+        <ol className={cn("flex flex-col", compact ? "gap-2.5" : "gap-2")}>
           {unread.map((note) => {
             const member = members.find((item) => item.id === note.memberId);
             const exiting = leaving.has(note.id);
@@ -86,13 +88,18 @@ export function ChartInbox({ showHeader = true }: { showHeader?: boolean }) {
                     data-chart-note-id={note.id}
                     disabled={exiting}
                     onClick={() => dismiss(note.id)}
-                    className="w-full origin-center rounded-[8px] border border-line-soft px-3 py-2.5 text-left transition-transform duration-100 ease-out hover:bg-muted active:scale-[0.97]"
+                    className={cn(
+                      "w-full origin-center rounded-[8px] border border-line-soft text-left transition-transform duration-100 ease-out hover:bg-muted active:scale-[0.97]",
+                      compact ? "min-h-touch px-4 py-3 touch-manipulation" : "px-3 py-2.5",
+                    )}
                   >
                     <div className="flex items-center gap-2">
-                      <Avatar name={member?.name ?? "탈퇴"} size={24} />
+                      <Avatar name={member?.name ?? "탈퇴"} size={compact ? 32 : 24} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium text-ink">{member?.name ?? "탈퇴 회원"}</p>
-                        <p className="text-[11px] text-faint">
+                        <p className={cn("truncate font-medium text-ink", compact ? "text-compact" : "text-[13px]")}>
+                          {member?.name ?? "탈퇴 회원"}
+                        </p>
+                        <p className={cn(compact ? "text-compact-caption text-faint" : "text-[11px] text-faint")}>
                           {formatChartStamp(note.createdAt)}
                           {note.author ? (
                             <>
@@ -103,7 +110,14 @@ export function ChartInbox({ showHeader = true }: { showHeader?: boolean }) {
                         </p>
                       </div>
                     </div>
-                    <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap text-[13px] leading-5 text-ink">{note.body}</p>
+                    <p
+                      className={cn(
+                        "mt-1.5 line-clamp-3 whitespace-pre-wrap text-ink",
+                        compact ? "text-compact leading-6" : "text-[13px] leading-5",
+                      )}
+                    >
+                      {note.body}
+                    </p>
                   </button>
                 </div>
               </li>

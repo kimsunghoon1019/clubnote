@@ -9,8 +9,23 @@ import { useClub } from "@/lib/store";
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { NAV_ITEMS, navItemActive } from "./nav";
+
+const HISTORY_FLAG = "__clubnoteBell";
+
+function useCompactViewport() {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setCompact(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return compact;
+}
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -18,8 +33,23 @@ export function AppHeader() {
   const unread = useUnreadChartNotes();
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const pushedRef = useRef(false);
+  const compactViewport = useCompactViewport();
   const saving = persistStatus === "saving" || persistStatus === "pending";
   const saveFailed = persistStatus === "error";
+
+  const finishClose = useCallback(() => {
+    setBellOpen(false);
+  }, []);
+
+  const closeBell = useCallback(() => {
+    if (pushedRef.current && window.history.state?.[HISTORY_FLAG]) {
+      window.history.back();
+      return;
+    }
+    finishClose();
+  }, [finishClose]);
 
   useEffect(() => {
     setBellOpen(false);
@@ -27,20 +57,49 @@ export function AppHeader() {
 
   useEffect(() => {
     if (!bellOpen) return;
-    const onPointer = (event: PointerEvent) => {
-      if (bellRef.current?.contains(event.target as Node)) return;
-      setBellOpen(false);
-    };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setBellOpen(false);
+      if (event.key === "Escape") closeBell();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [bellOpen, closeBell]);
+
+  useEffect(() => {
+    if (!bellOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (bellRef.current?.contains(target)) return;
+      if (overlayRef.current?.contains(target)) return;
+      closeBell();
     };
     document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [bellOpen, closeBell]);
+
+  useEffect(() => {
+    if (!bellOpen) return;
+
+    if (!window.history.state?.[HISTORY_FLAG]) {
+      window.history.pushState({ ...window.history.state, [HISTORY_FLAG]: true }, "", window.location.href);
+      pushedRef.current = true;
+    }
+
+    const onPop = () => {
+      if (window.history.state?.[HISTORY_FLAG]) return;
+      pushedRef.current = false;
+      finishClose();
     };
-  }, [bellOpen]);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (!pushedRef.current) return;
+      pushedRef.current = false;
+      if (!window.history.state?.[HISTORY_FLAG]) return;
+      const state = { ...window.history.state };
+      delete state[HISTORY_FLAG];
+      window.history.replaceState(state, "", window.location.href);
+    };
+  }, [bellOpen, finishClose]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-line-soft bg-white pt-[env(safe-area-inset-top)]">
@@ -113,14 +172,14 @@ export function AppHeader() {
               aria-haspopup="dialog"
               data-bell-open={bellOpen ? "true" : "false"}
               data-bell-unread={unread.length}
-              onClick={() => setBellOpen((open) => !open)}
+              onClick={() => (bellOpen ? closeBell() : setBellOpen(true))}
             >
               <Bell className="h-4 w-4" />
               {unread.length > 0 ? (
                 <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up lg:right-1.5 lg:top-1.5" data-bell-dot />
               ) : null}
             </button>
-            {bellOpen ? (
+            {bellOpen && !compactViewport ? (
               <div
                 data-bell-panel
                 className="absolute right-0 top-full z-20 mt-1.5 w-80 max-w-[calc(100vw-24px)] rounded-card border border-line bg-white py-2"
@@ -132,6 +191,47 @@ export function AppHeader() {
               </div>
             ) : null}
           </div>
+          {bellOpen && compactViewport
+            ? createPortal(
+                <div ref={overlayRef} data-bell-overlay className="fixed inset-0 z-50 bg-white">
+                  <div
+                    data-bell-panel
+                    data-bell-sheet
+                    role="dialog"
+                    aria-modal
+                    aria-label="알림"
+                    className="flex h-full flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+                  >
+                    <header className="flex shrink-0 items-center border-b border-line-soft">
+                      <button
+                        type="button"
+                        data-bell-close
+                        className="flex h-touch min-w-touch items-center justify-center px-3 text-compact text-sub touch-manipulation"
+                        onClick={closeBell}
+                      >
+                        닫기
+                      </button>
+                      <p
+                        data-bell-title
+                        className="min-w-0 flex-1 truncate text-center text-compact font-semibold text-ink"
+                      >
+                        알림
+                      </p>
+                      <span
+                        className="invisible flex h-touch min-w-touch items-center justify-center px-3 text-compact"
+                        aria-hidden
+                      >
+                        닫기
+                      </span>
+                    </header>
+                    <div className="min-h-0 flex-1 overflow-auto px-4 py-3 scrollbar-thin">
+                      <ChartInbox showHeader={false} compact />
+                    </div>
+                  </div>
+                </div>,
+                document.body,
+              )
+            : null}
 
           {currentMember ? (
             <Link
