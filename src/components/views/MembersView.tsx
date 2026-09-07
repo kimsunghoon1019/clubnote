@@ -21,7 +21,7 @@ import { categoryCounts, diligenceScore, participationScore } from "@/lib/stats"
 import { useClub } from "@/lib/store";
 import type { ChartNote, Member } from "@/lib/types";
 import { Download, UserPlus } from "lucide-react";
-import { useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
@@ -181,9 +181,11 @@ export function MembersView() {
     updateMember,
     addCategory,
     removeCategory,
+    renameCategory,
     moveCategory,
     addRole,
     removeRole,
+    renameRole,
     moveRole,
     assignCategory,
     removeMembers,
@@ -196,6 +198,14 @@ export function MembersView() {
   const [sort, setSort] = useState<SortState>(null);
   const [assignTo, setAssignTo] = useState(categories[0] ?? "");
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (categoryTab !== "전체" && !categories.includes(categoryTab)) setCategoryTab("전체");
+  }, [categories, categoryTab]);
+
+  useEffect(() => {
+    if (!categories.includes(assignTo)) setAssignTo(categories[0] ?? "");
+  }, [categories, assignTo]);
 
   const counts = categoryCounts(members, categories);
   const scores = useMemo(() => {
@@ -298,11 +308,16 @@ export function MembersView() {
           items={categories}
           onAdd={addCategory}
           onRemove={removeCategory}
+          onRename={renameCategory}
           onMove={moveCategory}
         />
       ),
       render: (row) => (
-        <PropertySelect value={row.category} options={categories} onChange={(value) => updateMember(row.id, { category: value })}>
+        <PropertySelect
+          value={row.category}
+          options={categories.includes(row.category) ? categories : [row.category, ...categories]}
+          onChange={(value) => updateMember(row.id, { category: value })}
+        >
           <span className="text-sub">{row.category}</span>
         </PropertySelect>
       ),
@@ -310,10 +325,21 @@ export function MembersView() {
     {
       key: "role",
       header: (
-        <TaxonomyEditor label="직책" items={roles} onAdd={addRole} onRemove={removeRole} onMove={moveRole} />
+        <TaxonomyEditor
+          label="직책"
+          items={roles}
+          onAdd={addRole}
+          onRemove={removeRole}
+          onRename={renameRole}
+          onMove={moveRole}
+        />
       ),
       render: (row) => (
-        <PropertySelect value={row.role} options={roles} onChange={(value) => updateMember(row.id, { role: value })}>
+        <PropertySelect
+          value={row.role}
+          options={roles.includes(row.role) ? roles : [row.role, ...roles]}
+          onChange={(value) => updateMember(row.id, { role: value })}
+        >
           <RolePill role={row.role} />
         </PropertySelect>
       ),

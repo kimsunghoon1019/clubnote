@@ -64,3 +64,4 @@ export const SMS_TEMPLATES = {
 } as const;
 
 export const STORAGE_KEY = "clubnote-db-v5";
+export const LEGACY_STORAGE_KEYS = ["clubnote-db-v4", "clubnote-db-v3"] as const;

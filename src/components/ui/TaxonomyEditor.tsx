@@ -20,6 +20,7 @@ export function TaxonomyEditor({
   items,
   onAdd,
   onRemove,
+  onRename,
   onMove,
   variant = "header",
 }: {
@@ -27,16 +28,20 @@ export function TaxonomyEditor({
   items: string[];
   onAdd: (name: string) => void;
   onRemove: (name: string) => void;
+  onRename?: (from: string, to: string) => void;
   onMove?: (from: number, to: number) => void;
   variant?: "header" | "button";
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const editRef = useRef<HTMLInputElement>(null);
   const onMoveRef = useRef(onMove);
   const dragFromRef = useRef<number | null>(null);
   const overRef = useRef<number | null>(null);
@@ -96,9 +101,25 @@ export function TaxonomyEditor({
     if (open) return;
     stopDrag();
     setDraft("");
+    setEditing(null);
+    setEditDraft("");
   }, [open]);
 
+  useEffect(() => {
+    if (!editing) return;
+    editRef.current?.focus();
+    editRef.current?.select();
+  }, [editing]);
+
   useEffect(() => () => stopDrag(), []);
+
+  const commitRename = (from: string) => {
+    const next = editDraft.trim();
+    setEditing(null);
+    setEditDraft("");
+    if (!onRename || !next || next === from) return;
+    onRename(from, next);
+  };
 
   const startDrag = (from: number, event: React.PointerEvent) => {
     if (!onMoveRef.current || items.length < 2) return;
@@ -160,34 +181,76 @@ export function TaxonomyEditor({
               onMouseDown={(e) => e.stopPropagation()}
             >
               <p className="px-1 pb-1 text-[11px] text-faint">
-                {onMove ? "끌어 순서를 바꾸거나 항목을 추가·삭제할 수 있어요" : "항목을 추가하거나 지울 수 있어요"}
+                {onRename
+                  ? "이름을 눌러 바꾸고, 왼쪽 손잡이를 끌어 순서를 바꿀 수 있어요"
+                  : onMove
+                    ? "끌어 순서를 바꾸거나 항목을 추가·삭제할 수 있어요"
+                    : "항목을 추가하거나 지울 수 있어요"}
               </p>
               <ul ref={listRef} className="max-h-52 overflow-auto">
                 {items.map((item, index) => (
                   <li
                     key={item}
                     data-tax-index={index}
-                    onPointerDown={(event) => {
-                      if (!onMove || dragFromRef.current !== null) return;
-                      if (event.button !== 0) return;
-                      if ((event.target as HTMLElement).closest("[data-tax-remove]")) return;
-                      startDrag(index, event);
-                    }}
                     className={cn(
                       "flex items-center gap-1 rounded-btn px-1.5 py-1.5",
-                      onMove && items.length > 1 && "cursor-grab",
-                      dragIndex !== null && "cursor-grabbing",
                       dragIndex === index && "opacity-40",
                       overIndex === index && dragIndex !== null && dragIndex !== index && "bg-brand-soft",
                       dragIndex === null && "hover:bg-muted",
                     )}
                   >
                     {onMove ? (
-                      <span className="shrink-0 text-faint" aria-hidden>
+                      <span
+                        className={cn(
+                          "shrink-0 text-faint",
+                          items.length > 1 && "cursor-grab",
+                          dragIndex !== null && "cursor-grabbing",
+                        )}
+                        aria-hidden
+                        onPointerDown={(event) => {
+                          if (dragFromRef.current !== null) return;
+                          if (event.button !== 0) return;
+                          startDrag(index, event);
+                        }}
+                      >
                         <GripVertical className="h-3.5 w-3.5" />
                       </span>
                     ) : null}
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{item}</span>
+                    {onRename && editing === item ? (
+                      <input
+                        ref={editRef}
+                        value={editDraft}
+                        aria-label={`${item} 이름 바꾸기`}
+                        onChange={(event) => setEditDraft(event.target.value)}
+                        onBlur={() => commitRename(item)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitRename(item);
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setEditing(null);
+                            setEditDraft("");
+                          }
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        className="h-7 min-w-0 flex-1 rounded-[6px] border border-brand bg-white px-1.5 text-[13px] text-ink outline-none"
+                      />
+                    ) : onRename ? (
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate rounded-[6px] px-1 text-left text-[13px] text-ink hover:bg-white"
+                        onClick={() => {
+                          setEditing(item);
+                          setEditDraft(item);
+                        }}
+                      >
+                        {item}
+                      </button>
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{item}</span>
+                    )}
                     <button
                       type="button"
                       data-tax-remove

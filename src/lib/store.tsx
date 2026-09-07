@@ -16,6 +16,7 @@ import {
   DEFAULT_ROLES,
   EVENT_TYPES,
   OPERATOR_NAME,
+  LEGACY_STORAGE_KEYS,
   STORAGE_KEY,
   TX_CATEGORIES,
   emptyFineTally,
@@ -94,6 +95,7 @@ type Persisted = {
   weatherFetchedAt?: string;
   eventsClearedBefore?: string;
   duesOverrides?: DuesOverride[];
+  legacyTaxonomyMerged?: boolean;
 };
 
 type ClubContextValue = {
@@ -132,9 +134,11 @@ type ClubContextValue = {
   acknowledgeChartNote: (id: string) => void;
   addCategory: (name: string) => void;
   removeCategory: (name: string) => void;
+  renameCategory: (from: string, to: string) => void;
   moveCategory: (from: number, to: number) => void;
   addRole: (name: string) => void;
   removeRole: (name: string) => void;
+  renameRole: (from: string, to: string) => void;
   moveRole: (from: number, to: number) => void;
   addEventType: (name: string) => void;
   removeEventType: (name: string) => void;
@@ -289,6 +293,50 @@ function moveName(list: string[], from: number, to: number) {
   return next;
 }
 
+function cleanNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return uniqueNames(raw.map((item) => String(item)));
+}
+
+function sameNames(list: string[] | undefined, defaults: readonly string[]) {
+  return Array.isArray(list) && list.length === defaults.length && list.every((name, index) => name === defaults[index]);
+}
+
+function loadLegacyTaxonomy(): { categories: string[]; roles: string[] } | null {
+  if (typeof window === "undefined") return null;
+  for (const key of LEGACY_STORAGE_KEYS) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const data = JSON.parse(raw) as Partial<Persisted>;
+      const categories = cleanNames(data.categories);
+      const roles = cleanNames(data.roles);
+      if (categories.length || roles.length) return { categories, roles };
+    } catch {
+      /* ignore broken legacy blobs */
+    }
+  }
+  return null;
+}
+
+function pickTaxonomy(
+  stored: string[] | undefined,
+  legacy: string[] | undefined,
+  used: string[],
+  defaults: readonly string[],
+  migrated: boolean,
+) {
+  const current = cleanNames(stored);
+  const previous = cleanNames(legacy);
+  const base = (() => {
+    if (migrated) return current.length ? current : [...defaults];
+    if (current.length && !sameNames(current, defaults)) return current;
+    if (previous.length && !sameNames(previous, defaults)) return previous;
+    return current.length ? current : [...defaults];
+  })();
+  return uniqueNames(base, used);
+}
+
 function normalizeMember(member: Member): Member {
   return {
     ...member,
@@ -342,6 +390,10 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const eventsRef = useRef(events);
   const membersRef = useRef(members);
   membersRef.current = members;
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+  const rolesRef = useRef(roles);
+  rolesRef.current = roles;
   const attendanceRef = useRef(attendance);
   eventsRef.current = events;
   attendanceRef.current = attendance;
@@ -404,8 +456,21 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         setWeatherDays(normalizeWeatherDays(data.weatherDays));
         setWeatherFetchedAt(typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "");
         setNotes(data.notes ?? []);
-        setCategories(data.categories?.length ? data.categories : DEFAULT_CATEGORIES);
-        setRoles(data.roles?.length ? data.roles : DEFAULT_ROLES);
+        const legacy = data.legacyTaxonomyMerged ? null : loadLegacyTaxonomy();
+        const usedCategories = data.members.map((member) => member.category);
+        const usedRoles = data.members.map((member) => member.role);
+        setCategories(
+          pickTaxonomy(
+            data.categories,
+            legacy?.categories,
+            usedCategories,
+            DEFAULT_CATEGORIES,
+            Boolean(data.legacyTaxonomyMerged),
+          ),
+        );
+        setRoles(
+          pickTaxonomy(data.roles, legacy?.roles, usedRoles, DEFAULT_ROLES, Boolean(data.legacyTaxonomyMerged)),
+        );
         setEventTypes(
           uniqueNames(
             EVENT_TYPES,
@@ -428,6 +493,28 @@ export function ClubProvider({ children }: { children: ReactNode }) {
         );
         setChartSeenByAccount(normalizeChartSeen(data.chartSeenByAccount));
         setDuesOverrides(normalizeDuesOverrides(data.duesOverrides));
+      } else {
+        const legacy = loadLegacyTaxonomy();
+        if (legacy) {
+          setCategories(
+            pickTaxonomy(
+              undefined,
+              legacy.categories,
+              seedMembers.map((member) => member.category),
+              DEFAULT_CATEGORIES,
+              false,
+            ),
+          );
+          setRoles(
+            pickTaxonomy(
+              undefined,
+              legacy.roles,
+              seedMembers.map((member) => member.role),
+              DEFAULT_ROLES,
+              false,
+            ),
+          );
+        }
       }
       setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
       setReady(true);
@@ -512,6 +599,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       weatherFetchedAt,
       eventsClearedBefore,
       duesOverrides,
+      legacyTaxonomyMerged: true,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -726,8 +814,24 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeCategory = useCallback((name: string) => {
+    if (membersRef.current.some((member) => member.category === name)) {
+      toast("이 분류를 쓰는 회원이 있어요. 이름을 바꾸거나 먼저 다른 분류로 옮기세요.");
+      return;
+    }
     setCategories((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
-  }, []);
+  }, [toast]);
+
+  const renameCategory = useCallback((from: string, to: string) => {
+    const trimmed = to.trim();
+    if (!trimmed || trimmed === from) return;
+    if (categoriesRef.current.includes(trimmed)) {
+      toast("이미 있는 분류예요");
+      return;
+    }
+    if (!categoriesRef.current.includes(from)) return;
+    setCategories((prev) => prev.map((item) => (item === from ? trimmed : item)));
+    setMembers((prev) => prev.map((member) => (member.category === from ? { ...member, category: trimmed } : member)));
+  }, [toast]);
 
   const addRole = useCallback((name: string) => {
     const trimmed = name.trim();
@@ -736,8 +840,24 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeRole = useCallback((name: string) => {
+    if (membersRef.current.some((member) => member.role === name)) {
+      toast("이 직책을 쓰는 회원이 있어요. 이름을 바꾸거나 먼저 다른 직책으로 옮기세요.");
+      return;
+    }
     setRoles((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item !== name)));
-  }, []);
+  }, [toast]);
+
+  const renameRole = useCallback((from: string, to: string) => {
+    const trimmed = to.trim();
+    if (!trimmed || trimmed === from) return;
+    if (rolesRef.current.includes(trimmed)) {
+      toast("이미 있는 직책이에요");
+      return;
+    }
+    if (!rolesRef.current.includes(from)) return;
+    setRoles((prev) => prev.map((item) => (item === from ? trimmed : item)));
+    setMembers((prev) => prev.map((member) => (member.role === from ? { ...member, role: trimmed } : member)));
+  }, [toast]);
 
   const moveCategory = useCallback((from: number, to: number) => {
     setCategories((prev) => moveName(prev, from, to));
@@ -980,9 +1100,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       acknowledgeChartNote,
       addCategory,
       removeCategory,
+      renameCategory,
       moveCategory,
       addRole,
       removeRole,
+      renameRole,
       moveRole,
       addEventType,
       removeEventType,
@@ -1050,9 +1172,11 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       acknowledgeChartNote,
       addCategory,
       removeCategory,
+      renameCategory,
       moveCategory,
       addRole,
       removeRole,
+      renameRole,
       moveRole,
       addEventType,
       removeEventType,
