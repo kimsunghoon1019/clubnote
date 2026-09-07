@@ -379,6 +379,46 @@ function loadPersisted(): Persisted | null {
   }
 }
 
+function toPersistPayload(input: {
+  members: Member[];
+  events: ClubEvent[];
+  attendance: Attendance[];
+  notes: ChartNote[];
+  transactions: Transaction[];
+  categories: string[];
+  roles: string[];
+  eventTypes: string[];
+  places: string[];
+  txCategories: string[];
+  chartSeenByAccount: ChartSeenByAccount;
+  weatherDays: WeatherDay[];
+  weatherFetchedAt: string;
+  eventsClearedBefore: string;
+  seedPracticesKeptDate: string;
+  duesOverrides: DuesOverride[];
+}): Persisted {
+  return {
+    members: withFineTallies(input.members, input.events, input.attendance),
+    events: input.events.map(persistableEvent),
+    attendance: input.attendance,
+    notes: input.notes,
+    transactions: input.transactions.map(persistableTransaction),
+    categories: input.categories,
+    roles: input.roles,
+    eventTypes: input.eventTypes,
+    places: input.places,
+    txCategories: input.txCategories,
+    chartSeenByAccount: input.chartSeenByAccount,
+    weatherDays: input.weatherDays,
+    weatherFetchedAt: input.weatherFetchedAt,
+    eventsClearedBefore: input.eventsClearedBefore,
+    seedPracticesKeptDate: input.seedPracticesKeptDate,
+    duesOverrides: input.duesOverrides,
+    legacyTaxonomyMerged: true,
+    profileDatesCleared: true,
+  };
+}
+
 function parsedClubSnapshot(data: Persisted, ignoreLegacy = false) {
   const attendanceRows = data.attendance.flatMap((row) => {
     const status = normalizeAttendanceStatus(String(row.status));
@@ -461,6 +501,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [sessionMemberId, setSessionMemberId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [remoteDb, setRemoteDb] = useState(false);
+  const sessionMemberIdRef = useRef(sessionMemberId);
+  sessionMemberIdRef.current = sessionMemberId;
   const eventsRef = useRef(events);
   const membersRef = useRef(members);
   membersRef.current = members;
@@ -478,6 +520,12 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const silencePersistRef = useRef(true);
   const persistTimerRef = useRef(0);
   const persistPayloadRef = useRef<Persisted | null>(null);
+  const persistInFlightRef = useRef(false);
+  const persistQueuedRef = useRef(false);
+  const persistDirtyRef = useRef(false);
+  const persistRetryRef = useRef(0);
+  const lastPushedJsonRef = useRef("");
+  const persistFlushRef = useRef<() => void>(() => {});
 
   const sweepOrphanEventBlobs = (live: ClubEvent[]) => {
     const used = eventAttachmentIds(live);
@@ -530,6 +578,28 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setChartSeenByAccount(snap.chartSeenByAccount);
     setDuesOverrides(snap.duesOverrides);
     setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
+    lastPushedJsonRef.current = JSON.stringify(
+      toPersistPayload({
+        members: snap.members,
+        events: snap.events,
+        attendance: snap.attendance,
+        notes: snap.notes,
+        transactions: txs,
+        categories: snap.categories,
+        roles: snap.roles,
+        eventTypes: snap.eventTypes,
+        places: snap.places,
+        txCategories: snap.txCategories,
+        chartSeenByAccount: snap.chartSeenByAccount,
+        weatherDays: snap.weatherDays,
+        weatherFetchedAt: snap.weatherFetchedAt,
+        eventsClearedBefore: snap.eventsClearedBefore,
+        seedPracticesKeptDate: snap.seedPracticesKeptDate,
+        duesOverrides: snap.duesOverrides,
+      }),
+    );
+    persistDirtyRef.current = false;
+    persistRetryRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -657,14 +727,76 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setSessionMemberId(null);
   }, [ready, sessionReady, sessionMemberId, members, remoteDb]);
 
+  persistFlushRef.current = () => {
+    if (!remoteDbRef.current || !sessionMemberIdRef.current) return;
+    if (silencePersistRef.current) return;
+    const next = persistPayloadRef.current;
+    if (!next) return;
+    let json: string;
+    try {
+      json = JSON.stringify(next);
+    } catch {
+      return;
+    }
+    if (json === lastPushedJsonRef.current) {
+      persistDirtyRef.current = false;
+      persistQueuedRef.current = false;
+      persistRetryRef.current = 0;
+      return;
+    }
+    if (persistInFlightRef.current) {
+      persistQueuedRef.current = true;
+      return;
+    }
+    persistInFlightRef.current = true;
+    persistQueuedRef.current = false;
+    const version = stateVersionRef.current;
+    void putClubState(next, version)
+      .then((result) => {
+        if (result.ok) {
+          stateVersionRef.current = result.version;
+          lastPushedJsonRef.current = json;
+          persistRetryRef.current = 0;
+          const latest = persistPayloadRef.current;
+          persistDirtyRef.current = Boolean(latest) && JSON.stringify(latest) !== json;
+          return;
+        }
+        if (!result.conflict || !result.payload) return;
+        stateVersionRef.current = result.version;
+        persistRetryRef.current += 1;
+        if (persistRetryRef.current > 5) {
+          persistRetryRef.current = 0;
+          persistQueuedRef.current = false;
+          silencePersistRef.current = true;
+          void applySnapshot(result.payload).finally(() => {
+            silencePersistRef.current = false;
+          });
+          const id = uid("toast");
+          setToasts((prev) => [...prev, { id, message: "다른 기기에서 먼저 저장해서 최신으로 맞췄어요." }]);
+          window.setTimeout(() => {
+            setToasts((prev) => prev.filter((item) => item.id !== id));
+          }, 2400);
+          return;
+        }
+        persistQueuedRef.current = true;
+      })
+      .finally(() => {
+        persistInFlightRef.current = false;
+        if (persistQueuedRef.current) {
+          persistQueuedRef.current = false;
+          persistFlushRef.current();
+        }
+      });
+  };
+
   useEffect(() => {
     if (!ready || silencePersistRef.current) return;
-    const payload: Persisted = {
-      members: withFineTallies(members, events, attendance),
-      events: events.map(persistableEvent),
+    const payload = toPersistPayload({
+      members,
+      events,
       attendance,
       notes,
-      transactions: transactions.map(persistableTransaction),
+      transactions,
       categories,
       roles,
       eventTypes,
@@ -676,49 +808,34 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventsClearedBefore,
       seedPracticesKeptDate,
       duesOverrides,
-      legacyTaxonomyMerged: true,
-      profileDatesCleared: true,
-    };
+    });
     persistPayloadRef.current = payload;
+    let json = "";
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      json = JSON.stringify(payload);
+      window.localStorage.setItem(STORAGE_KEY, json);
     } catch {
       /* quota: keep in-memory state */
     }
     if (!remoteDbRef.current || !sessionMemberId) return;
+    persistDirtyRef.current = Boolean(json) && json !== lastPushedJsonRef.current;
+    if (!persistDirtyRef.current) return;
     window.clearTimeout(persistTimerRef.current);
     persistTimerRef.current = window.setTimeout(() => {
-      const next = persistPayloadRef.current;
-      if (!next) return;
-      const version = stateVersionRef.current;
-      void putClubState(next, version).then((result) => {
-        if (result.ok) {
-          stateVersionRef.current = result.version;
-          return;
-        }
-        if (result.conflict && result.payload) {
-          stateVersionRef.current = result.version;
-          silencePersistRef.current = true;
-          void applySnapshot(result.payload).finally(() => {
-            silencePersistRef.current = false;
-          });
-          setToasts((prev) => [
-            ...prev,
-            { id: uid("toast"), message: "다른 기기에서 먼저 저장해서 최신으로 맞췄어요." },
-          ]);
-        }
-      });
+      persistFlushRef.current();
     }, 500);
     return () => window.clearTimeout(persistTimerRef.current);
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, seedPracticesKeptDate, duesOverrides, sessionMemberId, applySnapshot]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, seedPracticesKeptDate, duesOverrides, sessionMemberId]);
 
   useEffect(() => {
     if (!remoteDb || !ready || !sessionMemberId) return;
     const onWake = () => {
       if (document.visibilityState !== "visible") return;
+      if (persistInFlightRef.current || persistQueuedRef.current || persistDirtyRef.current) return;
       void fetchClubState().then((row) => {
         if (!row?.payload) return;
         if (row.version <= stateVersionRef.current) return;
+        if (persistInFlightRef.current || persistQueuedRef.current || persistDirtyRef.current) return;
         stateVersionRef.current = row.version;
         silencePersistRef.current = true;
         void applySnapshot(row.payload).finally(() => {
