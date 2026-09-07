@@ -41,6 +41,8 @@ export type Persisted = {
   weatherDays?: WeatherDay[];
   weatherFetchedAt?: string;
   eventsClearedBefore?: string;
+  /** 시드 연습 일정을 이 날짜만 남기고 걷어낸 뒤 기록. */
+  seedPracticesKeptDate?: string;
   duesOverrides?: DuesOverride[];
   legacyTaxonomyMerged?: boolean;
   /** 시드에 넣었던 생년월일·가입일을 한 번 비운 뒤 true. */
@@ -72,6 +74,7 @@ export function seedPersisted(): Persisted {
     weatherDays: [],
     weatherFetchedAt: "",
     eventsClearedBefore: EVENTS_KEEP_FROM,
+    seedPracticesKeptDate: EVENTS_KEEP_FROM,
     duesOverrides: [],
     legacyTaxonomyMerged: true,
     profileDatesCleared: true,

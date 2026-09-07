@@ -1,5 +1,5 @@
 import { MEMBER_ROLE, OPERATOR_NAME, OPERATOR_ROLE, PLACE, emptyFineTally } from "./constants";
-import { collegeFromMajor, parseISODate, toISODate, todayISO } from "./format";
+import { collegeFromMajor, parseISODate, todayISO } from "./format";
 import { placeholderImageDataUrl } from "./proof";
 import type {
   Attendance,
@@ -103,31 +103,18 @@ export const members: Member[] = featured.map((member, index) => ({
 export const EVENTS_KEEP_FROM = "2026-09-08";
 
 function generatePracticeEvents(): ClubEvent[] {
-  const start = parseISODate(EVENTS_KEEP_FROM);
-  const end = new Date(2026, 11, 31);
-  const list: ClubEvent[] = [];
-  const cursor = new Date(start);
-  let n = 1;
-  while (cursor <= end) {
-    const day = cursor.getDay();
-    if (day === 2 || day === 4 || day === 6) {
-      const iso = toISODate(cursor);
-      const isSat = day === 6;
-      list.push({
-        id: `p${pad(n, 3)}`,
-        date: iso,
-        title: "정기연습",
-        type: "정기연습",
-        place: PLACE,
-        preview: isSat ? "주말 전체 합주" : "주중 분강 연습",
-        startTime: isSat ? "10:00" : "19:00",
-        endTime: isSat ? "13:00" : "21:00",
-      });
-      n += 1;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return list;
+  return [
+    {
+      id: "p001",
+      date: EVENTS_KEEP_FROM,
+      title: "정기연습",
+      type: "정기연습",
+      place: PLACE,
+      preview: "주중 분강 연습",
+      startTime: "19:00",
+      endTime: "21:00",
+    },
+  ];
 }
 
 const extraEvents: ClubEvent[] = [
@@ -160,6 +147,17 @@ export function migrateSaturdayPracticeHours(events: ClubEvent[]) {
 
 export function dropEventsBefore(events: ClubEvent[], attendance: Attendance[], cutoff: string) {
   const kept = events.filter((event) => event.date >= cutoff);
+  if (kept.length === events.length) return { events, attendance };
+  const ids = new Set(kept.map((event) => event.id));
+  return { events: kept, attendance: attendance.filter((row) => ids.has(row.eventId)) };
+}
+
+/** keepDate가 아닌 연습 일정을 한 번 걷어낸다. */
+export function dropPracticeEventsExcept(events: ClubEvent[], attendance: Attendance[], keepDate: string) {
+  const kept = events.filter((event) => {
+    if (event.type !== "연습" && event.type !== "정기연습") return true;
+    return event.date === keepDate;
+  });
   if (kept.length === events.length) return { events, attendance };
   const ids = new Set(kept.map((event) => event.id));
   return { events: kept, attendance: attendance.filter((row) => ids.has(row.eventId)) };

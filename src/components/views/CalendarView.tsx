@@ -156,12 +156,14 @@ function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
 }
 
 export function CalendarView() {
-  const { events, weatherDays, addEvent, updateEvent, deleteEvent, undoEventChange, openModal, toast } = useClub();
+  const { events, weatherDays, addEvent, updateEvent, deleteEvent, deleteEvents, undoEventChange, openModal, modal, toast } =
+    useClub();
   const today = todayISO();
   const [cursor, setCursor] = useState(() => parseISODate(today));
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<ClubEvent | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropIsos, setDropIsos] = useState<string[]>([]);
@@ -190,8 +192,12 @@ export function CalendarView() {
   }, [events]);
 
   const selectedEvents = selected ? byDate.get(selected) ?? [] : [];
-  const active = selectedEvents.find((e) => e.id === activeId) ?? selectedEvents[0];
+  const pickedEvents = selectedEventIds
+    .map((id) => events.find((event) => event.id === id))
+    .filter((event): event is ClubEvent => Boolean(event));
+  const active = events.find((event) => event.id === activeId) ?? pickedEvents[0];
   const notice = practiceNoticeText(events, today);
+  const multiSelected = pickedEvents.length > 1;
 
   const shiftMonth = (delta: number) => {
     setCursor(new Date(year, monthIndex + delta, 1));
@@ -201,12 +207,14 @@ export function CalendarView() {
     setCursor(parseISODate(today));
     setSelected(null);
     setActiveId(null);
+    setSelectedEventIds([]);
     setEditing(false);
   };
 
   const resetPanel = () => {
     setSelected(null);
     setActiveId(null);
+    setSelectedEventIds([]);
     setEditing(false);
   };
 
@@ -240,8 +248,16 @@ export function CalendarView() {
     }
     const created = addEvent(cloneEventOntoDate(clipboard, selected));
     setActiveId(created.id);
+    setSelectedEventIds([created.id]);
     setEditing(false);
     toast("일정을 붙여넣었어요");
+  };
+
+  const clearDeletedSelection = (ids: string[]) => {
+    const doomed = new Set(ids);
+    setSelectedEventIds((prev) => prev.filter((id) => !doomed.has(id)));
+    setActiveId((id) => (id && doomed.has(id) ? null : id));
+    setEditing(false);
   };
 
   const confirmDelete = (event: ClubEvent) => {
@@ -249,15 +265,41 @@ export function CalendarView() {
     if (!window.confirm(`「${event.title}」 일정을 삭제할까요?`)) return;
     deleteEvent(event.id);
     toast("일정을 삭제했어요");
-    setEditing(false);
-    setActiveId((id) => (id === event.id ? null : id));
+    clearDeletedSelection([event.id]);
+  };
+
+  const confirmDeleteSelected = () => {
+    const ids = pickedEvents.map((event) => event.id);
+    if (ids.length === 0 && active) {
+      confirmDelete(active);
+      return;
+    }
+    if (ids.length === 1) {
+      const event = pickedEvents[0];
+      if (event) confirmDelete(event);
+      return;
+    }
+    if (ids.length === 0) return;
+    setEventMenu(null);
+    if (!window.confirm(`선택한 ${ids.length}개 일정을 삭제할까요?`)) return;
+    deleteEvents(ids);
+    toast(`${ids.length}개 일정을 삭제했어요`);
+    clearDeletedSelection(ids);
   };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (modal) return;
+      if (event.key === "Delete") {
+        if (editing) return;
+        if (pickedEvents.length === 0 && !active) return;
+        event.preventDefault();
+        confirmDeleteSelected();
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
       const key = event.key.toLowerCase();
       if (key === "c") {
         if (!active || !selected) return;
@@ -275,7 +317,7 @@ export function CalendarView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, selected, clipboard, addEvent, undoEventChange, toast]);
+  }, [active, selected, clipboard, addEvent, undoEventChange, toast, modal, editing, pickedEvents]);
 
   useEffect(() => {
     if (!draggingId) return;
@@ -312,6 +354,7 @@ export function CalendarView() {
 
   const onEventPointerDown = (pointer: ReactPointerEvent, event: ClubEvent) => {
     if (pointer.button !== 0) return;
+    if (pointer.ctrlKey || pointer.metaKey) return;
     setEventMenu(null);
     const grabIso = isoFromPoint(pointer.clientX, pointer.clientY) ?? event.date;
     const pointerId = pointer.pointerId;
@@ -372,6 +415,7 @@ export function CalendarView() {
       updateEvent(event.id, shifted);
       setSelected(drop);
       setActiveId(event.id);
+      setSelectedEventIds([event.id]);
       setEditing(false);
       toast("일정을 옮겼어요");
     };
@@ -385,6 +429,7 @@ export function CalendarView() {
     const iso = isoFromPoint(clientX, clientY) ?? event.date;
     setSelected(iso);
     setActiveId(event.id);
+    setSelectedEventIds((prev) => (prev.includes(event.id) ? prev : [event.id]));
     setEditing(false);
     const menuW = 128;
     const menuH = 40;
@@ -442,22 +487,36 @@ export function CalendarView() {
               today={today}
               selected={selected}
               activeId={activeId}
+              selectedEventIds={selectedEventIds}
               draggingId={draggingId}
               dropIsos={dropIsos}
               forecast={forecast}
               onSelectDay={(iso) => {
+                const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
                 setSelected(iso);
-                setActiveId((byDate.get(iso) ?? [])[0]?.id ?? null);
+                setActiveId(first);
+                setSelectedEventIds(first ? [first] : []);
                 setEditing(false);
               }}
-              onSelectEvent={(iso, id) => {
+              onSelectEvent={(iso, id, additive) => {
                 setSelected(iso);
-                setActiveId(id);
                 setEditing(false);
+                if (additive) {
+                  setSelectedEventIds((prev) => {
+                    const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+                    setActiveId(next.includes(id) ? id : (next[next.length - 1] ?? null));
+                    return next;
+                  });
+                  return;
+                }
+                setActiveId(id);
+                setSelectedEventIds([id]);
               }}
               onCreateDay={(iso) => {
+                const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
                 setSelected(iso);
-                setActiveId((byDate.get(iso) ?? [])[0]?.id ?? null);
+                setActiveId(first);
+                setSelectedEventIds(first ? [first] : []);
                 setEditing(false);
                 openCreate(iso);
               }}
@@ -468,9 +527,30 @@ export function CalendarView() {
         </div>
       </main>
 
-      <aside className="flex min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft">
+      <aside
+        className="flex min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft"
+        data-event-selected-count={pickedEvents.length}
+      >
         <div className="flex-1 overflow-auto px-5 py-5 [scrollbar-gutter:stable] scrollbar-thin">
-          {selected ? (
+          {multiSelected ? (
+            <>
+              <p className="text-[28px] font-semibold leading-8">{pickedEvents.length}개 선택</p>
+              <p className="mt-1 text-[13px] text-faint">Delete 키로 한 번에 지울 수 있어요.</p>
+              <ul className="mt-5 space-y-2">
+                {pickedEvents
+                  .slice()
+                  .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+                  .map((event) => (
+                    <li key={event.id} className="rounded-[10px] bg-muted px-3 py-2 text-[13px]">
+                      <p className="font-medium">{event.title}</p>
+                      <p className="mt-0.5 text-[12px] text-faint">
+                        {formatDateWeekday(event.date)} · {event.startTime}
+                      </p>
+                    </li>
+                  ))}
+              </ul>
+            </>
+          ) : selected ? (
             <>
               <p className="text-[28px] font-semibold leading-8">{formatDateKo(selected)}</p>
               <p className="mt-1 text-[13px] text-faint">{formatWeekday(selected)}요일</p>
@@ -481,7 +561,10 @@ export function CalendarView() {
                     <button
                       key={event.id}
                       type="button"
-                      onClick={() => setActiveId(event.id)}
+                      onClick={() => {
+                        setActiveId(event.id);
+                        setSelectedEventIds([event.id]);
+                      }}
                       className={cn(
                         "rounded-chip px-2 py-1 text-[12px]",
                         (active?.id ?? "") === event.id ? "bg-brand-soft text-brand-text" : "bg-muted text-sub",
@@ -527,16 +610,13 @@ export function CalendarView() {
           <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
             일정 생성
           </PrimaryButton>
-          <GhostButton className="flex-1" disabled={!active || !selected} onClick={() => setEditing(true)}>
+          <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
             수정
           </GhostButton>
           <GhostButton
             className="px-3"
-            disabled={!active || !selected}
-            onClick={() => {
-              if (!active) return;
-              confirmDelete(active);
-            }}
+            disabled={pickedEvents.length === 0 && !active}
+            onClick={confirmDeleteSelected}
             aria-label="일정 삭제"
           >
             <Trash2 className="h-4 w-4" />
@@ -547,7 +627,13 @@ export function CalendarView() {
       {eventMenu ? (
         <EventContextMenu
           menu={eventMenu}
-          onDelete={() => confirmDelete(eventMenu.event)}
+          onDelete={() => {
+            if (pickedEvents.length > 1 && selectedEventIds.includes(eventMenu.event.id)) {
+              confirmDeleteSelected();
+              return;
+            }
+            confirmDelete(eventMenu.event);
+          }}
         />
       ) : null}
     </div>
@@ -567,6 +653,7 @@ function WeekRow({
   today,
   selected,
   activeId,
+  selectedEventIds,
   draggingId,
   dropIsos,
   forecast,
@@ -581,11 +668,12 @@ function WeekRow({
   today: string;
   selected: string | null;
   activeId: string | null;
+  selectedEventIds: string[];
   draggingId: string | null;
   dropIsos: string[];
   forecast: Map<string, WeatherDay>;
   onSelectDay: (iso: string) => void;
-  onSelectEvent: (iso: string, id: string) => void;
+  onSelectEvent: (iso: string, id: string, additive: boolean) => void;
   onCreateDay: (iso: string) => void;
   onEventPointerDown: (pointer: ReactPointerEvent, event: ClubEvent) => void;
   onEventContextMenu: (clientX: number, clientY: number, event: ClubEvent) => void;
@@ -671,11 +759,12 @@ function WeekRow({
             key={`${seg.event.id}-${seg.colStart}`}
             segment={seg}
             active={activeId === seg.event.id}
+            selected={selectedEventIds.includes(seg.event.id)}
             dragging={draggingId === seg.event.id}
-            onPick={(clientX) => {
+            onPick={(clientX, additive) => {
               const weekEl = ref.current;
               const iso = weekEl ? isoAtClientX(weekEl, clientX, weekIsos) : weekIsos[seg.colStart - 1];
-              onSelectEvent(iso, seg.event.id);
+              onSelectEvent(iso, seg.event.id, additive);
             }}
             onMoveStart={onEventPointerDown}
             onContextMenu={onEventContextMenu}
@@ -689,6 +778,7 @@ function WeekRow({
 function EventBar({
   segment,
   active,
+  selected,
   dragging,
   onPick,
   onMoveStart,
@@ -696,8 +786,9 @@ function EventBar({
 }: {
   segment: WeekSegment;
   active: boolean;
+  selected: boolean;
   dragging: boolean;
-  onPick: (clientX: number) => void;
+  onPick: (clientX: number, additive: boolean) => void;
   onMoveStart: (pointer: ReactPointerEvent, event: ClubEvent) => void;
   onContextMenu: (clientX: number, clientY: number, event: ClubEvent) => void;
 }) {
@@ -711,13 +802,15 @@ function EventBar({
       data-col-span={colSpan}
       data-event-has-attach={hasAttach ? "true" : undefined}
       data-event-dragging={dragging ? "true" : undefined}
+      data-event-selected={selected ? "true" : undefined}
       aria-grabbed={dragging || undefined}
+      aria-pressed={selected || undefined}
       title={event.title}
       onPointerDown={(e) => onMoveStart(e, event)}
       onDragStart={(e) => e.preventDefault()}
       onClick={(e) => {
         e.stopPropagation();
-        onPick(e.clientX);
+        onPick(e.clientX, e.ctrlKey || e.metaKey);
       }}
       onDoubleClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => {
@@ -730,7 +823,7 @@ function EventBar({
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
         continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
         barClass(event.type),
-        active && "ring-1 ring-inset ring-brand",
+        (selected || active) && "ring-1 ring-inset ring-brand",
         dragging && "opacity-40",
       )}
       style={{

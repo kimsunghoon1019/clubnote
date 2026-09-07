@@ -31,6 +31,7 @@ import {
   attendance as seedAttendance,
   chartNotes as seedNotes,
   dropEventsBefore,
+  dropPracticeEventsExcept,
   EVENTS_KEEP_FROM,
   events as seedEvents,
   migrateSaturdayPracticeHours,
@@ -152,6 +153,7 @@ type ClubContextValue = {
   addEventAttachment: (id: string, file: File) => Promise<void>;
   removeEventAttachment: (id: string, attachmentId: string) => Promise<void>;
   deleteEvent: (id: string) => void;
+  deleteEvents: (ids: string[]) => void;
   undoEventChange: () => boolean;
   toast: (message: string) => void;
   dismissToast: (id: string) => void;
@@ -374,10 +376,13 @@ function parsedClubSnapshot(data: Persisted, ignoreLegacy = false) {
     return [{ ...row, status }];
   });
   const cutoff = data.eventsClearedBefore ?? "";
-  const loaded =
+  let loaded =
     cutoff < EVENTS_KEEP_FROM
       ? dropEventsBefore(data.events, attendanceRows, EVENTS_KEEP_FROM)
       : { events: data.events, attendance: attendanceRows };
+  if (data.seedPracticesKeptDate !== EVENTS_KEEP_FROM) {
+    loaded = dropPracticeEventsExcept(loaded.events, loaded.attendance, EVENTS_KEEP_FROM);
+  }
   const events = migrateSaturdayPracticeHours(loaded.events).map(persistableEvent);
   const legacy = ignoreLegacy || data.legacyTaxonomyMerged ? null : loadLegacyTaxonomy();
   const usedCategories = data.members.map((member) => member.category);
@@ -392,6 +397,7 @@ function parsedClubSnapshot(data: Persisted, ignoreLegacy = false) {
     attendance: loaded.attendance,
     members: withFineTallies(members, events, loaded.attendance),
     eventsClearedBefore: EVENTS_KEEP_FROM,
+    seedPracticesKeptDate: EVENTS_KEEP_FROM,
     weatherDays: normalizeWeatherDays(data.weatherDays),
     weatherFetchedAt: typeof data.weatherFetchedAt === "string" ? data.weatherFetchedAt : "",
     notes: data.notes ?? [],
@@ -423,6 +429,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [weatherDays, setWeatherDays] = useState<WeatherDay[]>([]);
   const [weatherFetchedAt, setWeatherFetchedAt] = useState("");
   const [eventsClearedBefore, setEventsClearedBefore] = useState(EVENTS_KEEP_FROM);
+  const [seedPracticesKeptDate, setSeedPracticesKeptDate] = useState(EVENTS_KEEP_FROM);
   const [attendance, setAttendance] = useState<Attendance[]>(seedAttendance);
   const [notes, setNotes] = useState<ChartNote[]>(seedNotes);
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
@@ -501,6 +508,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setAttendance(snap.attendance);
     setMembers(snap.members);
     setEventsClearedBefore(snap.eventsClearedBefore);
+    setSeedPracticesKeptDate(snap.seedPracticesKeptDate);
     setWeatherDays(snap.weatherDays);
     setWeatherFetchedAt(snap.weatherFetchedAt);
     setNotes(snap.notes);
@@ -656,6 +664,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       weatherDays,
       weatherFetchedAt,
       eventsClearedBefore,
+      seedPracticesKeptDate,
       duesOverrides,
       legacyTaxonomyMerged: true,
       profileDatesCleared: true,
@@ -691,7 +700,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       });
     }, 500);
     return () => window.clearTimeout(persistTimerRef.current);
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, duesOverrides, sessionMemberId, applySnapshot]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, seedPracticesKeptDate, duesOverrides, sessionMemberId, applySnapshot]);
 
   useEffect(() => {
     if (!remoteDb || !ready || !sessionMemberId) return;
@@ -1115,23 +1124,31 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const deleteEvent = useCallback((id: string) => {
-    if (!eventsRef.current.some((row) => row.id === id)) return;
+  const deleteEvents = useCallback((ids: string[]) => {
+    const doomed = new Set(ids.filter((id) => eventsRef.current.some((row) => row.id === id)));
+    if (doomed.size === 0) return;
     pushEventUndo();
     setEvents((prev) => {
-      const doomed = prev.find((row) => row.id === id);
-      const next = prev.filter((row) => row.id !== id);
-      if (doomed) {
-        for (const item of eventAttachments(doomed)) {
-          const stillUsed = next.some((row) => eventAttachments(row).some((file) => file.id === item.id));
+      const next = prev.filter((row) => !doomed.has(row.id));
+      for (const row of prev) {
+        if (!doomed.has(row.id)) continue;
+        for (const item of eventAttachments(row)) {
+          const stillUsed = next.some((live) => eventAttachments(live).some((file) => file.id === item.id));
           if (!stillUsed) orphanEventBlobsRef.current.add(item.id);
         }
       }
       sweepOrphanEventBlobs(next);
       return next;
     });
-    setAttendance((prev) => prev.filter((row) => row.eventId !== id));
+    setAttendance((prev) => prev.filter((row) => !doomed.has(row.eventId)));
   }, []);
+
+  const deleteEvent = useCallback(
+    (id: string) => {
+      deleteEvents([id]);
+    },
+    [deleteEvents],
+  );
 
   const openModal = useCallback((key: Exclude<ModalKey, null>, payload?: { date?: string }) => {
     setModal(key);
@@ -1271,6 +1288,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       addEventAttachment,
       removeEventAttachment,
       deleteEvent,
+      deleteEvents,
       undoEventChange,
       toast,
       dismissToast,
@@ -1344,6 +1362,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       addEventAttachment,
       removeEventAttachment,
       deleteEvent,
+      deleteEvents,
       undoEventChange,
       toast,
       dismissToast,
