@@ -3,7 +3,8 @@
 import { DuesStatusModal } from "@/components/finance/DuesStatusModal";
 import { ProofThumbs } from "@/components/finance/ProofPreview";
 import { TransactionRail } from "@/components/finance/TransactionRail";
-import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { DetailSurface } from "@/components/layout/DetailSurface";
+import { RailSection } from "@/components/layout/RightRail";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FieldLabel, TextInput } from "@/components/ui/Field";
 import { FilterChip } from "@/components/ui/FilterChip";
@@ -416,7 +417,11 @@ export function FinanceView() {
         </div>
       </main>
 
-      <RightRail>
+      <DetailSurface
+        open={Boolean(inspectedTxId)}
+        title={transactions.find((item) => item.id === inspectedTxId)?.title ?? "거래"}
+        onClose={() => setInspectedTxId(null)}
+      >
         {inspectedTxId ? (
           <TransactionRail txId={inspectedTxId} onClose={() => setInspectedTxId(null)} />
         ) : (
@@ -453,7 +458,7 @@ export function FinanceView() {
             </ul>
           </RailSection>
         )}
-      </RightRail>
+      </DetailSurface>
 
       <DuesStatusModal open={duesOpen} onClose={() => setDuesOpen(false)} />
 

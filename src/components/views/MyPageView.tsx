@@ -1,6 +1,7 @@
 "use client";
 
-import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { DetailSurface } from "@/components/layout/DetailSurface";
+import { RailSection } from "@/components/layout/RightRail";
 import { Avatar } from "@/components/ui/Avatar";
 import { FieldLabel, TextArea, TextInput } from "@/components/ui/Field";
 import { GhostButton } from "@/components/ui/GhostButton";
@@ -280,7 +281,7 @@ function MyPageEditor({
         </form>
       </main>
 
-      <RightRail>
+      <DetailSurface open={false}>
         <RailSection title="계정">
           <p className="text-[13px] text-sub">
             {member.name} 님으로 로그인되어 있어요. 아이디·비밀번호·사진을 여기서 바꿔 주세요.
@@ -293,7 +294,7 @@ function MyPageEditor({
             로그아웃
           </Link>
         </RailSection>
-      </RightRail>
+      </DetailSurface>
     </>
   );
 }

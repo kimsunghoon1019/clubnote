@@ -112,7 +112,12 @@ export function MemberRail({ memberId }: { memberId: string }) {
             </p>
           </div>
         </div>
-        <button type="button" className="text-[12px] text-faint hover:text-ink" onClick={() => inspectMember(null)}>
+        <button
+          type="button"
+          data-rail-close
+          className="hidden text-[12px] text-faint hover:text-ink lg:inline"
+          onClick={() => inspectMember(null)}
+        >
           닫기
         </button>
       </div>

@@ -75,3 +75,7 @@ textarea {
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
+
+html[data-detail-open] [data-bottom-nav] {
+  display: none;
+}

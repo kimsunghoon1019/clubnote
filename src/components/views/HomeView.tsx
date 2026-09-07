@@ -4,7 +4,8 @@ import { GhostButton } from "@/components/ui/GhostButton";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { MiniCalendar } from "@/components/ui/MiniCalendar";
-import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { DetailSurface } from "@/components/layout/DetailSurface";
+import { RailSection } from "@/components/layout/RightRail";
 import { ChartInbox } from "@/components/members/ChartInbox";
 import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction, transactionBalanceSpark } from "@/lib/bankExcel";
@@ -365,7 +366,11 @@ export function HomeView() {
         </section>
       </main>
 
-      <RightRail>
+      <DetailSurface
+        open={Boolean(inspectedMemberId)}
+        title={members.find((item) => item.id === inspectedMemberId)?.name ?? "회원"}
+        onClose={() => inspectMember(null)}
+      >
         <RailSection>
           <LiveClock />
         </RailSection>
@@ -381,7 +386,7 @@ export function HomeView() {
             </RailSection>
           </>
         )}
-      </RightRail>
+      </DetailSurface>
     </>
   );
 }

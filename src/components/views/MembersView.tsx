@@ -1,6 +1,7 @@
 "use client";
 
-import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { DetailSurface } from "@/components/layout/DetailSurface";
+import { RailSection } from "@/components/layout/RightRail";
 import { ChartInbox } from "@/components/members/ChartInbox";
 import { MemberRail } from "@/components/members/MemberRail";
 import { Avatar } from "@/components/ui/Avatar";
@@ -540,7 +541,11 @@ export function MembersView() {
         </div>
       </main>
 
-      <RightRail>
+      <DetailSurface
+        open={Boolean(inspectedMemberId)}
+        title={members.find((item) => item.id === inspectedMemberId)?.name ?? "회원"}
+        onClose={() => inspectMember(null)}
+      >
         {inspectedMemberId ? (
           <MemberRail memberId={inspectedMemberId} />
         ) : (
@@ -598,7 +603,7 @@ export function MembersView() {
             </RailSection>
           </>
         )}
-      </RightRail>
+      </DetailSurface>
     </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { RightRail, RailSection } from "@/components/layout/RightRail";
+import { DetailSurface } from "@/components/layout/DetailSurface";
+import { RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
 import { AttendanceSheetModal } from "@/components/modals/AttendanceSheetModal";
 import { AttendanceToggle, StatusMixBar } from "@/components/ui/AttendanceToggle";
@@ -350,7 +351,11 @@ export function AttendanceView() {
         </div>
       </main>
 
-      <RightRail>
+      <DetailSurface
+        open={Boolean(inspectedMemberId)}
+        title={members.find((item) => item.id === inspectedMemberId)?.name ?? "회원"}
+        onClose={() => inspectMember(null)}
+      >
         {inspectedMemberId ? (
           <MemberRail memberId={inspectedMemberId} />
         ) : (
@@ -383,7 +388,7 @@ export function AttendanceView() {
             </ul>
           </RailSection>
         )}
-      </RightRail>
+      </DetailSurface>
 
       <AttendanceSheetModal open={sheetOpen} onClose={() => setSheetOpen(false)} focusEventId={event.id} />
     </>
