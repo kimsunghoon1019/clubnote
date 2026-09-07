@@ -30,11 +30,11 @@ export function PropertySelect({
     const rect = el.getBoundingClientRect();
     const width = field ? rect.width : Math.max(140, rect.width);
     const row = 34;
-    const estimated = Math.min(280, 8 + options.length * row);
+    const estimated = Math.min(360, 8 + options.length * row);
     const spaceBelow = window.innerHeight - rect.bottom - 8;
     const spaceAbove = rect.top - 8;
     const openUp = spaceBelow < Math.min(estimated, 160) && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(120, Math.min(280, openUp ? spaceAbove - 4 : spaceBelow - 4));
+    const maxHeight = Math.max(120, Math.min(360, openUp ? spaceAbove - 4 : spaceBelow - 4));
     const top = openUp ? Math.max(8, rect.top - Math.min(estimated, maxHeight) - 4) : rect.bottom + 4;
     const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
     setPos({ top, left, width, maxHeight });
@@ -58,7 +58,26 @@ export function PropertySelect({
       setOpen(false);
     };
     const onReposition = () => place();
-    const onScroll = field ? onReposition : () => setOpen(false);
+    const onScroll = (e: Event) => {
+      const target = e.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      const el = rootRef.current;
+      if (!el) {
+        setOpen(false);
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const visible =
+        rect.bottom > 40 &&
+        rect.top < window.innerHeight - 40 &&
+        rect.right > 8 &&
+        rect.left < window.innerWidth - 8;
+      if (!visible) {
+        setOpen(false);
+        return;
+      }
+      place();
+    };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
@@ -113,8 +132,9 @@ export function PropertySelect({
                 maxHeight: pos.maxHeight,
               }}
               onMouseDown={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
             >
-              <div className="overflow-auto scrollbar-thin" style={{ maxHeight: pos.maxHeight - 8 }}>
+              <div className="overflow-auto overscroll-contain scrollbar-thin" style={{ maxHeight: pos.maxHeight - 8 }}>
                 {options.map((item) => (
                   <button
                     key={item}

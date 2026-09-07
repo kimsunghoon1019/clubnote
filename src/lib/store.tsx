@@ -1119,13 +1119,15 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const addChartNote = useCallback((memberId: string, body: string) => {
     const trimmed = body.trim();
     if (!trimmed) return;
+    const author =
+      membersRef.current.find((item) => item.id === sessionMemberIdRef.current)?.name.trim() || OPERATOR_NAME;
     setNotes((prev) => [
       {
         id: uid("note"),
         memberId,
         body: trimmed,
         createdAt: new Date().toISOString(),
-        author: OPERATOR_NAME,
+        author,
       },
       ...prev,
     ]);

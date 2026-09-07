@@ -40,7 +40,13 @@ export function ChartInbox() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-medium text-ink">{member?.name ?? "탈퇴 회원"}</p>
                       <p className="text-[11px] text-faint">
-                        {formatChartStamp(note.createdAt)} · {note.author}
+                        {formatChartStamp(note.createdAt)}
+                        {note.author ? (
+                          <>
+                            {" · "}
+                            <span className="font-medium text-sub">{note.author}</span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                   </div>
