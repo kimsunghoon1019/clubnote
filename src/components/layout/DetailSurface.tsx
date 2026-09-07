@@ -1,59 +1,20 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { COMPACT_QUERY } from "@/lib/compact";
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useId,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
-const COMPACT_QUERY = "(max-width: 1023px)";
 const HISTORY_FLAG = "__clubnoteDetail";
 const SWIPE_CLOSE_PX = 88;
-
-type CompactDetailLayer = {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-};
-
-const CompactDetailContext = createContext<CompactDetailLayer>({
-  open: false,
-  setOpen: () => {},
-});
-
-export function CompactDetailProvider({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const value = useMemo(() => ({ open, setOpen }), [open]);
-  return <CompactDetailContext.Provider value={value}>{children}</CompactDetailContext.Provider>;
-}
-
-export function useCompactDetail() {
-  return useContext(CompactDetailContext);
-}
-
-function useCompactViewport() {
-  const [compact, setCompact] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia(COMPACT_QUERY).matches : false,
-  );
-
-  useEffect(() => {
-    const media = window.matchMedia(COMPACT_QUERY);
-    const sync = () => setCompact(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
-
-  return compact;
-}
 
 function focusableIn(root: HTMLElement) {
   return [...root.querySelectorAll<HTMLElement>(
@@ -68,9 +29,9 @@ export function DetailSurface({
   onSave,
   saveLabel = "저장",
   footer,
-  railClassName = "lg:w-[300px]",
   children,
   className,
+  sheet,
 }: {
   open: boolean;
   title?: string;
@@ -78,13 +39,10 @@ export function DetailSurface({
   onSave?: () => void;
   saveLabel?: string;
   footer?: ReactNode;
-  railClassName?: string;
   children: ReactNode;
   className?: string;
+  sheet?: boolean;
 }) {
-  const compact = useCompactViewport();
-  const layer = useCompactDetail();
-  const compactOpen = compact && open;
   const titleId = useId();
   const sheetRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -103,19 +61,16 @@ export function DetailSurface({
     onCloseRef.current?.();
   }, []);
 
-  const setLayerOpen = layer.setOpen;
   useLayoutEffect(() => {
-    setLayerOpen(compactOpen);
-    if (compactOpen) document.documentElement.dataset.detailOpen = "true";
+    if (open) document.documentElement.dataset.detailOpen = "true";
     else delete document.documentElement.dataset.detailOpen;
     return () => {
-      setLayerOpen(false);
       delete document.documentElement.dataset.detailOpen;
     };
-  }, [compactOpen, setLayerOpen]);
+  }, [open]);
 
   useLayoutEffect(() => {
-    if (!compactOpen) return;
+    if (!open || !window.matchMedia(COMPACT_QUERY).matches) return;
     const shell = document.querySelector("[data-app-shell]");
     if (!shell) return;
     const blocked: HTMLElement[] = [];
@@ -135,10 +90,10 @@ export function DetailSurface({
     return () => {
       for (const el of blocked) el.removeAttribute("inert");
     };
-  }, [compactOpen]);
+  }, [open]);
 
   useLayoutEffect(() => {
-    if (!compactOpen) {
+    if (!open) {
       setEntered(false);
       setDragY(0);
       return;
@@ -146,10 +101,10 @@ export function DetailSurface({
     setEntered(false);
     const frame = window.requestAnimationFrame(() => setEntered(true));
     return () => window.cancelAnimationFrame(frame);
-  }, [compactOpen]);
+  }, [open]);
 
   useEffect(() => {
-    if (!compactOpen) return;
+    if (!open || !window.matchMedia(COMPACT_QUERY).matches) return;
     restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const root = sheetRef.current;
     const closeBtn = root?.querySelector<HTMLElement>("[data-detail-close]");
@@ -184,10 +139,10 @@ export function DetailSurface({
       window.removeEventListener("keydown", onKey);
       restoreRef.current?.focus?.();
     };
-  }, [close, compactOpen]);
+  }, [close, open]);
 
   useEffect(() => {
-    if (!compactOpen) return;
+    if (!open || !window.matchMedia(COMPACT_QUERY).matches) return;
 
     if (!window.history.state?.[HISTORY_FLAG]) {
       window.history.pushState({ ...window.history.state, [HISTORY_FLAG]: true }, "", window.location.href);
@@ -209,11 +164,12 @@ export function DetailSurface({
       delete state[HISTORY_FLAG];
       window.history.replaceState(state, "", window.location.href);
     };
-  }, [compactOpen]);
+  }, [open]);
 
   const onHeaderPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     if ((event.target as Element | null)?.closest("button")) return;
+    if (!window.matchMedia(COMPACT_QUERY).matches) return;
     dragStartY.current = event.clientY;
     setDragY(0);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -236,6 +192,7 @@ export function DetailSurface({
     setDragY(0);
   };
 
+  const compactOpen = open;
   const dim = compactOpen ? Math.max(0, 1 - dragY / 420) : 0;
   const shift = compactOpen ? (entered ? dragY : typeof window === "undefined" ? 0 : window.innerHeight) : 0;
 
@@ -246,10 +203,10 @@ export function DetailSurface({
         aria-hidden
         className={cn(
           "fixed inset-0 z-40 bg-black/30 lg:hidden",
-          compactOpen ? "pointer-events-auto" : "pointer-events-none opacity-0",
+          open ? "pointer-events-auto" : "pointer-events-none opacity-0",
         )}
         style={{
-          opacity: compactOpen ? dim : 0,
+          opacity: open ? dim : 0,
           transition: dragY ? "none" : "opacity var(--motion) ease-out",
         }}
         onClick={close}
@@ -259,24 +216,26 @@ export function DetailSurface({
         tabIndex={-1}
         data-detail-surface
         data-detail-open={open ? "true" : "false"}
-        role={compactOpen ? "dialog" : undefined}
-        aria-modal={compactOpen ? true : undefined}
-        aria-labelledby={compactOpen && title ? titleId : undefined}
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? true : undefined}
+        aria-labelledby={open && title ? titleId : undefined}
         className={cn(
           "min-h-0 bg-white",
-          "lg:static lg:z-auto lg:flex lg:shrink-0 lg:flex-col lg:overflow-hidden lg:border-l lg:border-line-soft lg:translate-y-0",
-          railClassName,
-          open
-            ? "fixed inset-0 z-40 flex flex-col overscroll-contain"
-            : "hidden",
+          sheet
+            ? open
+              ? "fixed inset-0 z-40 flex flex-col overscroll-contain lg:hidden"
+              : "hidden"
+            : cn(
+                "lg:static lg:z-auto lg:flex lg:w-[300px] lg:shrink-0 lg:flex-col lg:overflow-hidden lg:border-l lg:border-line-soft lg:!translate-y-0 lg:!transition-none",
+                open ? "fixed inset-0 z-40 flex flex-col overscroll-contain" : "hidden lg:flex",
+              ),
           className,
         )}
         style={
-          compactOpen
+          open
             ? {
                 transform: `translateY(${shift}px)`,
                 transition: dragY || !entered ? "none" : "transform var(--motion) ease-out",
-                paddingBottom: "env(safe-area-inset-bottom)",
               }
             : undefined
         }

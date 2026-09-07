@@ -1,77 +1,25 @@
 "use client";
 
-import { cn } from "@/lib/cn";
 import { formatDateKo, formatWon } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import { Search, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-const HISTORY_FLAG = "__clubnoteSearch";
+import { useEffect, useMemo, useState } from "react";
 
 export function SearchOverlay() {
   const { searchOpen, setSearchOpen, members, events, transactions, focusMember, focusEvent } = useClub();
   const [query, setQuery] = useState("");
   const router = useRouter();
   const pathname = usePathname();
-  const pushedRef = useRef(false);
-
-  const finishClose = useCallback(() => {
-    setSearchOpen(false);
-    setQuery("");
-  }, [setSearchOpen]);
-
-  const close = useCallback(() => {
-    if (pushedRef.current && window.history.state?.[HISTORY_FLAG]) {
-      window.history.back();
-      return;
-    }
-    finishClose();
-  }, [finishClose]);
-
-  const dismiss = useCallback(() => {
-    if (pushedRef.current && window.history.state?.[HISTORY_FLAG]) {
-      pushedRef.current = false;
-      const state = { ...window.history.state };
-      delete state[HISTORY_FLAG];
-      window.history.replaceState(state, "", window.location.href);
-    }
-    finishClose();
-  }, [finishClose]);
 
   useEffect(() => {
     if (!searchOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") setSearchOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [searchOpen, close]);
-
-  useEffect(() => {
-    if (!searchOpen) return;
-
-    if (!window.history.state?.[HISTORY_FLAG]) {
-      window.history.pushState({ ...window.history.state, [HISTORY_FLAG]: true }, "", window.location.href);
-      pushedRef.current = true;
-    }
-
-    const onPop = () => {
-      if (window.history.state?.[HISTORY_FLAG]) return;
-      pushedRef.current = false;
-      finishClose();
-    };
-    window.addEventListener("popstate", onPop);
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      if (!pushedRef.current) return;
-      pushedRef.current = false;
-      if (!window.history.state?.[HISTORY_FLAG]) return;
-      const state = { ...window.history.state };
-      delete state[HISTORY_FLAG];
-      window.history.replaceState(state, "", window.location.href);
-    };
-  }, [searchOpen, finishClose]);
+  }, [searchOpen, setSearchOpen]);
 
   const q = query.trim();
   const results = useMemo(() => {
@@ -85,75 +33,58 @@ export function SearchOverlay() {
 
   if (!searchOpen) return null;
 
+  const close = () => {
+    setSearchOpen(false);
+    setQuery("");
+  };
+
   const goMember = (id: string) => {
     focusMember(id);
-    dismiss();
+    close();
     if (pathname !== "/members") router.push("/members");
   };
 
   const goEvent = (id: string) => {
     focusEvent(id);
-    dismiss();
+    close();
     if (pathname !== "/calendar") router.push("/calendar");
   };
 
   const go = (href: string) => {
-    dismiss();
+    close();
     router.push(href);
   };
 
   return (
-    <div data-search-overlay className="fixed inset-0 z-50 bg-white lg:bg-black/20" onClick={close}>
+    <div
+      className="fixed inset-0 z-50 bg-white lg:bg-black/20"
+      onClick={() => setSearchOpen(false)}
+    >
       <div
-        data-search-sheet
-        role="dialog"
-        aria-modal
-        aria-label="검색"
-        className={cn(
-          "flex h-full flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
-          "lg:mx-auto lg:mt-20 lg:h-auto lg:max-h-[min(560px,calc(100%-6rem))] lg:w-[560px] lg:max-w-[calc(100%-32px)] lg:rounded-card lg:border lg:border-line lg:pt-0 lg:pb-0",
-        )}
+        className="flex h-full flex-col bg-white pt-[env(safe-area-inset-top)] lg:mx-auto lg:mt-20 lg:h-auto lg:max-h-[min(520px,calc(100%-96px))] lg:w-[560px] lg:max-w-[calc(100%-32px)] lg:rounded-card lg:border lg:border-line lg:pt-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex shrink-0 items-center border-b border-line-soft lg:hidden">
-          <button
-            type="button"
-            data-search-close
-            className="flex h-touch min-w-touch items-center justify-center px-3 text-compact text-sub touch-manipulation"
-            onClick={close}
-          >
-            닫기
-          </button>
-          <p className="min-w-0 flex-1 truncate text-center text-compact font-semibold text-ink">검색</p>
-          <span className="invisible flex h-touch min-w-touch items-center justify-center px-3 text-compact" aria-hidden>
-            닫기
-          </span>
-        </header>
-        <div className="flex shrink-0 items-center gap-2 border-b border-line-soft px-4">
-          <Search className="h-4 w-4 shrink-0 text-faint" />
+        <div className="flex items-center gap-2 border-b border-line-soft px-4">
+          <Search className="h-4 w-4 text-faint" />
           <input
             autoFocus
-            data-search-input
-            type="text"
-            enterKeyHint="search"
-            autoComplete="off"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="이름, 일정, 거래내역을 검색하세요"
-            className="h-touch min-w-0 flex-1 bg-transparent text-compact text-ink outline-none placeholder:text-faint focus-visible:outline-none lg:h-12 lg:text-[15px]"
+            className="h-touch flex-1 bg-transparent text-compact outline-none placeholder:text-faint lg:h-12 lg:text-[15px]"
           />
           <button
             type="button"
-            onClick={close}
+            onClick={() => setSearchOpen(false)}
             aria-label="닫기"
-            className="hidden h-touch w-touch items-center justify-center text-faint lg:flex"
+            className="flex h-touch w-touch items-center justify-center text-faint"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2 scrollbar-thin lg:max-h-[420px] lg:flex-none">
           {!q ? (
-            <p className="px-3 py-6 text-center text-compact-caption text-faint">회원, 일정, 거래 적요를 검색해 보세요</p>
+            <p className="px-3 py-6 text-center text-[13px] text-faint">회원, 일정, 거래 적요를 검색해 보세요</p>
           ) : (
             <>
               <Group title="회원">
@@ -161,19 +92,12 @@ export function SearchOverlay() {
                   <Empty />
                 ) : (
                   results.members.map((m) => (
-                    <ResultButton key={m.id} dataAttr={{ "data-search-member": m.id }} onClick={() => goMember(m.id)}>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-compact font-medium text-ink lg:text-[13px] lg:font-normal">
-                          {m.name}
-                        </span>
-                        <span className="block truncate text-compact-caption text-faint lg:hidden">
-                          {[m.role, m.major].filter(Boolean).join(" · ")}
-                        </span>
+                    <button key={m.id} type="button" data-search-member={m.id} className="flex min-h-touch w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-compact lg:min-h-0 lg:text-[13px] hover:bg-muted" onClick={() => goMember(m.id)}>
+                      <span>{m.name}</span>
+                      <span className="text-faint">
+                        {m.role} · {m.major}
                       </span>
-                      <span className="hidden shrink-0 text-[13px] text-faint lg:inline">
-                        {[m.role, m.major].filter(Boolean).join(" · ")}
-                      </span>
-                    </ResultButton>
+                    </button>
                   ))
                 )}
               </Group>
@@ -182,19 +106,12 @@ export function SearchOverlay() {
                   <Empty />
                 ) : (
                   results.events.map((e) => (
-                    <ResultButton key={e.id} dataAttr={{ "data-search-event": e.id }} onClick={() => goEvent(e.id)}>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-compact font-medium text-ink lg:text-[13px] lg:font-normal">
-                          {e.title}
-                        </span>
-                        <span className="block truncate text-compact-caption text-faint lg:hidden">
-                          {formatDateKo(e.date)} · {e.type}
-                        </span>
-                      </span>
-                      <span className="hidden shrink-0 text-[13px] text-faint lg:inline">
+                    <button key={e.id} type="button" data-search-event={e.id} className="flex min-h-touch w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-compact lg:min-h-0 lg:text-[13px] hover:bg-muted" onClick={() => goEvent(e.id)}>
+                      <span>{e.title}</span>
+                      <span className="text-faint">
                         {formatDateKo(e.date)} · {e.type}
                       </span>
-                    </ResultButton>
+                    </button>
                   ))
                 )}
               </Group>
@@ -203,15 +120,10 @@ export function SearchOverlay() {
                   <Empty />
                 ) : (
                   results.transactions.map((t) => (
-                    <ResultButton key={t.id} dataAttr={{ "data-search-tx": t.id }} onClick={() => go("/finance")}>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-compact font-medium text-ink lg:text-[13px] lg:font-normal">
-                          {t.title}
-                        </span>
-                        <span className="block truncate text-compact-caption text-faint lg:hidden">{formatWon(t.amount)}</span>
-                      </span>
-                      <span className="hidden shrink-0 text-[13px] text-faint lg:inline">{formatWon(t.amount)}</span>
-                    </ResultButton>
+                    <button key={t.id} type="button" className="flex min-h-touch w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-compact lg:min-h-0 lg:text-[13px] hover:bg-muted" onClick={() => go("/finance")}>
+                      <span>{t.title}</span>
+                      <span className="text-faint">{formatWon(t.amount)}</span>
+                    </button>
                   ))
                 )}
               </Group>
@@ -220,27 +132,6 @@ export function SearchOverlay() {
         </div>
       </div>
     </div>
-  );
-}
-
-function ResultButton({
-  children,
-  onClick,
-  dataAttr,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  dataAttr?: Record<string, string>;
-}) {
-  return (
-    <button
-      type="button"
-      {...dataAttr}
-      className="flex min-h-touch w-full items-center gap-2 rounded-[10px] px-3 py-2 text-left touch-manipulation hover:bg-muted lg:min-h-0"
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -254,5 +145,5 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 }
 
 function Empty() {
-  return <p className="px-3 py-2 text-compact-caption text-faint lg:text-[12px]">검색 결과가 없어요</p>;
+  return <p className="px-3 py-2 text-[12px] text-faint">검색 결과가 없어요</p>;
 }

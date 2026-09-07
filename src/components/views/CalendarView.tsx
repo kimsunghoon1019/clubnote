@@ -35,11 +35,12 @@ import {
 } from "@/lib/format";
 import { practiceNoticeText } from "@/lib/notice";
 import { eventAttachments } from "@/lib/proof";
+import { isCompactViewport } from "@/lib/compact";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
-import { ChevronLeft, ChevronRight, Copy, MoreHorizontal, Paperclip, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Paperclip, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 
@@ -122,17 +123,6 @@ function swallowNextClick() {
   window.setTimeout(() => window.removeEventListener("click", onClick, true), 400);
 }
 
-const LONG_PRESS_MS = 500;
-const LONG_PRESS_MOVE_PX = 8;
-
-function isCompactViewport() {
-  return window.matchMedia("(max-width: 1023px)").matches;
-}
-
-function dayOccupied(iso: string, events: ClubEvent[]) {
-  return events.some((event) => event.date <= iso && eventEndDate(event) >= iso);
-}
-
 type DragGhost = {
   event: ClubEvent;
   x: number;
@@ -194,8 +184,6 @@ export function CalendarView() {
   const [dropIsos, setDropIsos] = useState<string[]>([]);
   const [dragGhost, setDragGhost] = useState<DragGhost | null>(null);
   const [eventMenu, setEventMenu] = useState<EventMenu | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -371,23 +359,6 @@ export function CalendarView() {
   }, [draggingId]);
 
   useEffect(() => {
-    if (!moreOpen) return;
-    const onPointer = (event: PointerEvent) => {
-      if (moreRef.current?.contains(event.target as Node)) return;
-      setMoreOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [moreOpen]);
-
-  useEffect(() => {
     if (!eventMenu) return;
     const close = () => setEventMenu(null);
     const onPointerDown = (event: PointerEvent) => {
@@ -409,9 +380,9 @@ export function CalendarView() {
   }, [eventMenu]);
 
   const onEventPointerDown = (pointer: ReactPointerEvent, event: ClubEvent) => {
-    if (window.matchMedia("(max-width: 1023px)").matches) return;
     if (pointer.button !== 0) return;
     if (pointer.ctrlKey || pointer.metaKey) return;
+    if (isCompactViewport()) return;
     setEventMenu(null);
     const grabIso = isoFromPoint(pointer.clientX, pointer.clientY) ?? event.date;
     const pointerId = pointer.pointerId;
@@ -497,96 +468,13 @@ export function CalendarView() {
     });
   };
 
-  const saveEdit = () => {
-    const form = document.getElementById(EDIT_FORM_ID);
-    if (form instanceof HTMLFormElement) form.requestSubmit();
-  };
-
-  const sheetTitle = multiSelected
-    ? `${pickedEvents.length}개 선택`
-    : selected
-      ? formatDateKo(selected)
-      : "일정";
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-[7]" onClick={resetPanel}>
-        <div
-          data-calendar-compact-head
-          className="relative flex shrink-0 items-center gap-1 border-b border-line-soft px-2 py-1.5 lg:hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex min-w-0 flex-1 items-center">
-            <button
-              type="button"
-              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
-              onClick={() => shiftMonth(-1)}
-              aria-label="이전 달"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <h1 className="min-w-0 flex-1 truncate text-center text-compact font-semibold tabular-nums">
-              {year}년 {monthIndex + 1}월
-            </h1>
-            <button
-              type="button"
-              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
-              onClick={() => shiftMonth(1)}
-              aria-label="다음 달"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-          <GhostButton className="h-touch shrink-0 px-3 text-[13px] touch-manipulation" onClick={goToday}>
-            오늘
-          </GhostButton>
-          <button
-            type="button"
-            data-calendar-add
-            aria-label="일정 생성"
-            className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
-            onClick={() => openCreate(selected)}
-          >
-            <Plus className="h-5 w-5" />
-          </button>
-          <div className="relative" ref={moreRef}>
-            <button
-              type="button"
-              data-calendar-more
-              aria-label="더보기"
-              aria-haspopup="menu"
-              aria-expanded={moreOpen}
-              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
-              onClick={() => setMoreOpen((open) => !open)}
-            >
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
-            {moreOpen ? (
-              <div
-                data-calendar-more-menu
-                role="menu"
-                className="absolute right-0 top-full z-20 mt-1.5 w-48 rounded-card border border-line bg-white p-2"
-              >
-                <GhostButton
-                  className="h-touch w-full text-[13px]"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    void copyNotice();
-                  }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  카톡 공지 복사
-                </GhostButton>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div
-          data-calendar-console-head
-          className="mb-4 hidden items-center justify-between px-5 pt-5 lg:flex"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <main
+        className="min-h-0 min-w-0 flex-1 overflow-auto p-4 scrollbar-thin lg:flex-[7] lg:p-5"
+        onClick={resetPanel}
+      >
+        <div className="mb-4 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-[176px] min-w-[176px] max-w-[176px] shrink-0 items-center justify-between overflow-hidden">
               <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(-1)} aria-label="이전 달">
@@ -604,125 +492,190 @@ export function CalendarView() {
             </GhostButton>
             {forecast.size > 0 ? <span className="ml-2 text-[12px] text-faint">신촌 예보</span> : null}
           </div>
-          <PrimaryButton onClick={() => openCreate(selected)}>일정 생성</PrimaryButton>
+          <PrimaryButton className="hidden lg:inline-flex" onClick={() => openCreate(selected)}>
+            일정 생성
+          </PrimaryButton>
+          <button
+            type="button"
+            aria-label="일정 생성"
+            className="flex h-touch w-touch items-center justify-center text-brand-text lg:hidden"
+            onClick={() => openCreate(selected)}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
         </div>
 
         <div
-          data-calendar-grid
-          className={cn(
-            "min-h-0 flex-1 overflow-auto px-4 pb-3 lg:px-5 lg:pb-5",
-            "max-lg:flex max-lg:flex-col max-lg:overflow-hidden",
-            draggingId && "select-none",
-          )}
+          className={cn("border-l border-t border-line-soft", draggingId && "select-none")}
           data-calendar-dragging={draggingId ? "true" : undefined}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="border-l border-t border-line-soft max-lg:flex max-lg:h-full max-lg:min-h-0 max-lg:flex-col">
-            <div className="grid shrink-0 grid-cols-7">
-              {WEEKDAYS.map((d) => (
-                <div
-                  key={d}
-                  className="border-b border-r border-line-soft bg-muted px-1 py-1.5 text-center text-[11px] text-faint lg:px-2 lg:py-2 lg:text-left lg:text-[12px]"
-                >
-                  {d}
-                </div>
-              ))}
-            </div>
-            <div className="max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col">
-              {weeks.map((week) => (
-                <WeekRow
-                  key={week[0].iso}
-                  week={week}
-                  events={events}
-                  today={today}
-                  selected={selected}
-                  activeId={activeId}
-                  selectedEventIds={selectedEventIds}
-                  draggingId={draggingId}
-                  dropIsos={dropIsos}
-                  forecast={forecast}
-                  onSelectDay={(iso) => {
-                    const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
-                    setSelected(iso);
-                    setActiveId(first);
-                    setSelectedEventIds(first ? [first] : []);
-                    setEditing(false);
-                  }}
-                  onSelectEvent={(iso, id, additive) => {
-                    setSelected(iso);
-                    setEditing(false);
-                    if (additive) {
-                      setSelectedEventIds((prev) => {
-                        const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
-                        setActiveId(next.includes(id) ? id : (next[next.length - 1] ?? null));
-                        return next;
-                      });
-                      return;
-                    }
-                    setActiveId(id);
-                    setSelectedEventIds([id]);
-                  }}
-                  onCreateDay={(iso) => {
-                    if (isCompactViewport()) {
-                      openCreate(iso);
-                      return;
-                    }
-                    const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
-                    setSelected(iso);
-                    setActiveId(first);
-                    setSelectedEventIds(first ? [first] : []);
-                    setEditing(false);
-                    openCreate(iso);
-                  }}
-                  onEventPointerDown={onEventPointerDown}
-                  onEventContextMenu={onEventContextMenu}
-                />
-              ))}
-            </div>
+          <div className="grid grid-cols-7">
+            {WEEKDAYS.map((d) => (
+              <div key={d} className="border-b border-r border-line-soft bg-muted px-2 py-2 text-[12px] text-faint">
+                {d}
+              </div>
+            ))}
           </div>
+          {weeks.map((week) => (
+            <WeekRow
+              key={week[0].iso}
+              week={week}
+              events={events}
+              today={today}
+              selected={selected}
+              activeId={activeId}
+              selectedEventIds={selectedEventIds}
+              draggingId={draggingId}
+              dropIsos={dropIsos}
+              forecast={forecast}
+              onSelectDay={(iso) => {
+                setSelected(iso);
+                setEditing(false);
+                if (isCompactViewport()) {
+                  setActiveId(null);
+                  setSelectedEventIds([]);
+                  return;
+                }
+                const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
+                setActiveId(first);
+                setSelectedEventIds(first ? [first] : []);
+              }}
+              onSelectEvent={(iso, id, additive) => {
+                setSelected(iso);
+                setEditing(false);
+                if (additive) {
+                  setSelectedEventIds((prev) => {
+                    const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+                    setActiveId(next.includes(id) ? id : (next[next.length - 1] ?? null));
+                    return next;
+                  });
+                  return;
+                }
+                setActiveId(id);
+                setSelectedEventIds([id]);
+              }}
+              onCreateDay={(iso) => {
+                if (isCompactViewport()) {
+                  openCreate(iso);
+                  return;
+                }
+                const first = (byDate.get(iso) ?? [])[0]?.id ?? null;
+                setSelected(iso);
+                setActiveId(first);
+                setSelectedEventIds(first ? [first] : []);
+                setEditing(false);
+                openCreate(iso);
+              }}
+              onEventPointerDown={onEventPointerDown}
+              onEventContextMenu={onEventContextMenu}
+            />
+          ))}
         </div>
+
+        <section className="mt-3 lg:hidden" onClick={(e) => e.stopPropagation()}>
+          {selected ? (
+            <>
+              <p className="text-compact font-semibold">
+                {formatDateKo(selected)} · {formatWeekday(selected)}
+              </p>
+              {selectedEvents.length === 0 ? (
+                <p className="mt-2 text-compact-caption text-faint">이 날짜에 일정이 없어요.</p>
+              ) : (
+                <ul className="mt-2 divide-y divide-line-soft">
+                  {selectedEvents
+                    .slice()
+                    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                    .map((event) => (
+                      <li key={event.id}>
+                        <button
+                          type="button"
+                          className="flex min-h-row w-full items-center gap-3 py-2 text-left"
+                          onClick={() => {
+                            setActiveId(event.id);
+                            setSelectedEventIds([event.id]);
+                            setEditing(false);
+                          }}
+                        >
+                          <span className="w-14 shrink-0 tabular-nums text-compact-caption text-sub">
+                            {event.allDay ? "종일" : event.startTime}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-compact font-medium">{event.title}</span>
+                            <span className="block truncate text-compact-caption text-faint">{event.place}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className="text-compact-caption text-faint">날짜를 선택하면 그날 일정이 아래에 나와요.</p>
+          )}
+        </section>
       </main>
 
       <DetailSurface
-        open={Boolean(selected)}
-        title={sheetTitle}
-        onClose={resetPanel}
-        onSave={editing ? saveEdit : undefined}
-        railClassName="lg:w-[32%] lg:min-w-[300px] lg:max-w-[360px]"
+        sheet
+        open={Boolean(active) && Boolean(selected)}
+        title={active?.title}
+        onClose={() => {
+          setActiveId(null);
+          setSelectedEventIds([]);
+          setEditing(false);
+        }}
+        onSave={
+          editing
+            ? () => {
+                const form = document.getElementById(EDIT_FORM_ID) as HTMLFormElement | null;
+                form?.requestSubmit();
+              }
+            : undefined
+        }
         footer={
-          <div className="flex gap-2">
-            <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
-              일정 생성
-            </PrimaryButton>
-            {editing ? (
-              <PrimaryButton className="hidden flex-1 lg:inline-flex" type="submit" form={EDIT_FORM_ID} disabled={!active}>
-                저장
-              </PrimaryButton>
-            ) : (
-              <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
-                수정
+          active ? (
+            <div className="flex gap-2">
+              {editing ? null : (
+                <GhostButton className="flex-1" onClick={() => setEditing(true)}>
+                  수정
+                </GhostButton>
+              )}
+              <GhostButton className="flex-1 text-up" onClick={() => confirmDelete(active)}>
+                삭제
               </GhostButton>
-            )}
-            <GhostButton
-              className="px-3"
-              disabled={pickedEvents.length === 0 && !active}
-              onClick={confirmDeleteSelected}
-              aria-label="일정 삭제"
-            >
-              <Trash2 className="h-4 w-4" />
-            </GhostButton>
-          </div>
+            </div>
+          ) : null
         }
       >
-        <div
-          data-event-selected-count={pickedEvents.length}
-          data-active-event-id={active?.id ?? undefined}
-          data-selected-date={selected ?? undefined}
-        >
+        {active ? (
+          editing ? (
+            <EditEvent
+              key={active.id}
+              event={active}
+              onSave={(patch) => {
+                updateEvent(active.id, patch);
+                setEditing(false);
+                toast("일정을 수정했어요");
+              }}
+            />
+          ) : (
+            <EventDetail key={active.id} event={active} />
+          )
+        ) : null}
+      </DetailSurface>
+
+      <aside
+        className="hidden min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft lg:flex"
+        data-event-selected-count={pickedEvents.length}
+        data-active-event-id={active?.id ?? undefined}
+        data-selected-date={selected ?? undefined}
+      >
+        <div className="flex-1 overflow-auto px-5 py-5 [scrollbar-gutter:stable] scrollbar-thin">
           {multiSelected ? (
             <>
-              <p className="hidden text-[28px] font-semibold leading-8 lg:block">{pickedEvents.length}개 선택</p>
-              <p className="text-[13px] text-faint lg:mt-1">Delete 키로 한 번에 지울 수 있어요.</p>
+              <p className="text-[28px] font-semibold leading-8">{pickedEvents.length}개 선택</p>
+              <p className="mt-1 text-[13px] text-faint">Delete 키로 한 번에 지울 수 있어요.</p>
               <ul className="mt-5 space-y-2">
                 {pickedEvents
                   .slice()
@@ -739,11 +692,11 @@ export function CalendarView() {
             </>
           ) : selected ? (
             <>
-              <p className="hidden text-[28px] font-semibold leading-8 lg:block">{formatDateKo(selected)}</p>
-              <p className="hidden text-[13px] text-faint lg:mt-1 lg:block">{formatWeekday(selected)}요일</p>
+              <p className="text-[28px] font-semibold leading-8">{formatDateKo(selected)}</p>
+              <p className="mt-1 text-[13px] text-faint">{formatWeekday(selected)}요일</p>
 
               {selectedEvents.length > 1 ? (
-                <div className="flex flex-wrap gap-1 lg:mt-3">
+                <div className="mt-3 flex flex-wrap gap-1">
                   {selectedEvents.map((event) => (
                     <button
                       key={event.id}
@@ -753,7 +706,7 @@ export function CalendarView() {
                         setSelectedEventIds([event.id]);
                       }}
                       className={cn(
-                        "min-h-touch rounded-chip px-3 py-1.5 text-[13px] touch-manipulation lg:min-h-0 lg:px-2 lg:py-1 lg:text-[12px]",
+                        "rounded-chip px-2 py-1 text-[12px]",
                         (active?.id ?? "") === event.id ? "bg-brand-soft text-brand-text" : "bg-muted text-sub",
                       )}
                     >
@@ -764,7 +717,7 @@ export function CalendarView() {
               ) : null}
 
               {active ? (
-                <div className={cn(selectedEvents.length > 1 ? "mt-5" : "lg:mt-5")}>
+                <div className="mt-5">
                   {editing ? (
                     <EditEvent
                       key={active.id}
@@ -792,7 +745,29 @@ export function CalendarView() {
             <NoticePanel text={notice} onCopy={copyNotice} />
           )}
         </div>
-      </DetailSurface>
+        <div className="flex gap-2 border-t border-line-soft px-5 py-3">
+          <PrimaryButton className="flex-1" onClick={() => openCreate(selected)}>
+            일정 생성
+          </PrimaryButton>
+          {editing ? (
+            <PrimaryButton className="flex-1" type="submit" form={EDIT_FORM_ID} disabled={!active}>
+              저장
+            </PrimaryButton>
+          ) : (
+            <GhostButton className="flex-1" disabled={multiSelected || !active || !selected} onClick={() => setEditing(true)}>
+              수정
+            </GhostButton>
+          )}
+          <GhostButton
+            className="px-3"
+            disabled={pickedEvents.length === 0 && !active}
+            onClick={confirmDeleteSelected}
+            aria-label="일정 삭제"
+          >
+            <Trash2 className="h-4 w-4" />
+          </GhostButton>
+        </div>
+      </aside>
       {dragGhost ? <EventDragGhost ghost={dragGhost} /> : null}
       {eventMenu ? (
         <EventContextMenu
@@ -849,19 +824,7 @@ function WeekRow({
   onEventContextMenu: (clientX: number, clientY: number, event: ClubEvent) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pressTimer = useRef<number | null>(null);
-  const pressStart = useRef<{ iso: string; x: number; y: number } | null>(null);
   const weekIsos = week.map((cell) => cell.iso);
-
-  const clearPress = () => {
-    if (pressTimer.current != null) {
-      window.clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-    pressStart.current = null;
-  };
-
-  useEffect(() => () => clearPress(), []);
   const segments = layoutWeek(weekIsos, events);
   const visible = segments.filter((seg) => seg.lane < CALENDAR_MAX_LANES);
   const laneCount = segments.reduce((max, seg) => Math.max(max, seg.lane + 1), 0);
@@ -869,14 +832,31 @@ function WeekRow({
   const hasMore = moreByDay.some((n) => n > 0);
   const height = weekMinHeight(laneCount, hasMore);
   const bodyMin = height - CALENDAR_DAY_HEAD;
+  const longTimer = useRef(0);
+  const longFired = useRef(false);
+
+  const startLong = (iso: string) => {
+    if (!isCompactViewport()) return;
+    longFired.current = false;
+    window.clearTimeout(longTimer.current);
+    longTimer.current = window.setTimeout(() => {
+      longFired.current = true;
+      onCreateDay(iso);
+    }, 500);
+  };
+  const endLong = (iso: string, click: boolean) => {
+    window.clearTimeout(longTimer.current);
+    if (longFired.current) return;
+    if (click) onSelectDay(iso);
+  };
 
   return (
     <div
       ref={ref}
-      className="grid min-h-[96px] border-b border-line-soft max-lg:flex-1"
+      className="grid border-b border-line-soft max-lg:[grid-template-rows:2.75rem_1rem]"
       style={{
         gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-        gridTemplateRows: `${CALENDAR_DAY_HEAD}px minmax(${bodyMin}px, 1fr)`,
+        gridTemplateRows: `${CALENDAR_DAY_HEAD}px minmax(${bodyMin}px, auto)`,
       }}
     >
       {week.map((cell, index) => {
@@ -895,32 +875,15 @@ function WeekRow({
             data-iso={cell.iso}
             data-drop-hover={isDrop ? "true" : undefined}
             aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
-            onPointerDown={(event) => {
-              if (!isCompactViewport() || event.button !== 0) return;
-              if (dayOccupied(cell.iso, events)) return;
-              clearPress();
-              pressStart.current = { iso: cell.iso, x: event.clientX, y: event.clientY };
-              pressTimer.current = window.setTimeout(() => {
-                const start = pressStart.current;
-                pressTimer.current = null;
-                pressStart.current = null;
-                if (!start) return;
-                swallowNextClick();
-                onCreateDay(start.iso);
-              }, LONG_PRESS_MS);
+            onPointerDown={() => startLong(cell.iso)}
+            onPointerUp={() => endLong(cell.iso, true)}
+            onPointerCancel={() => endLong(cell.iso, false)}
+            onClick={(event) => {
+              if (longFired.current) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
             }}
-            onPointerMove={(event) => {
-              if (!pressStart.current || pressStart.current.iso !== cell.iso) return;
-              const dx = event.clientX - pressStart.current.x;
-              const dy = event.clientY - pressStart.current.y;
-              if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_PX) clearPress();
-            }}
-            onPointerUp={clearPress}
-            onPointerCancel={clearPress}
-            onContextMenu={(event) => {
-              if (isCompactViewport()) event.preventDefault();
-            }}
-            onClick={() => onSelectDay(cell.iso)}
             onDoubleClick={(event) => {
               event.preventDefault();
               if (isCompactViewport()) return;
@@ -928,7 +891,7 @@ function WeekRow({
             }}
             style={{ gridColumn: index + 1, gridRow: "1 / 3" }}
             className={cn(
-              "relative flex flex-col border-r border-line-soft text-left hover:bg-muted touch-manipulation max-lg:select-none",
+              "relative flex flex-col border-r border-line-soft text-left hover:bg-muted",
               !cell.inMonth && "bg-[#fcfcfd]",
               isSelected && "bg-[#F7FBFF]",
               isDrop && "bg-brand-soft",
@@ -949,17 +912,35 @@ function WeekRow({
               >
                 {cell.day}
               </span>
-              {weather ? <WeatherMark day={weather} /> : null}
+              {weather ? (
+                <span className="hidden lg:inline-flex">
+                  <WeatherMark day={weather} />
+                </span>
+              ) : null}
+            </span>
+            <span className="flex gap-0.5 px-1.5 pb-1.5 lg:hidden">
+              {events
+                .filter((event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso)
+                .slice(0, 3)
+                .map((event) => (
+                  <span
+                    key={event.id}
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      isPracticeEvent(event) ? "bg-brand" : "bg-[#8b95a1]",
+                    )}
+                  />
+                ))}
             </span>
             {more > 0 ? (
-              <span className="absolute bottom-1 left-1.5 text-[10px] text-faint">+{more}</span>
+              <span className="absolute bottom-1 left-1.5 hidden text-[10px] text-faint lg:inline">+{more}</span>
             ) : null}
           </button>
         );
       })}
       <div
         data-event-overlay
-        className="pointer-events-none relative z-[1] grid auto-rows-[18px] grid-cols-7 gap-y-[2px] self-stretch py-0.5"
+        className="pointer-events-none relative z-[1] hidden auto-rows-[18px] grid-cols-7 gap-y-[2px] self-stretch py-0.5 lg:grid"
         style={{ gridColumn: "1 / -1", gridRow: 2 }}
       >
         {visible.map((seg) => (
@@ -1027,7 +1008,7 @@ function EventBar({
         onContextMenu(e.clientX, e.clientY, event);
       }}
       className={cn(
-        "pointer-events-auto flex h-[18px] items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px] touch-manipulation lg:cursor-grab lg:touch-none lg:active:cursor-grabbing",
+        "pointer-events-auto flex h-[18px] cursor-grab items-center gap-0.5 px-1.5 text-left text-[11px] leading-[18px] touch-none active:cursor-grabbing",
         continuesLeft ? "ml-0 rounded-l-none" : "ml-[3px] rounded-l-[6px]",
         continuesRight ? "mr-0 rounded-r-none" : "mr-[3px] rounded-r-[6px]",
         barClass(event.type),

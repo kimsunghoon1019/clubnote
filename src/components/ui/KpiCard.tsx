@@ -23,7 +23,7 @@ export function KpiCard({
   return (
     <div className="min-w-0 px-3 py-3">
       <p className="text-[12px] text-sub">{label}</p>
-      <p className="mt-1 text-[18px] font-semibold leading-6 text-ink">{value}</p>
+      <p className="mt-1 text-compact-title font-semibold leading-7 text-ink lg:text-[18px] lg:leading-6">{value}</p>
       <div className="mt-1 flex items-end justify-between gap-2">
         {delta ? (
           <p className={cn("text-[12px] font-medium", deltaUp ? "text-up" : "text-down")}>{delta}</p>
@@ -34,7 +34,11 @@ export function KpiCard({
         ) : (
           <span />
         )}
-        {spark ? <Sparkline data={spark} color={sparkColor} width={72} height={28} fill /> : null}
+        {spark ? (
+          <span className="hidden xl:inline-flex">
+            <Sparkline data={spark} color={sparkColor} width={72} height={28} fill />
+          </span>
+        ) : null}
       </div>
     </div>
   );

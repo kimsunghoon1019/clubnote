@@ -2,9 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
-
-const HISTORY_FLAG = "__clubnoteModal";
+import { useEffect, type ReactNode } from "react";
 
 export function Modal({
   open,
@@ -23,125 +21,47 @@ export function Modal({
   align?: "center" | "top";
   footer?: ReactNode;
 }) {
-  const onCloseRef = useRef(onClose);
-  const pushedRef = useRef(false);
-  onCloseRef.current = onClose;
-
-  const finishClose = useCallback(() => {
-    onCloseRef.current();
-  }, []);
-
-  const close = useCallback(() => {
-    if (pushedRef.current && window.history.state?.[HISTORY_FLAG]) {
-      window.history.back();
-      return;
-    }
-    finishClose();
-  }, [finishClose]);
-
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
-
-  useLayoutEffect(() => {
     if (!open) return;
     document.documentElement.dataset.modalOpen = "true";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
+      window.removeEventListener("keydown", onKey);
       delete document.documentElement.dataset.modalOpen;
     };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    if (!window.history.state?.[HISTORY_FLAG]) {
-      window.history.pushState({ ...window.history.state, [HISTORY_FLAG]: true }, "", window.location.href);
-      pushedRef.current = true;
-    }
-
-    const onPop = () => {
-      if (window.history.state?.[HISTORY_FLAG]) return;
-      pushedRef.current = false;
-      finishClose();
-    };
-    window.addEventListener("popstate", onPop);
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      if (!pushedRef.current) return;
-      pushedRef.current = false;
-      if (!window.history.state?.[HISTORY_FLAG]) return;
-      const state = { ...window.history.state };
-      delete state[HISTORY_FLAG];
-      window.history.replaceState(state, "", window.location.href);
-    };
-  }, [open, finishClose]);
+  }, [open, onClose]);
 
   if (!open) return null;
 
   return (
     <div
-      data-modal-overlay
       className={cn(
-        "fixed inset-0 z-50 flex justify-center bg-white",
-        "lg:bg-black/30 lg:p-4",
-        align === "top" ? "lg:items-start lg:pt-[7vh]" : "lg:items-center",
+        "fixed inset-0 z-50 flex justify-center bg-black/30 p-0 lg:p-4",
+        align === "top" ? "items-stretch lg:items-start lg:pt-[7vh]" : "items-stretch lg:items-center",
       )}
-      onClick={close}
+      onClick={onClose}
     >
       <div
-        data-modal-sheet
         role="dialog"
         aria-modal
         aria-label={title}
-        className={cn(
-          "flex h-full w-full max-w-none flex-col overflow-hidden bg-white overscroll-contain",
-          "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
-          "lg:h-auto lg:max-h-[86vh] lg:rounded-card lg:border lg:border-line lg:pt-0 lg:pb-0",
-          "lg:w-[var(--modal-width)] lg:max-w-[min(var(--modal-width),calc(100vw-32px))]",
-        )}
-        style={{ ["--modal-width" as string]: `${width}px` }}
+        className="flex h-full w-full max-h-none flex-col overflow-hidden rounded-none border-0 bg-white lg:h-auto lg:max-h-[86vh] lg:w-[min(100%-2rem,var(--modal-w))] lg:rounded-card lg:border lg:border-line"
+        style={{ ["--modal-w" as string]: `${width}px` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex shrink-0 items-center border-b border-line-soft lg:hidden">
-          <button
-            type="button"
-            data-modal-close
-            className="flex h-touch min-w-touch items-center justify-center px-3 text-compact text-sub touch-manipulation"
-            onClick={close}
-          >
-            닫기
-          </button>
-          <p data-modal-title className="min-w-0 flex-1 truncate text-center text-compact font-semibold text-ink">
-            {title}
-          </p>
-          <span className="invisible flex h-touch min-w-touch items-center justify-center px-3 text-compact" aria-hidden>
-            닫기
-          </span>
-        </header>
-        <div className="hidden shrink-0 items-center justify-between border-b border-line-soft px-5 py-3.5 lg:flex">
-          <h2 className="text-[16px] font-semibold text-ink">{title}</h2>
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-btn p-1 text-faint hover:bg-muted hover:text-ink"
-            aria-label="닫기"
-          >
+        <div className="flex h-touch shrink-0 items-center justify-between border-b border-line-soft px-5 pt-[env(safe-area-inset-top)] lg:h-auto lg:py-3.5 lg:pt-3.5">
+          <h2 className="text-compact font-semibold text-ink lg:text-[16px]">{title}</h2>
+          <button type="button" onClick={onClose} className="flex h-touch w-touch items-center justify-center rounded-btn text-faint hover:bg-muted hover:text-ink lg:h-auto lg:w-auto lg:p-1" aria-label="닫기">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 [scrollbar-gutter:stable] scrollbar-thin lg:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 [scrollbar-gutter:stable] scrollbar-thin">
           {children}
         </div>
-        {footer ? (
-          <div data-modal-footer className="shrink-0 border-t border-line-soft px-4 py-3 lg:px-5">
-            {footer}
-          </div>
-        ) : null}
+        {footer ? <div className="shrink-0 border-t border-line-soft px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div> : null}
       </div>
     </div>
   );

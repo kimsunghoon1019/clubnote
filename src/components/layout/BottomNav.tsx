@@ -4,7 +4,6 @@ import { cn } from "@/lib/cn";
 import { Calendar, ClipboardCheck, Home, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCompactDetail } from "./DetailSurface";
 import { NAV_ITEMS, navItemActive } from "./nav";
 
 const ICONS = {
@@ -17,17 +16,16 @@ const ICONS = {
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { open } = useCompactDetail();
-  const hide = open || pathname === "/attendance";
+  const hide = pathname === "/attendance";
 
   return (
     <nav
       data-bottom-nav
-      aria-hidden={hide || undefined}
       aria-label="주요 메뉴"
+      aria-hidden={hide || undefined}
       className={cn(
-        "shrink-0 border-t border-line-soft bg-white pb-[env(safe-area-inset-bottom)] lg:hidden",
-        hide && "hidden",
+        "shrink-0 border-t border-line-soft bg-white pb-[env(safe-area-inset-bottom)]",
+        hide ? "hidden" : "lg:hidden",
       )}
     >
       <ul className="grid h-14 grid-cols-5">

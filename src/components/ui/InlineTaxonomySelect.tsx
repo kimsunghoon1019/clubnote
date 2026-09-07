@@ -143,7 +143,7 @@ export function InlineTaxonomySelect({
           setOpen((current) => !current);
         }}
         className={cn(
-          "flex h-touch w-full items-center rounded-btn border bg-white px-2.5 text-left transition-colors touch-manipulation lg:h-10",
+          "flex h-10 w-full items-center rounded-btn border bg-white px-2.5 text-left transition-colors",
           open ? "border-brand" : "border-line hover:border-[#d1d6db]",
         )}
       >

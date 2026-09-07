@@ -35,12 +35,7 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
           <p className="truncate text-[15px] font-semibold">{tx.title}</p>
           <p className="mt-0.5 text-[12px] text-faint">{formatTxWhen(tx.occurredOn, tx.occurredAt)}</p>
         </div>
-        <button
-          type="button"
-          data-rail-close
-          className="hidden shrink-0 text-[12px] text-faint hover:text-ink lg:inline"
-          onClick={onClose}
-        >
+        <button type="button" className="hidden shrink-0 text-[12px] text-faint hover:text-ink lg:inline" onClick={onClose}>
           닫기
         </button>
       </div>

@@ -19,6 +19,7 @@
   --down: #3182f6;
   --warn: #ffb800;
   --touch: 44px;
+  --row: 56px;
   --motion: 280ms;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);

@@ -4,6 +4,11 @@ import defaultTheme from "tailwindcss/defaultTheme";
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
+    screens: {
+      md: "768px",
+      lg: "1024px",
+      xl: "1440px",
+    },
     extend: {
       colors: {
         bg: "var(--bg)",
@@ -56,6 +61,7 @@ const config: Config = {
       },
       minHeight: {
         touch: "var(--touch)",
+        row: "var(--row)",
       },
       minWidth: {
         touch: "var(--touch)",

@@ -6,7 +6,7 @@ export function ToastViewport() {
   const { toasts } = useClub();
   if (toasts.length === 0) return null;
   return (
-    <div className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 space-y-2 lg:bottom-12">
+    <div className="pointer-events-none fixed bottom-12 left-1/2 z-50 -translate-x-1/2 space-y-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}

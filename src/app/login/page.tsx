@@ -1,21 +1,13 @@
 "use client";
 
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { FieldLabel } from "@/components/ui/Field";
-import { cn } from "@/lib/cn";
+import { FieldLabel, TextInput } from "@/components/ui/Field";
 import { CLUB_NAME } from "@/lib/constants";
 import { safeNextPath } from "@/lib/session";
 import { useClub } from "@/lib/store";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type InputHTMLAttributes } from "react";
-
-const inputClass =
-  "h-touch w-full rounded-btn border border-line bg-white px-3 text-compact text-ink placeholder:text-faint touch-manipulation hover:border-[#d1d6db] focus:border-brand lg:h-10 lg:text-[14px]";
-
-function LoginInput(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cn(inputClass, props.className)} />;
-}
+import { useEffect, useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -56,11 +48,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      data-login
-      className="flex min-h-dvh items-start justify-center overflow-y-auto scroll-pb-24 bg-white px-4 pt-[max(2.5rem,calc(env(safe-area-inset-top)+1.5rem))] pb-[max(1.5rem,env(safe-area-inset-bottom))] md:items-center md:py-10 lg:min-h-dvh lg:px-5"
-    >
-      <div data-login-card className="w-full max-w-[360px]">
+    <div className="flex min-h-dvh items-center justify-center bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)] max-lg:items-start max-lg:pt-16">
+      <div className="w-full max-w-[360px] scroll-pb-24">
         <div className="mb-8 flex items-center gap-2">
           <svg viewBox="0 0 16 16" className="h-6 w-6" aria-hidden>
             <rect x="3.2" y="3.2" width="9.6" height="9.6" rx="1.2" transform="rotate(45 8 8)" fill="#3182F6" />
@@ -70,19 +59,13 @@ export default function LoginPage() {
             <p className="text-[12px] text-faint">동아리 운영</p>
           </div>
         </div>
-        <h1 className="text-compact-title font-semibold lg:text-[20px]">운영진 로그인</h1>
+        <h1 className="text-[20px] font-semibold">운영진 로그인</h1>
         <form className="mt-6 space-y-3" onSubmit={submit}>
           <div>
             <FieldLabel>아이디 또는 학번</FieldLabel>
-            <LoginInput
-              data-login-id
+            <TextInput
               type="text"
-              name="username"
               autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="next"
               required
               placeholder="학번 또는 아이디"
               value={studentId}
@@ -91,12 +74,9 @@ export default function LoginPage() {
           </div>
           <div>
             <FieldLabel hint="기본은 전화번호 뒷 4자리">비밀번호</FieldLabel>
-            <LoginInput
-              data-login-password
+            <TextInput
               type="password"
-              name="password"
               autoComplete="current-password"
-              enterKeyHint="done"
               required
               maxLength={32}
               placeholder="••••"
@@ -106,24 +86,20 @@ export default function LoginPage() {
               onChange={(e) => setPin(e.target.value.slice(0, 32))}
             />
             {error ? (
-              <p id="login-error" data-login-error className="mt-1.5 text-compact-caption text-up lg:text-[13px]">
+              <p id="login-error" data-login-error className="mt-1.5 text-compact-caption text-up">
                 {error}
               </p>
             ) : null}
           </div>
-          <PrimaryButton
-            type="submit"
-            className="h-touch w-full text-compact touch-manipulation lg:h-11 lg:text-[13px]"
-            disabled={busy || !sessionReady}
-          >
+          <PrimaryButton type="submit" className="h-touch w-full text-compact lg:h-11 lg:text-[13px]" disabled={busy || !sessionReady}>
             {busy ? "확인 중…" : "로그인"}
           </PrimaryButton>
         </form>
 
         {currentMember ? (
-          <p className="mt-4 text-compact-caption text-sub lg:text-[13px]">
+          <p className="mt-4 text-[13px] text-sub">
             지금 {currentMember.name} 님으로 들어가 있어요.{" "}
-            <Link href="/" className="inline-flex min-h-touch items-center font-medium text-brand-text lg:min-h-0">
+            <Link href="/" className="font-medium text-brand-text">
               홈으로
             </Link>
           </p>

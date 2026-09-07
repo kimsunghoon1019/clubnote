@@ -1,13 +1,16 @@
-"use client";
-
-import { DetailSurface } from "@/components/layout/DetailSurface";
+import { cn } from "@/lib/cn";
 import type { ReactNode } from "react";
 
 export function RightRail({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <DetailSurface open={false} className={className}>
-      {children}
-    </DetailSurface>
+    <aside
+      className={cn(
+        "hidden w-[300px] shrink-0 overflow-auto border-l border-line-soft bg-white scrollbar-thin lg:block min-h-0",
+        className,
+      )}
+    >
+      <div className="px-4 py-4">{children}</div>
+    </aside>
   );
 }
 

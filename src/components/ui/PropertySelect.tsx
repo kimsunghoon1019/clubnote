@@ -100,7 +100,7 @@ export function PropertySelect({
         className={cn(
           "text-left",
           field &&
-            "flex h-touch w-full items-center justify-between gap-1 rounded-btn border border-line bg-white px-3 text-compact text-ink touch-manipulation hover:border-[#d1d6db] lg:h-10 lg:text-[14px]",
+            "flex h-touch w-full items-center justify-between gap-1 rounded-btn border border-line bg-white px-3 text-compact text-ink hover:border-[#d1d6db] lg:h-10 lg:text-[14px]",
           field && open && "border-brand",
           className,
         )}

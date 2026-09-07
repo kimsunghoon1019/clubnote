@@ -8,21 +8,16 @@ export function AttendanceToggle({
   value,
   name,
   onChange,
-  fill = false,
 }: {
   value?: AttendanceStatus;
   name: string;
   onChange: (status: AttendanceStatus | null) => void;
-  fill?: boolean;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={`${name} 출결`}
-      className={cn(
-        "overflow-hidden rounded-[10px] border border-line bg-white",
-        fill ? "flex h-touch w-full max-w-[420px]" : "inline-flex h-8",
-      )}
+      className="inline-flex h-touch overflow-hidden rounded-[10px] border border-line bg-white lg:h-8"
     >
       {ATTENDANCE_STATUSES.map((status, index) => {
         const meta = ATTENDANCE_STATUS_META[status];
@@ -36,10 +31,7 @@ export function AttendanceToggle({
             aria-label={status}
             onClick={() => onChange(active ? null : status)}
             className={cn(
-              "flex flex-col items-center justify-center font-semibold transition-colors",
-              fill
-                ? "h-touch min-w-0 flex-1 text-[11px] leading-[13px] touch-manipulation"
-                : "h-8 w-[3.35rem] text-[10px] leading-[11px]",
+              "flex h-touch w-9 flex-col items-center justify-center text-[11px] font-semibold leading-[13px] transition-colors lg:h-8 lg:w-[3.35rem] lg:text-[10px] lg:leading-[11px]",
               index > 0 && "border-l border-line",
               !active && "text-faint hover:bg-muted",
             )}

@@ -20,12 +20,11 @@ import { cn } from "@/lib/cn";
 import { CLUB_NAME } from "@/lib/constants";
 import { formatChartStamp, formatDateDot, formatRatio, tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
-import { memberPhotoSrc } from "@/lib/proof";
 import { categoryCounts, diligenceScore, isActive, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ChartNote, Member } from "@/lib/types";
-import { ChevronDown, Download, MoreHorizontal, Plus, Search, UserPlus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Download, Plus, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
@@ -113,54 +112,6 @@ function SortChip({
         </span>
       </FilterChip>
     </span>
-  );
-}
-
-function memberMatchesQuery(member: Member, query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [member.name, member.studentId, member.major, member.role, member.category, member.phone, member.college].some(
-    (value) => value.toLowerCase().includes(q),
-  );
-}
-
-function MemberCompactRow({
-  member,
-  diligence,
-  selected,
-  onClick,
-}: {
-  member: Member;
-  diligence: number;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        data-row-id={member.id}
-        data-members-row
-        aria-current={selected ? "true" : undefined}
-        className={cn(
-          "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left touch-manipulation md:px-6",
-          selected && "bg-[#F7FBFF]",
-        )}
-        onClick={onClick}
-      >
-        <Avatar name={member.name} size={40} src={memberPhotoSrc(member)} />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate text-compact font-semibold text-ink">{member.name}</span>
-            <RolePill role={member.role} className="max-w-[40%] shrink-0" />
-          </span>
-          <span className="mt-0.5 flex items-center gap-2">
-            <span className="min-w-0 truncate text-compact-caption text-faint">{member.category}</span>
-            <RatioBar value={diligence * 100} className="shrink-0" />
-          </span>
-        </span>
-      </button>
-    </li>
   );
 }
 
@@ -263,8 +214,6 @@ export function MembersView() {
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [inactiveOpen, setInactiveOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (categoryTab !== "전체" && !categories.includes(categoryTab)) setCategoryTab("전체");
@@ -277,35 +226,13 @@ export function MembersView() {
   useEffect(() => {
     if (memberFocusSeq === 0 || !inspectedMemberId) return;
     setCategoryTab("전체");
-    setQuery("");
     setSelectionAnchorId(inspectedMemberId);
-    const focused = members.find((item) => item.id === inspectedMemberId);
-    if (focused && !isActive(focused)) setInactiveOpen(true);
     requestAnimationFrame(() => {
       document.querySelector(`[data-row-id="${CSS.escape(inspectedMemberId)}"]`)?.scrollIntoView({
         block: "nearest",
       });
     });
-  }, [memberFocusSeq, inspectedMemberId, members]);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    const onPointer = (event: PointerEvent) => {
-      const target = event.target;
-      if (moreRef.current?.contains(target as Node)) return;
-      if (target instanceof Element && target.closest("[data-taxonomy-menu]")) return;
-      setMoreOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMoreOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [moreOpen]);
+  }, [memberFocusSeq, inspectedMemberId]);
 
   const activeMembers = useMemo(() => members.filter(isActive), [members]);
   const counts = categoryCounts(activeMembers, categories);
@@ -322,9 +249,13 @@ export function MembersView() {
   }, [members, events, attendance]);
 
   const filtered = useMemo(() => {
-    if (categoryTab === "전체") return members;
-    return members.filter((m) => m.category === categoryTab);
-  }, [members, categoryTab]);
+    const q = query.trim();
+    return members.filter((m) => {
+      if (categoryTab !== "전체" && m.category !== categoryTab) return false;
+      if (!q) return true;
+      return `${m.name}${m.role}${m.category}${m.studentId}`.includes(q);
+    });
+  }, [members, categoryTab, query]);
 
   const { activeSorted, inactiveSorted, sorted } = useMemo(() => {
     const active = sortMemberList(filtered.filter(isActive), sort, scores);
@@ -335,13 +266,6 @@ export function MembersView() {
     );
     return { activeSorted: active, inactiveSorted: inactive, sorted: [...active, ...inactive] };
   }, [filtered, sort, scores]);
-
-  const { compactActive, compactInactive } = useMemo(() => {
-    return {
-      compactActive: activeSorted.filter((member) => memberMatchesQuery(member, query)),
-      compactInactive: inactiveSorted.filter((member) => memberMatchesQuery(member, query)),
-    };
-  }, [activeSorted, inactiveSorted, query]);
 
   const selectedEnabled = selectedMemberIds.length > 0;
   const selectedMembers = members.filter((m) => selectedMemberIds.includes(m.id));
@@ -388,21 +312,6 @@ export function MembersView() {
       return;
     }
 
-    setSelectionAnchorId(row.id);
-    inspectMember(row.id);
-    selectAll([row.id]);
-  };
-
-  const handleCompactRowClick = (row: Member) => {
-    if (
-      inspectedMemberId === row.id &&
-      (selectedMemberIds.length === 0 || (selectedMemberIds.length === 1 && selectedMemberIds[0] === row.id))
-    ) {
-      inspectMember(null);
-      clearSelection();
-      setSelectionAnchorId(null);
-      return;
-    }
     setSelectionAnchorId(row.id);
     inspectMember(row.id);
     selectAll([row.id]);
@@ -514,279 +423,220 @@ export function MembersView() {
     { key: "sid", header: "학번", sortable: true, render: (row) => <span className="tabular-nums">{row.studentId}</span> },
   ];
 
-  const categoryChips = (chipClass?: string) =>
-    ["전체", ...categories].map((tab) => (
-      <FilterChip key={tab} active={categoryTab === tab} onClick={() => setCategoryTab(tab)} className={chipClass}>
-        {tab}
-      </FilterChip>
-    ));
-
-  const emptyRoster = (
-    <span>
-      이 분류에 회원이 없어요.{" "}
-      <button type="button" className="text-brand-text" onClick={() => setCategoryTab("전체")}>
-        전체 보기
-      </button>
-    </span>
-  );
-
   return (
     <>
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onClick={dismissInspected}>
-        <div data-members-console className="hidden min-h-0 flex-1 flex-col overflow-auto scrollbar-thin lg:flex">
-          <section data-members-kpi className="grid grid-cols-3 border-b border-line-soft">
-            <div className="row-span-2 flex flex-col justify-between border-b border-r border-line-soft p-4 md:border-b-0">
-              <div>
-                <p className="text-[12px] text-sub">회원수</p>
-                <p className="mt-1 text-[28px] font-semibold leading-8">{memberCount}</p>
-              </div>
-              <div className="mt-4">
-                <p className="mb-2 text-[12px] text-sub">분류 비율</p>
-                <div className="flex items-center gap-3">
-                  <PieChart width={88} height={88}>
-                    <Pie
-                      data={counts.filter((item) => item.count > 0)}
-                      dataKey="count"
-                      innerRadius={26}
-                      outerRadius={40}
-                      paddingAngle={1.5}
-                      stroke="none"
-                      isAnimationActive={false}
-                      cx="50%"
-                      cy="50%"
-                    >
-                      {counts
-                        .filter((item) => item.count > 0)
-                        .map((entry) => {
-                          const i = counts.findIndex((item) => item.name === entry.name);
-                          return <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />;
-                        })}
-                    </Pie>
-                  </PieChart>
-                  <ul className="min-w-0 flex-1 space-y-1">
-                    {counts.map((item, i) => (
-                      <li key={item.name} className="flex items-center justify-between gap-2 text-[11px]">
-                        <span className="inline-flex min-w-0 items-center gap-1.5 text-sub">
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full"
-                            style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                          />
-                          <span className="truncate">{item.name}</span>
-                        </span>
-                        <span className="tabular-nums text-ink">
-                          {memberCount ? Math.round((item.count / memberCount) * 100) : 0}%
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-            {counts.map((item) => (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => setCategoryTab(item.name)}
-                className="border-b border-r border-line-soft p-4 text-left last:border-r-0 hover:bg-muted"
-              >
-                <p className="text-[12px] text-sub">{item.name} 회원수</p>
-                <p className="mt-1 text-[20px] font-semibold">{item.count}명</p>
-              </button>
-            ))}
-          </section>
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
+        <div className="flex items-center gap-2 border-b border-line-soft px-4 py-2 lg:hidden">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="이름, 학번, 직책"
+            className="h-touch min-w-0 flex-1 rounded-btn border border-line bg-white px-3 text-compact outline-none placeholder:text-faint"
+          />
+          <button
+            type="button"
+            aria-label="회원 추가"
+            className="flex h-touch w-touch items-center justify-center rounded-btn text-brand-text"
+            onClick={() => openModal("member-add")}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-thin lg:hidden">
+          {["전체", ...categories].map((tab) => (
+            <FilterChip key={tab} active={categoryTab === tab} onClick={() => setCategoryTab(tab)}>
+              {tab}
+            </FilterChip>
+          ))}
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-5 py-2">
-            {categoryChips()}
-            <div className="ml-auto flex flex-wrap items-center gap-1">
-              <span className="mr-1 text-[12px] text-faint">정렬</span>
-              {SORT_KEYS.map((key) => (
-                <SortChip
-                  key={key}
-                  label={key}
-                  active={sort ? sort.key === key : key === DEFAULT_SORT_KEY}
-                  dir={sort?.key === key ? sort.dir : null}
-                  onClick={() => setSort((current) => cycleSort(current, key))}
-                />
-              ))}
+        <section className="hidden grid-cols-2 border-b border-line-soft md:grid-cols-3 lg:grid">
+          <div className="row-span-2 flex flex-col justify-between border-b border-r border-line-soft p-4 md:border-b-0">
+            <div>
+              <p className="text-[12px] text-sub">회원수</p>
+              <p className="mt-1 text-[28px] font-semibold leading-8">{memberCount}</p>
+            </div>
+            <div className="mt-4">
+              <p className="mb-2 text-[12px] text-sub">분류 비율</p>
+              <div className="flex items-center gap-3">
+                <PieChart width={88} height={88}>
+                  <Pie
+                    data={counts.filter((item) => item.count > 0)}
+                    dataKey="count"
+                    innerRadius={26}
+                    outerRadius={40}
+                    paddingAngle={1.5}
+                    stroke="none"
+                    isAnimationActive={false}
+                    cx="50%"
+                    cy="50%"
+                  >
+                    {counts
+                      .filter((item) => item.count > 0)
+                      .map((entry) => {
+                        const i = counts.findIndex((item) => item.name === entry.name);
+                        return <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />;
+                      })}
+                  </Pie>
+                </PieChart>
+                <ul className="min-w-0 flex-1 space-y-1">
+                  {counts.map((item, i) => (
+                    <li key={item.name} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="inline-flex min-w-0 items-center gap-1.5 text-sub">
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                        />
+                        <span className="truncate">{item.name}</span>
+                      </span>
+                      <span className="tabular-nums text-ink">
+                        {memberCount ? Math.round((item.count / memberCount) * 100) : 0}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
+          {counts.map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              onClick={() => setCategoryTab(item.name)}
+              className="border-b border-r border-line-soft p-4 text-left last:border-r-0 hover:bg-muted"
+            >
+              <p className="text-[12px] text-sub">{item.name} 회원수</p>
+              <p className="mt-1 text-[20px] font-semibold">{item.count}명</p>
+            </button>
+          ))}
+        </section>
 
-          <div data-members-table className="px-2 py-2">
-            <DataTable
-              columns={columns}
-              rows={sorted}
-              groups={
-                inactiveSorted.length
-                  ? [
-                      { key: "active", rows: activeSorted },
-                      {
-                        key: "inactive",
-                        label: `비활동 ${inactiveSorted.length}명`,
-                        rows: inactiveSorted,
-                      },
-                    ]
-                  : undefined
-              }
-              sortKey={sort ? SORT_COLUMN[sort.key] : undefined}
-              sortDir={sort?.dir}
-              onSort={(columnKey) => {
-                const key = sortColumnKey(columnKey);
-                if (key) setSort((current) => cycleSort(current, key));
-              }}
-              selectedIds={selectedMemberIds}
-              onToggle={toggleSelect}
-              onToggleAll={() => {
-                if (sorted.every((row) => selectedMemberIds.includes(row.id))) clearSelection();
-                else selectAll(sorted.map((row) => row.id));
-              }}
-              onRowClick={handleRowClick}
-              empty={emptyRoster}
-            />
+        <div className="hidden flex-wrap items-center gap-2 border-b border-line-soft px-5 py-2 lg:flex">
+          {["전체", ...categories].map((tab) => (
+            <FilterChip key={tab} active={categoryTab === tab} onClick={() => setCategoryTab(tab)}>
+              {tab}
+            </FilterChip>
+          ))}
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            <span className="mr-1 text-[12px] text-faint">정렬</span>
+            {SORT_KEYS.map((key) => (
+              <SortChip
+                key={key}
+                label={key}
+                active={sort ? sort.key === key : key === DEFAULT_SORT_KEY}
+                dir={sort?.key === key ? sort.dir : null}
+                onClick={() => setSort((current) => cycleSort(current, key))}
+              />
+            ))}
           </div>
         </div>
 
-        <div data-members-compact className="flex min-h-0 flex-1 flex-col lg:hidden">
-          <div
-            data-members-compact-head
-            className="relative flex shrink-0 flex-col gap-2.5 border-b border-line-soft px-4 py-3 md:px-6"
-          >
-            <h1 className="sr-only">회원관리</h1>
-            <div className="flex items-center gap-2">
-              <label className="relative min-w-0 flex-1">
-                <span className="sr-only">회원 검색</span>
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
-                <input
-                  data-members-search
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="이름, 학번, 전공"
-                  enterKeyHint="search"
-                  className="h-touch w-full rounded-btn border border-line bg-white py-2 pl-9 pr-3 text-compact text-ink placeholder:text-faint touch-manipulation"
-                />
-              </label>
-              <button
-                type="button"
-                data-members-add
-                aria-label="회원 추가"
-                className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
-                onClick={() => openModal("member-add")}
-              >
-                <Plus className="h-5 w-5" />
-              </button>
-              <div className="relative" ref={moreRef}>
+        <ul className="lg:hidden">
+          {activeSorted.map((row) => {
+            const diligence = scores.get(row.id)?.diligence ?? 0;
+            return (
+              <li key={row.id} className="border-b border-line-soft">
                 <button
                   type="button"
-                  data-members-more
-                  aria-label="더보기"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                  className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
-                  onClick={() => setMoreOpen((open) => !open)}
+                  data-roster-row
+                  data-row-id={row.id}
+                  className="flex min-h-row w-full items-center gap-3 px-4 py-2 text-left"
+                  onClick={() => inspectMember(row.id)}
                 >
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
-                {moreOpen ? (
-                  <div
-                    data-members-more-menu
-                    role="menu"
-                    className="absolute right-0 top-full z-20 mt-1.5 w-56 rounded-card border border-line bg-white p-2"
-                  >
-                    <div className="flex flex-col gap-1.5">
-                      <TaxonomyEditor
-                        variant="button"
-                        label="분류"
-                        items={categories}
-                        onAdd={addCategory}
-                        onRemove={removeCategory}
-                        onRename={renameCategory}
-                        onMove={moveCategory}
-                      />
-                      <TaxonomyEditor
-                        variant="button"
-                        label="직책"
-                        items={roles}
-                        onAdd={addRole}
-                        onRemove={removeRole}
-                        onRename={renameRole}
-                        onMove={moveRole}
-                      />
-                      <GhostButton
-                        className="h-touch w-full text-[13px]"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          exportCsv();
-                        }}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        CSV 내려받기
-                      </GhostButton>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div data-members-chips className="-mx-4 flex flex-nowrap gap-1 overflow-x-auto px-4 scrollbar-thin md:-mx-6 md:px-6">
-              {categoryChips("shrink-0")}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
-            <ul data-members-list className="divide-y divide-line-soft">
-              {compactActive.length === 0 && compactInactive.length === 0 ? (
-                <li className="px-4 py-16 text-center text-[13px] text-faint md:px-6">
-                  {query.trim() ? "검색과 맞는 회원이 없어요" : emptyRoster}
-                </li>
-              ) : (
-                compactActive.map((row) => (
-                  <MemberCompactRow
-                    key={row.id}
-                    member={row}
-                    diligence={scores.get(row.id)?.diligence ?? 0}
-                    selected={selectedMemberIds.includes(row.id) || inspectedMemberId === row.id}
-                    onClick={() => handleCompactRowClick(row)}
-                  />
-                ))
-              )}
-              {compactInactive.length > 0 ? (
-                <li>
-                  <button
-                    type="button"
-                    data-members-inactive-toggle
-                    aria-expanded={inactiveOpen}
-                    className="flex min-h-touch w-full items-center justify-between gap-2 px-4 py-3 text-left touch-manipulation md:px-6"
-                    onClick={() => setInactiveOpen((open) => !open)}
-                  >
-                    <span className="text-compact-caption font-medium text-faint">
-                      비활동 {compactInactive.length}명
+                  <Avatar name={row.name} size={40} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-compact font-medium">{row.name}</span>
+                      <RolePill role={row.role} />
                     </span>
-                    <ChevronDown
-                      className={cn("h-4 w-4 shrink-0 text-faint transition-transform", inactiveOpen && "rotate-180")}
-                    />
-                  </button>
-                  {inactiveOpen ? (
-                    <ul className="divide-y divide-line-soft border-t border-line-soft">
-                      {compactInactive.map((row) => (
-                        <MemberCompactRow
-                          key={row.id}
-                          member={row}
-                          diligence={scores.get(row.id)?.diligence ?? 0}
-                          selected={selectedMemberIds.includes(row.id) || inspectedMemberId === row.id}
-                          onClick={() => handleCompactRowClick(row)}
-                        />
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
-              ) : null}
-            </ul>
-          </div>
+                    <span className="mt-0.5 flex items-center gap-2 text-compact-caption text-sub">
+                      <span>{row.category}</span>
+                      <RatioBar value={diligence * 100} color="var(--up)" width={64} className="h-[3px]" />
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {inactiveSorted.length > 0 ? (
+            <li>
+              <button
+                type="button"
+                className="flex min-h-touch w-full items-center justify-between px-4 text-compact-caption text-sub"
+                onClick={() => setInactiveOpen((open) => !open)}
+              >
+                비활동 {inactiveSorted.length}명
+                <span>{inactiveOpen ? "접기" : "펼치기"}</span>
+              </button>
+              {inactiveOpen
+                ? inactiveSorted.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      data-roster-row
+                      data-row-id={row.id}
+                      className="flex min-h-row w-full items-center gap-3 px-4 py-2 text-left"
+                      onClick={() => inspectMember(row.id)}
+                    >
+                      <Avatar name={row.name} size={40} />
+                      <span className="min-w-0 flex-1">
+                        <span className="truncate text-compact font-medium">{row.name}</span>
+                        <span className="block text-compact-caption text-faint">비활동 · {row.category}</span>
+                      </span>
+                    </button>
+                  ))
+                : null}
+            </li>
+          ) : null}
+          {sorted.length === 0 ? (
+            <li className="px-5 py-8 text-center text-compact-caption text-faint">이 분류에 회원이 없어요.</li>
+          ) : null}
+        </ul>
+
+        <div className="hidden px-2 py-2 lg:block">
+          <DataTable
+            columns={columns}
+            rows={sorted}
+            groups={
+              inactiveSorted.length
+                ? [
+                    { key: "active", rows: activeSorted },
+                    {
+                      key: "inactive",
+                      label: `비활동 ${inactiveSorted.length}명`,
+                      rows: inactiveSorted,
+                    },
+                  ]
+                : undefined
+            }
+            sortKey={sort ? SORT_COLUMN[sort.key] : undefined}
+            sortDir={sort?.dir}
+            onSort={(columnKey) => {
+              const key = sortColumnKey(columnKey);
+              if (key) setSort((current) => cycleSort(current, key));
+            }}
+            selectedIds={selectedMemberIds}
+            onToggle={toggleSelect}
+            onToggleAll={() => {
+              if (sorted.every((row) => selectedMemberIds.includes(row.id))) clearSelection();
+              else selectAll(sorted.map((row) => row.id));
+            }}
+            onRowClick={handleRowClick}
+            empty={
+              <span>
+                이 분류에 회원이 없어요.{" "}
+                <button type="button" className="text-brand-text" onClick={() => setCategoryTab("전체")}>
+                  전체 보기
+                </button>
+              </span>
+            }
+          />
         </div>
       </main>
 
       <DetailSurface
         open={Boolean(inspectedMemberId)}
-        title={members.find((item) => item.id === inspectedMemberId)?.name ?? "회원"}
+        title={members.find((item) => item.id === inspectedMemberId)?.name}
         onClose={() => inspectMember(null)}
       >
         {inspectedMemberId ? (

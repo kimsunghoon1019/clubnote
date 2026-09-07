@@ -10,22 +10,9 @@ import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { NAV_ITEMS, navItemActive } from "./nav";
 
 const HISTORY_FLAG = "__clubnoteBell";
-
-function useCompactViewport() {
-  const [compact, setCompact] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1023px)");
-    const update = () => setCompact(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-  return compact;
-}
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -35,7 +22,6 @@ export function AppHeader() {
   const bellRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const pushedRef = useRef(false);
-  const compactViewport = useCompactViewport();
   const saving = persistStatus === "saving" || persistStatus === "pending";
   const saveFailed = persistStatus === "error";
 
@@ -78,12 +64,10 @@ export function AppHeader() {
 
   useEffect(() => {
     if (!bellOpen) return;
-
     if (!window.history.state?.[HISTORY_FLAG]) {
       window.history.pushState({ ...window.history.state, [HISTORY_FLAG]: true }, "", window.location.href);
       pushedRef.current = true;
     }
-
     const onPop = () => {
       if (window.history.state?.[HISTORY_FLAG]) return;
       pushedRef.current = false;
@@ -112,7 +96,7 @@ export function AppHeader() {
           </span>
           <span className="leading-tight">
             <span className="block text-[15px] font-bold text-ink">{CLUB_NAME}</span>
-            <span className="block text-[11px] text-faint">동아리 운영</span>
+            <span className="hidden text-[11px] text-faint lg:block">동아리 운영</span>
           </span>
         </Link>
 
@@ -176,13 +160,13 @@ export function AppHeader() {
             >
               <Bell className="h-4 w-4" />
               {unread.length > 0 ? (
-                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up lg:right-1.5 lg:top-1.5" data-bell-dot />
+                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-up" data-bell-dot />
               ) : null}
             </button>
-            {bellOpen && !compactViewport ? (
+            {bellOpen ? (
               <div
                 data-bell-panel
-                className="absolute right-0 top-full z-20 mt-1.5 w-80 max-w-[calc(100vw-24px)] rounded-card border border-line bg-white py-2"
+                className="absolute right-0 top-full z-20 mt-1.5 hidden w-80 max-w-[calc(100vw-24px)] rounded-card border border-line bg-white py-2 lg:block"
               >
                 <p className="px-3 pb-2 text-[12px] font-semibold text-faint">알림</p>
                 <div className="max-h-[min(420px,70vh)] overflow-auto px-3 scrollbar-thin">
@@ -191,47 +175,43 @@ export function AppHeader() {
               </div>
             ) : null}
           </div>
-          {bellOpen && compactViewport
-            ? createPortal(
-                <div ref={overlayRef} data-bell-overlay className="fixed inset-0 z-50 bg-white">
-                  <div
-                    data-bell-panel
-                    data-bell-sheet
-                    role="dialog"
-                    aria-modal
-                    aria-label="알림"
-                    className="flex h-full flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+
+          {bellOpen ? (
+            <div
+              ref={overlayRef}
+              data-bell-overlay
+              className="fixed inset-0 z-50 bg-white lg:hidden"
+            >
+              <div
+                data-bell-panel
+                data-bell-sheet
+                role="dialog"
+                aria-modal
+                aria-label="알림"
+                className="flex h-full flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+              >
+                <header className="flex shrink-0 items-center border-b border-line-soft">
+                  <button
+                    type="button"
+                    data-bell-close
+                    className="flex h-touch min-w-touch items-center justify-center px-3 text-compact text-sub touch-manipulation"
+                    onClick={closeBell}
                   >
-                    <header className="flex shrink-0 items-center border-b border-line-soft">
-                      <button
-                        type="button"
-                        data-bell-close
-                        className="flex h-touch min-w-touch items-center justify-center px-3 text-compact text-sub touch-manipulation"
-                        onClick={closeBell}
-                      >
-                        닫기
-                      </button>
-                      <p
-                        data-bell-title
-                        className="min-w-0 flex-1 truncate text-center text-compact font-semibold text-ink"
-                      >
-                        알림
-                      </p>
-                      <span
-                        className="invisible flex h-touch min-w-touch items-center justify-center px-3 text-compact"
-                        aria-hidden
-                      >
-                        닫기
-                      </span>
-                    </header>
-                    <div className="min-h-0 flex-1 overflow-auto px-4 py-3 scrollbar-thin">
-                      <ChartInbox showHeader={false} compact />
-                    </div>
-                  </div>
-                </div>,
-                document.body,
-              )
-            : null}
+                    닫기
+                  </button>
+                  <p data-bell-title className="min-w-0 flex-1 truncate text-center text-compact font-semibold text-ink">
+                    알림
+                  </p>
+                  <span className="invisible flex h-touch min-w-touch items-center justify-center px-3 text-compact" aria-hidden>
+                    닫기
+                  </span>
+                </header>
+                <div className="min-h-0 flex-1 overflow-auto px-4 py-3 scrollbar-thin">
+                  <ChartInbox showHeader={false} />
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {currentMember ? (
             <Link
