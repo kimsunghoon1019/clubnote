@@ -441,9 +441,14 @@ export function AttendanceView() {
             <p className="min-w-0 text-compact-caption text-sub">
               출석 {present}/{targetCount} · 미체크 {unchecked}명
             </p>
-            <GhostButton className="h-touch shrink-0 px-3 text-[13px] touch-manipulation" onClick={() => setSheetOpen(true)}>
+            <button
+              type="button"
+              data-attendance-sheet
+              className="inline-flex h-touch shrink-0 items-center justify-center rounded-btn border border-line bg-white px-3 text-[13px] font-semibold text-ink touch-manipulation hover:bg-muted"
+              onClick={() => setSheetOpen(true)}
+            >
               출석표 보기
-            </GhostButton>
+            </button>
           </div>
           <StatusMixBar counts={counts} unchecked={unchecked} />
           <div className="-mx-4 flex flex-nowrap gap-1 overflow-x-auto px-4 scrollbar-thin">
