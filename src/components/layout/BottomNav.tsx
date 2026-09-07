@@ -18,15 +18,16 @@ const ICONS = {
 export function BottomNav() {
   const pathname = usePathname();
   const { open } = useCompactDetail();
+  const hide = open || pathname === "/attendance";
 
   return (
     <nav
       data-bottom-nav
-      aria-hidden={open || undefined}
+      aria-hidden={hide || undefined}
       aria-label="주요 메뉴"
       className={cn(
         "shrink-0 border-t border-line-soft bg-white pb-[env(safe-area-inset-bottom)] lg:hidden",
-        open && "hidden",
+        hide && "hidden",
       )}
     >
       <ul className="grid h-14 grid-cols-5">

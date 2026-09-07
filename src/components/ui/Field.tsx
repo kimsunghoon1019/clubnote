@@ -15,7 +15,7 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={cn(
-        "h-10 w-full rounded-btn border border-line bg-white px-3 text-[14px] text-ink placeholder:text-faint hover:border-[#d1d6db] focus:border-brand",
+        "h-touch w-full rounded-btn border border-line bg-white px-3 text-compact text-ink placeholder:text-faint touch-manipulation hover:border-[#d1d6db] focus:border-brand lg:h-10 lg:text-[14px]",
         props.className,
       )}
     />
@@ -27,7 +27,7 @@ export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
     <textarea
       {...props}
       className={cn(
-        "min-h-[88px] w-full resize-y rounded-btn border border-line bg-white px-3 py-2 text-[14px] text-ink placeholder:text-faint focus:border-brand",
+        "min-h-[88px] w-full resize-y rounded-btn border border-line bg-white px-3 py-2 text-compact text-ink placeholder:text-faint touch-manipulation focus:border-brand lg:text-[14px]",
         props.className,
       )}
     />
@@ -39,7 +39,7 @@ export function SelectInput(props: SelectHTMLAttributes<HTMLSelectElement>) {
     <select
       {...props}
       className={cn(
-        "h-10 w-full rounded-btn border border-line bg-white px-3 text-[14px] text-ink focus:border-brand",
+        "h-touch w-full rounded-btn border border-line bg-white px-3 text-compact text-ink touch-manipulation focus:border-brand lg:h-10 lg:text-[14px]",
         props.className,
       )}
     />

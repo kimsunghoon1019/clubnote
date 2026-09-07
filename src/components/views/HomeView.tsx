@@ -4,10 +4,12 @@ import { GhostButton } from "@/components/ui/GhostButton";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { MiniCalendar } from "@/components/ui/MiniCalendar";
+import { Avatar } from "@/components/ui/Avatar";
 import { DetailSurface } from "@/components/layout/DetailSurface";
 import { RailSection } from "@/components/layout/RightRail";
 import { ChartInbox } from "@/components/members/ChartInbox";
 import { MemberRail } from "@/components/members/MemberRail";
+import { memberPhotoSrc } from "@/lib/proof";
 import { latestTransaction, transactionBalanceSpark } from "@/lib/bankExcel";
 import { duesStatus } from "@/lib/dues";
 import {
@@ -69,6 +71,7 @@ export function HomeView() {
     duesOverrides,
     inspectMember,
     inspectedMemberId,
+    currentMember,
     toast,
   } = useClub();
   const router = useRouter();
@@ -213,6 +216,15 @@ export function HomeView() {
             className="relative flex flex-col gap-3 border-b border-line-soft px-4 py-3 md:px-6"
           >
             <h1 className="sr-only">홈</h1>
+            <div data-home-greeting className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-compact-caption text-sub">안녕하세요</p>
+                <p className="truncate text-compact-title font-semibold text-ink">
+                  {currentMember?.name ?? "운영진"} 님
+                </p>
+              </div>
+              <LiveClock compact />
+            </div>
             <button
               type="button"
               data-home-next-event
@@ -294,14 +306,15 @@ export function HomeView() {
               pieSlices={pieSlices}
               compact
             />
+            <JoinedList
+              event={selectedEvent}
+              members={selectedJoined}
+              onPick={(id) => inspectMember(id)}
+            />
           </section>
 
-          <section data-home-inbox className="border-b border-line-soft px-4 py-4 md:px-6">
+          <section data-home-inbox className="px-4 py-4 md:px-6">
             <ChartInbox />
-          </section>
-
-          <section data-home-calendar className="px-4 py-4 md:px-6">
-            <MiniCalendar compact events={events} onSelect={() => router.push("/calendar")} />
           </section>
         </div>
       </main>
@@ -328,6 +341,40 @@ export function HomeView() {
         )}
       </DetailSurface>
     </>
+  );
+}
+
+function JoinedList({
+  event,
+  members,
+  onPick,
+}: {
+  event: ClubEvent | null;
+  members: Member[];
+  onPick: (id: string) => void;
+}) {
+  if (!event) return null;
+  return (
+    <ul data-home-joined className="mt-4 divide-y divide-line-soft overflow-hidden rounded-card border border-line-soft">
+      {members.length === 0 ? (
+        <li className="px-3 py-4 text-center text-compact-caption text-faint">참여 인원이 없어요</li>
+      ) : (
+        members.map((member) => (
+          <li key={member.id}>
+            <button
+              type="button"
+              data-home-joined-row={member.id}
+              className="flex min-h-touch w-full items-center gap-3 px-3 py-2 text-left touch-manipulation active:bg-muted"
+              onClick={() => onPick(member.id)}
+            >
+              <Avatar name={member.name} size={32} src={memberPhotoSrc(member)} />
+              <span className="min-w-0 flex-1 truncate text-compact font-semibold text-ink">{member.name}</span>
+              <span className="shrink-0 text-compact-caption text-faint">{member.category}</span>
+            </button>
+          </li>
+        ))
+      )}
+    </ul>
   );
 }
 
@@ -371,7 +418,7 @@ function ParticipationChart({
 }) {
   const selectable = participationByDate.some((row) => !row.isPad && !row.isPlaceholder);
   const hasToday = participationByDate.some((row) => row.isToday);
-  const height = compact ? "h-[140px]" : "h-[160px]";
+  const height = compact ? "h-[120px]" : "h-[160px]";
 
   return (
     <>

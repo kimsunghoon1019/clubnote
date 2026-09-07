@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export function LiveClock() {
+export function LiveClock({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function LiveClock() {
   }, []);
 
   if (!now) {
-    return <div className="h-[52px]" aria-hidden />;
+    return <div className={compact ? "h-[48px]" : "h-[52px]"} aria-hidden />;
   }
 
   const week = ["일", "월", "화", "수", "목", "금", "토"][now.getDay()];
@@ -33,11 +33,17 @@ export function LiveClock() {
   const ss = String(now.getSeconds()).padStart(2, "0");
 
   return (
-    <div>
-      <p className="text-[12px] text-faint">
+    <div data-home-clock={compact ? "true" : undefined}>
+      <p className={compact ? "text-compact-caption text-faint" : "text-[12px] text-faint"}>
         {y}.{m}.{d} ({week})
       </p>
-      <p className="mt-0.5 text-[22px] font-semibold leading-7 tabular-nums tracking-tight">
+      <p
+        className={
+          compact
+            ? "mt-0.5 text-compact font-semibold tabular-nums tracking-tight"
+            : "mt-0.5 text-[22px] font-semibold leading-7 tabular-nums tracking-tight"
+        }
+      >
         {period} {hour12}:{mm}:{ss}
       </p>
     </div>

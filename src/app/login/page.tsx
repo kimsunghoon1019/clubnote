@@ -58,7 +58,7 @@ export default function LoginPage() {
   return (
     <div
       data-login
-      className="flex min-h-dvh items-start justify-center overflow-y-auto bg-white px-4 pt-[max(2.5rem,calc(env(safe-area-inset-top)+1.5rem))] pb-[max(1.5rem,env(safe-area-inset-bottom))] md:items-center md:py-10 lg:min-h-screen lg:px-5"
+      className="flex min-h-dvh items-start justify-center overflow-y-auto scroll-pb-24 bg-white px-4 pt-[max(2.5rem,calc(env(safe-area-inset-top)+1.5rem))] pb-[max(1.5rem,env(safe-area-inset-bottom))] md:items-center md:py-10 lg:min-h-dvh lg:px-5"
     >
       <div data-login-card className="w-full max-w-[360px]">
         <div className="mb-8 flex items-center gap-2">
@@ -101,8 +101,15 @@ export default function LoginPage() {
               maxLength={32}
               placeholder="••••"
               value={pin}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "login-error" : undefined}
               onChange={(e) => setPin(e.target.value.slice(0, 32))}
             />
+            {error ? (
+              <p id="login-error" data-login-error className="mt-1.5 text-compact-caption text-up lg:text-[13px]">
+                {error}
+              </p>
+            ) : null}
           </div>
           <PrimaryButton
             type="submit"
@@ -112,7 +119,6 @@ export default function LoginPage() {
             {busy ? "확인 중…" : "로그인"}
           </PrimaryButton>
         </form>
-        {error ? <p className="mt-3 text-compact-caption text-up lg:text-[13px]">{error}</p> : null}
 
         {currentMember ? (
           <p className="mt-4 text-compact-caption text-sub lg:text-[13px]">

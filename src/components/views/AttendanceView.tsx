@@ -29,7 +29,7 @@ import { isInspectDismissClick } from "@/lib/inspect";
 import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 export function AttendanceView() {
@@ -368,16 +368,29 @@ export function AttendanceView() {
           className="relative flex shrink-0 flex-col gap-2.5 border-b border-line-soft px-4 py-3 lg:hidden"
         >
           <h1 className="sr-only">출석대상자</h1>
-          <div ref={datePickerRef} className="relative">
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              data-attendance-date-picker
-              aria-haspopup="listbox"
-              aria-expanded={dateOpen}
-              aria-label="연습날짜 선택"
-              className="flex min-h-touch w-full items-center justify-between gap-2 rounded-btn border border-line px-3 py-2 text-left touch-manipulation"
-              onClick={() => setDateOpen((open) => !open)}
+              data-attendance-prev
+              aria-label="이전 연습일"
+              disabled={eventIndex <= 0}
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation disabled:text-faint"
+              onClick={() => {
+                if (eventIndex > 0) setEventId(practiceList[eventIndex - 1].id);
+              }}
             >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div ref={datePickerRef} className="relative min-w-0 flex-1">
+              <button
+                type="button"
+                data-attendance-date-picker
+                aria-haspopup="listbox"
+                aria-expanded={dateOpen}
+                aria-label="연습날짜 선택"
+                className="flex min-h-touch w-full items-center justify-between gap-2 rounded-btn border border-line px-3 py-2 text-left touch-manipulation"
+                onClick={() => setDateOpen((open) => !open)}
+              >
               <span className="min-w-0">
                 <span className="block truncate text-compact font-semibold text-ink">
                   {formatDateKo(event.date)} ({formatWeekday(event.date)})
@@ -436,6 +449,21 @@ export function AttendanceView() {
                 </div>
               </div>
             ) : null}
+            </div>
+            <button
+              type="button"
+              data-attendance-next
+              aria-label="다음 연습일"
+              disabled={eventIndex < 0 || eventIndex >= practiceList.length - 1}
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation disabled:text-faint"
+              onClick={() => {
+                if (eventIndex >= 0 && eventIndex < practiceList.length - 1) {
+                  setEventId(practiceList[eventIndex + 1].id);
+                }
+              }}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
           <div className="flex items-center justify-between gap-2">
             <p className="min-w-0 text-compact-caption text-sub">
@@ -509,7 +537,7 @@ export function AttendanceView() {
         </div>
         <div
           data-attendance-save
-          className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-4 py-2.5 lg:px-5"
+          className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-4 py-2.5 max-lg:pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:px-5"
         >
           <PrimaryButton
             className={cn(
