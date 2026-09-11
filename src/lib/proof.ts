@@ -1,8 +1,6 @@
+import { AVATAR_MAX_BYTES, MAX_ATTACHMENT_BYTES } from "./fileLimits";
 import type { ClubEvent, EventAttachment, Member, Transaction, TxProof } from "./types";
 
-const MAX_PROOF_BYTES = 8 * 1024 * 1024;
-const IMAGE_MAX_EDGE = 1280;
-const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const AVATAR_MAX_EDGE = 320;
 
 export type ProofKind = "image" | "pdf" | "other" | "none";
@@ -74,19 +72,34 @@ export function isImageBlob(blob?: Blob, mime?: string) {
 }
 
 export async function fileToProof(file: File): Promise<{ meta: TxProof; blob: Blob }> {
-  if (file.size > MAX_PROOF_BYTES) {
-    throw new Error("파일은 8MB 이하만 올릴 수 있어요");
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("파일은 5GB 이하만 올릴 수 있어요");
   }
   const mime = file.type || guessMime(file.name);
-  const kind = proofKind(file.name, mime);
-  const blob = kind === "image" ? await compressImage(file, IMAGE_MAX_EDGE, 0.78) : file.slice(0, file.size, mime);
   return {
     meta: {
       id: newProofId(),
       name: file.name,
-      mime: blob.type || mime,
+      mime,
+      bytes: file.size,
     },
-    blob,
+    blob: file,
+  };
+}
+
+export async function fileToAttachment(file: File): Promise<{ meta: EventAttachment; blob: Blob }> {
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("파일은 5GB 이하만 올릴 수 있어요");
+  }
+  const mime = file.type || guessMime(file.name);
+  return {
+    meta: {
+      id: newProofId(),
+      name: file.name,
+      mime,
+      bytes: file.size,
+    },
+    blob: file,
   };
 }
 
@@ -152,7 +165,7 @@ export async function fileToAvatarDataUrl(file: File) {
   return blobToDataUrl(blob);
 }
 
-function compressImage(file: File, maxEdge = IMAGE_MAX_EDGE, quality = 0.78) {
+function compressImage(file: File, maxEdge = AVATAR_MAX_EDGE, quality = 0.78) {
   if (file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg")) {
     return Promise.resolve(file.slice(0, file.size, "image/svg+xml"));
   }

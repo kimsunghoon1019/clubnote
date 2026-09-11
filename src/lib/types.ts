@@ -56,6 +56,7 @@ export type EventAttachment = {
   id: string;
   name: string;
   mime: string;
+  bytes?: number;
 };
 
 export type ClubEvent = {
@@ -87,6 +88,7 @@ export type TxProof = {
   id: string;
   name: string;
   mime: string;
+  bytes?: number;
 };
 
 export type Transaction = {

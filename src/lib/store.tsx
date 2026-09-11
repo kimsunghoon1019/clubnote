@@ -53,6 +53,7 @@ import { compareTxAsc, newBankRows, type ParsedBankTx } from "./bankExcel";
 import {
   dataUrlToBlob,
   eventAttachments,
+  fileToAttachment,
   fileToProof,
   persistableEvent,
   persistableMember,
@@ -154,11 +155,11 @@ type ClubContextValue = {
   addTransaction: (input: Omit<Transaction, "id" | "balanceAfter"> & { balanceAfter?: number }) => void;
   importBankTransactions: (incoming: ParsedBankTx[]) => number;
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
-  addTransactionProof: (id: string, file: File) => Promise<void>;
+  addTransactionProof: (id: string, file: File, onProgress?: (ratio: number) => void) => Promise<void>;
   removeTransactionProof: (id: string, proofId: string) => Promise<void>;
   addEvent: (input: Omit<ClubEvent, "id">) => ClubEvent;
   updateEvent: (id: string, patch: Partial<ClubEvent>) => void;
-  addEventAttachment: (id: string, file: File) => Promise<void>;
+  addEventAttachment: (id: string, file: File, onProgress?: (ratio: number) => void) => Promise<void>;
   removeEventAttachment: (id: string, attachmentId: string) => Promise<void>;
   deleteEvent: (id: string) => void;
   deleteEvents: (ids: string[]) => void;
@@ -1302,9 +1303,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setTransactions((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }, []);
 
-  const addTransactionProof = useCallback(async (id: string, file: File) => {
+  const addTransactionProof = useCallback(async (id: string, file: File, onProgress?: (ratio: number) => void) => {
     const { meta, blob } = await fileToProof(file);
-    await putProofBlob(meta.id, blob, { name: meta.name, mime: meta.mime });
+    await putProofBlob(meta.id, blob, { name: meta.name, mime: meta.mime, onProgress });
     setTransactions((prev) =>
       prev.map((row) => (row.id === id ? { ...row, proofs: [...txProofs(row), meta] } : row)),
     );
@@ -1346,9 +1347,9 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     if (patch.place) setPlaces((prev) => (prev.includes(patch.place!) ? prev : [...prev, patch.place!]));
   }, []);
 
-  const addEventAttachment = useCallback(async (id: string, file: File) => {
-    const { meta, blob } = await fileToProof(file);
-    await putProofBlob(meta.id, blob, { name: meta.name, mime: meta.mime });
+  const addEventAttachment = useCallback(async (id: string, file: File, onProgress?: (ratio: number) => void) => {
+    const { meta, blob } = await fileToAttachment(file);
+    await putProofBlob(meta.id, blob, { name: meta.name, mime: meta.mime, onProgress });
     pushEventUndo();
     orphanEventBlobsRef.current.add(meta.id);
     setEvents((prev) =>

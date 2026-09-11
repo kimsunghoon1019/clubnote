@@ -6,6 +6,7 @@ import { GhostButton } from "@/components/ui/GhostButton";
 import { Modal } from "@/components/ui/Modal";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { TX_TYPES } from "@/lib/constants";
+import { formatFileBytes } from "@/lib/fileLimits";
 import { todayISO } from "@/lib/format";
 import { fileToProof } from "@/lib/proof";
 import { putProofBlob } from "@/lib/proofDb";
@@ -28,6 +29,7 @@ export function TransactionModal() {
   const [category, setCategory] = useState("");
   const [proofs, setProofs] = useState<PendingProof[]>([]);
   const [occurredOn, setOccurredOn] = useState(todayISO());
+  const [busy, setBusy] = useState(false);
 
   if (!open) return null;
 
@@ -102,7 +104,10 @@ export function TransactionModal() {
             <ul className="mb-2 space-y-1">
               {proofs.map((item) => (
                 <li key={item.meta.id} className="flex items-center gap-2 text-[13px]">
-                  <span className="min-w-0 flex-1 truncate text-sub">{item.meta.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sub">
+                    {item.meta.name}
+                    {item.blob.size ? <span className="ml-1 text-[12px] text-faint">{formatFileBytes(item.blob.size)}</span> : null}
+                  </span>
                   <button
                     type="button"
                     className="shrink-0 text-[12px] text-sub hover:text-up"
@@ -116,7 +121,7 @@ export function TransactionModal() {
           ) : (
             <p className="mb-2 text-[12px] text-faint">증빙없음</p>
           )}
-          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-btn border border-line px-3 text-[13px] text-sub hover:bg-muted">
+          <label className="flex h-touch cursor-pointer items-center justify-center gap-2 rounded-btn border border-line px-3 text-compact text-sub hover:bg-muted lg:h-10 lg:text-[13px]">
             <Paperclip className="h-3.5 w-3.5" />
             증빙 추가
             <input
@@ -137,13 +142,14 @@ export function TransactionModal() {
         </div>
       </div>
       <div className="mt-5 flex justify-end gap-2">
-        <GhostButton onClick={closeModal}>취소</GhostButton>
+        <GhostButton disabled={busy} onClick={closeModal}>취소</GhostButton>
         <PrimaryButton
-          disabled={!title || !amount}
+          disabled={!title || !amount || busy}
           onClick={() => {
             const raw = Number(amount);
             const signed = type === "입금" ? raw : -Math.abs(raw);
             void (async () => {
+              setBusy(true);
               try {
                 for (const item of proofs) {
                   await putProofBlob(item.meta.id, item.blob, { name: item.meta.name, mime: item.meta.mime });
@@ -164,11 +170,13 @@ export function TransactionModal() {
                 closeModal();
               } catch (error: unknown) {
                 toast(error instanceof Error ? error.message : "증빙을 올리지 못했어요");
+              } finally {
+                setBusy(false);
               }
             })();
           }}
         >
-          거래 추가
+          {busy ? "올리는 중" : "거래 추가"}
         </PrimaryButton>
       </div>
     </Modal>

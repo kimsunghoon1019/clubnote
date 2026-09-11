@@ -1,3 +1,5 @@
+import { FILE_CACHE_MAX_BYTES, FILE_PREVIEW_MAX_BYTES } from "./fileLimits";
+
 const DB_NAME = "clubnote-proofs-v1";
 const STORE = "files";
 const VERSION = 1;
@@ -48,23 +50,30 @@ function openProofDb() {
   return dbPromise;
 }
 
-export async function putProofBlob(id: string, blob: Blob, meta?: { name?: string; mime?: string }) {
-  memory.set(id, blob);
-  notifyProofStore();
-  try {
-    const db = await openProofDb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.objectStore(STORE).put(blob, id);
-    });
-  } catch {
-    /* keep the file in memory for this session */
+export async function putProofBlob(
+  id: string,
+  blob: Blob,
+  meta?: { name?: string; mime?: string; onProgress?: (ratio: number) => void },
+) {
+  const cacheLocally = !remoteFiles || blob.size <= FILE_CACHE_MAX_BYTES;
+  if (cacheLocally) {
+    memory.set(id, blob);
+    notifyProofStore();
+    try {
+      const db = await openProofDb();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore(STORE).put(blob, id);
+      });
+    } catch {
+      /* keep the file in memory for this session */
+    }
   }
   if (remoteFiles) {
     const { putClubFile } = await import("./remoteClient");
-    await putClubFile(id, blob, meta?.name || id, meta?.mime || blob.type || "application/octet-stream");
+    await putClubFile(id, blob, meta?.name || id, meta?.mime || blob.type || "application/octet-stream", meta?.onProgress);
   }
 }
 
@@ -82,31 +91,37 @@ export async function getStoredProofBlob(id: string): Promise<Blob | undefined> 
   }
 }
 
-export async function getProofBlob(id: string): Promise<Blob | undefined> {
+export async function getProofBlob(id: string, opts?: { maxBytes?: number }): Promise<Blob | undefined> {
   const cached = memory.get(id);
-  if (cached) return cached;
+  if (cached) {
+    if (opts?.maxBytes != null && cached.size > opts.maxBytes) return undefined;
+    return cached;
+  }
   const stored = await getStoredProofBlob(id);
   if (stored) {
+    if (opts?.maxBytes != null && stored.size > opts.maxBytes) return undefined;
     memory.set(id, stored);
     return stored;
   }
   if (remoteFiles) {
     try {
       const { getClubFile } = await import("./remoteClient");
-      const remote = await getClubFile(id);
+      const remote = await getClubFile(id, { maxBytes: opts?.maxBytes ?? FILE_PREVIEW_MAX_BYTES });
       if (remote) {
-        memory.set(id, remote);
-        notifyProofStore();
-        try {
-          const db = await openProofDb();
-          await new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(STORE, "readwrite");
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-            tx.objectStore(STORE).put(remote, id);
-          });
-        } catch {
-          /* memory cache is enough */
+        if (remote.size <= FILE_CACHE_MAX_BYTES) {
+          memory.set(id, remote);
+          notifyProofStore();
+          try {
+            const db = await openProofDb();
+            await new Promise<void>((resolve, reject) => {
+              const tx = db.transaction(STORE, "readwrite");
+              tx.oncomplete = () => resolve();
+              tx.onerror = () => reject(tx.error);
+              tx.objectStore(STORE).put(remote, id);
+            });
+          } catch {
+            /* memory cache is enough */
+          }
         }
         return remote;
       }

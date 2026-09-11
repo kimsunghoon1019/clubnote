@@ -45,6 +45,7 @@ export function EventModal() {
   const [place, setPlace] = useState(PLACE);
   const [preview, setPreview] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -68,11 +69,12 @@ export function EventModal() {
       align="top"
       footer={
         <div className="flex justify-end gap-2">
-          <GhostButton onClick={closeModal}>취소</GhostButton>
+          <GhostButton disabled={busy} onClick={closeModal}>취소</GhostButton>
           <PrimaryButton
-            disabled={!title || !range.startDate}
+            disabled={!title || !range.startDate || busy}
             onClick={() => {
               void (async () => {
+                setBusy(true);
                 const created = addEvent({
                   date: range.startDate,
                   endDate: range.endDate !== range.startDate ? range.endDate : undefined,
@@ -96,11 +98,12 @@ export function EventModal() {
                     ? "연습 일정을 만들었어요. 출석체크에 바로 반영돼요."
                     : "일정을 만들었어요",
                 );
+                setBusy(false);
                 closeModal();
               })();
             }}
           >
-            일정 생성
+            {busy ? "올리는 중" : "일정 생성"}
           </PrimaryButton>
         </div>
       }

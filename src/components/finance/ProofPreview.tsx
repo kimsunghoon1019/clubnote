@@ -1,8 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { FILE_PREVIEW_MAX_BYTES } from "@/lib/fileLimits";
 import { isImageBlob, proofKind } from "@/lib/proof";
 import { getProofBlob, peekProofBlob, subscribeProofStore } from "@/lib/proofDb";
+import { cachedDbHealth, clubFileHref } from "@/lib/remoteClient";
 import type { EventAttachment, TxProof } from "@/lib/types";
 
 type FileMeta = TxProof | EventAttachment;
@@ -29,7 +31,7 @@ export function ProofThumbs({ proofs, size = "table" }: { proofs: FileMeta[]; si
 }
 
 export function ProofThumb({ proof, size = "table" }: { proof: FileMeta; size?: ThumbSize }) {
-  const { url, blob } = useProofBlob(proof.id);
+  const { url, blob } = useProofBlob(proof.id, "bytes" in proof ? proof.bytes : undefined);
   const kind = proofKind(proof.name, proof.mime);
   const image = isImageBlob(blob, blob?.type || proof.mime);
   const rail = size === "rail";
@@ -166,6 +168,7 @@ function ProofLightbox({
 }) {
   const kind = proofKind(proof.name, proof.mime);
   const image = isImageBlob(blob, blob?.type || proof.mime);
+  const downloadHref = url || (cachedDbHealth()?.files ? clubFileHref(proof.id, true) : "");
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -202,26 +205,24 @@ function ProofLightbox({
             src={url}
             className="h-[min(82vh,900px)] w-[min(92vw,760px)] rounded-md bg-white shadow-lg"
           />
-        ) : url ? (
-          <div className="flex min-w-[280px] flex-col items-center gap-3 rounded-card bg-white px-10 py-12">
-            <FileText className="h-10 w-10 text-faint" />
-            <p className="text-[15px] font-medium">{proof.name}</p>
-            <a href={url} download={proof.name} className="text-[13px] text-brand-text">
-              내려받기
-            </a>
-          </div>
         ) : (
           <div className="flex min-w-[280px] flex-col items-center gap-3 rounded-card bg-white px-10 py-12">
             <FileText className="h-10 w-10 text-faint" />
             <p className="text-[15px] font-medium">{proof.name}</p>
-            <p className="text-[12px] text-faint">미리볼 파일이 없어요. 다시 첨부해 주세요.</p>
+            {url || downloadHref ? (
+              <a href={downloadHref} download={proof.name} className="text-[13px] text-brand-text">
+                내려받기
+              </a>
+            ) : (
+              <p className="text-[12px] text-faint">미리볼 파일이 없어요. 다시 첨부해 주세요.</p>
+            )}
           </div>
         )}
         <div className="flex max-w-[80vw] items-center gap-3">
           <p className="min-w-0 truncate text-[12px] text-white/80">{proof.name}</p>
-          {url ? (
+          {url || downloadHref ? (
             <a
-              href={url}
+              href={downloadHref}
               download={proof.name}
               className="shrink-0 text-[12px] text-white hover:underline"
               onClick={stop}
@@ -236,19 +237,24 @@ function ProofLightbox({
   );
 }
 
-function useProofBlob(id: string) {
-  const [blob, setBlob] = useState<Blob | undefined>(() => peekProofBlob(id));
+function useProofBlob(id: string, bytes?: number) {
+  const skip = bytes != null && bytes > FILE_PREVIEW_MAX_BYTES;
+  const [blob, setBlob] = useState<Blob | undefined>(() => (skip ? undefined : peekProofBlob(id)));
 
   useEffect(() => {
+    if (skip) {
+      setBlob(undefined);
+      return;
+    }
     let alive = true;
     const load = () => {
-      void getProofBlob(id).then((next) => {
+      void getProofBlob(id, { maxBytes: FILE_PREVIEW_MAX_BYTES }).then((next) => {
         if (alive) setBlob(next);
       });
     };
     load();
     return subscribeProofStore(load);
-  }, [id]);
+  }, [id, skip]);
 
   const [url, setUrl] = useState("");
   useEffect(() => {

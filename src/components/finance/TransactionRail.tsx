@@ -2,17 +2,20 @@
 
 import { ProofThumb } from "@/components/finance/ProofPreview";
 import { FieldLabel, SelectInput, TextArea } from "@/components/ui/Field";
+import { formatFileBytes } from "@/lib/fileLimits";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import { Paperclip } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 export function TransactionRail({ txId, onClose }: { txId: string; onClose: () => void }) {
   const { transactions, txCategories, updateTransaction, addTransactionProof, removeTransactionProof, toast } =
     useClub();
   const tx = transactions.find((item) => item.id === txId);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
   if (!tx) return null;
 
@@ -21,10 +24,15 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
   async function attach(files: File[]) {
     try {
       for (const file of files) {
-        await addTransactionProof(txId, file);
+        setUploading(file.name);
+        setProgress(0);
+        await addTransactionProof(txId, file, (ratio) => setProgress(ratio));
       }
     } catch (error: unknown) {
       toast(error instanceof Error ? error.message : "증빙을 읽지 못했어요");
+    } finally {
+      setUploading(null);
+      setProgress(0);
     }
   }
 
@@ -99,7 +107,10 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
               <div key={proof.id}>
                 <ProofThumb proof={proof} size="rail" />
                 <div className="mt-1 flex items-center gap-1">
-                  <p className="min-w-0 flex-1 truncate text-[12px] text-sub">{proof.name}</p>
+                  <p className="min-w-0 flex-1 truncate text-[12px] text-sub" title={proof.bytes ? `${proof.name} ${formatFileBytes(proof.bytes)}` : proof.name}>
+                    {proof.name}
+                    {proof.bytes ? <span className="ml-1 text-faint">{formatFileBytes(proof.bytes)}</span> : null}
+                  </p>
                   <button
                     type="button"
                     className="shrink-0 text-[12px] text-sub hover:text-up"
@@ -114,9 +125,15 @@ export function TransactionRail({ txId, onClose }: { txId: string; onClose: () =
         ) : (
           <p className="text-[12px] text-faint">증빙없음</p>
         )}
+        {uploading ? (
+          <p className="mt-1.5 text-[12px] text-sub" data-proof-progress>
+            {uploading} 올리는 중 {Math.round(progress * 100)}%
+          </p>
+        ) : null}
         <button
           type="button"
-          className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-btn border border-line text-[13px] text-sub hover:bg-muted"
+          disabled={Boolean(uploading)}
+          className="mt-2 flex h-touch w-full items-center justify-center gap-1.5 rounded-btn border border-line text-compact text-sub hover:bg-muted disabled:opacity-50 lg:h-9 lg:text-[13px]"
           onClick={() => fileRef.current?.click()}
         >
           <Paperclip className="h-3.5 w-3.5" />

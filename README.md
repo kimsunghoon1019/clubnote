@@ -81,7 +81,19 @@ git push -u origin master
    - `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
 6. `R2_BUCKET` = `clubnote`
 
-버킷을 인터넷에 공개하지 마세요. 사이트는 로그인 쿠키가 있을 때만 `/api/files/...` 로 꺼냅니다.
+버킷을 인터넷에 공개하지 마세요. 캘린더 첨부는 파일당 5GB까지 올립니다. 큰 파일은 Vercel 한도를 피해 조각으로 올리거나, R2 CORS가 있으면 브라우저가 R2로 바로 올립니다. CORS를 켜 두면 큰 파일이 더 빨라집니다. R2 버킷 **Settings → CORS Policy**:
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "POST"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 86400
+  }
+]
+```
 
 ### 4. Vercel에 붙이기
 
