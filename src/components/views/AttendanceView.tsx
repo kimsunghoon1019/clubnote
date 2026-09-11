@@ -30,6 +30,7 @@ import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 export function AttendanceView() {
@@ -45,6 +46,7 @@ export function AttendanceView() {
     openModal,
     toast,
   } = useClub();
+  const router = useRouter();
 
   const practiceList = useMemo(() => {
     const today = todayISO();
@@ -230,6 +232,26 @@ export function AttendanceView() {
     window.clearTimeout(saveFlashTimer.current);
     saveFlashTimer.current = window.setTimeout(() => setSaveFlash(false), 720);
     toast("출석이 저장됐어요");
+  };
+
+  const goBack = () => {
+    try {
+      const ref = document.referrer;
+      if (ref) {
+        const url = new URL(ref);
+        if (url.origin === window.location.origin && url.pathname !== "/attendance") {
+          router.back();
+          return;
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/");
   };
 
   const columns: Column<Member & { status?: AttendanceStatus }>[] = [
@@ -546,11 +568,20 @@ export function AttendanceView() {
         </div>
         <div
           data-attendance-save
-          className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-4 py-2.5 max-lg:pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:px-5"
+          className="flex shrink-0 items-center justify-between gap-2 border-t border-line-soft bg-white px-4 py-2 lg:justify-end lg:px-5 lg:py-2.5"
         >
+          <button
+            type="button"
+            data-attendance-back
+            className="inline-flex h-touch min-w-touch items-center gap-0.5 rounded-btn px-2 text-[13px] font-semibold text-ink touch-manipulation hover:bg-muted lg:hidden"
+            onClick={goBack}
+          >
+            <ChevronLeft className="h-5 w-5" />
+            뒤로
+          </button>
           <PrimaryButton
             className={cn(
-              "min-w-[88px] origin-center touch-manipulation active:scale-90 max-lg:h-touch max-lg:w-full lg:h-9",
+              "h-9 min-w-[64px] origin-center px-4 touch-manipulation active:scale-90 lg:min-w-[88px]",
               saveFlash && "animate-save-press",
             )}
             onClick={handleSave}

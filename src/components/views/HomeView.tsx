@@ -131,14 +131,14 @@ export function HomeView() {
 
   return (
     <>
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
-        <section className="border-b border-line-soft px-5 py-4 lg:hidden">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto scrollbar-thin" onClick={dismissInspected}>
+        <section data-home-greeting className="order-1 border-b border-line-soft px-5 py-4 lg:hidden">
           <p className="text-compact-title font-semibold">{currentMember?.name} 님</p>
           <div className="mt-1">
             <LiveClock />
           </div>
         </section>
-        <section className="grid grid-cols-2 border-b border-line-soft xl:grid-cols-6">
+        <section data-home-kpi className="order-3 grid grid-cols-2 border-b border-line-soft lg:order-1 xl:grid-cols-6">
           <KpiCard label="전체 회원수" value={`${members.length}명`} spark={memberSpark} sparkColor="auto" />
           <KpiCard
             label="이번 주 출석률"
@@ -167,7 +167,7 @@ export function HomeView() {
         </section>
 
         {nextEvent ? (
-          <section className="border-b border-line-soft px-5 py-4 lg:hidden">
+          <section data-home-next-event className="order-4 border-b border-line-soft px-5 py-4 lg:hidden">
             <p className="text-compact-caption text-sub">다음 연습</p>
             <p className="mt-1 text-compact-title font-semibold">{formatDateKo(nextEvent.date)}</p>
             <p className="text-compact-caption text-sub">
@@ -176,7 +176,7 @@ export function HomeView() {
           </section>
         ) : null}
 
-        <section className="grid border-b border-line-soft lg:grid-cols-2">
+        <section data-home-charts className="order-5 grid border-b border-line-soft lg:order-2 lg:grid-cols-2">
           <div className="border-b border-line-soft p-5 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">날짜별 연습 참여 인원</h2>
@@ -386,7 +386,7 @@ export function HomeView() {
           </div>
         </section>
 
-        <section className="min-w-0 border-b border-line-soft px-5 py-4">
+        <section data-home-memos className="order-2 min-w-0 border-b border-line-soft px-5 py-4 lg:order-3">
           <div className="mb-2">
             <h2 className="text-[15px] font-semibold">오늘의 멘트</h2>
             <p className="mt-0.5 text-[12px] text-faint">카톡방에 바로 붙여넣을 수 있어요</p>
@@ -428,7 +428,7 @@ export function HomeView() {
 
 function CopyMemoCard({ memo, onCopy }: { memo: TodayMemo; onCopy: () => void }) {
   return (
-    <div className="rounded-card border border-line-soft">
+    <div data-home-memo className="rounded-card border border-line-soft">
       <div className="flex items-start justify-between gap-2 px-3 py-1.5">
         <div className="min-w-0">
           <p className="text-[13px] font-semibold">{memo.title}</p>

@@ -202,7 +202,8 @@ export function DetailSurface({
         data-detail-backdrop
         aria-hidden
         className={cn(
-          "fixed inset-0 z-40 bg-black/30 lg:hidden",
+          "fixed inset-0 bg-black/30 lg:hidden",
+          sheet ? "z-50" : "z-40",
           open ? "pointer-events-auto" : "pointer-events-none opacity-0",
         )}
         style={{
@@ -223,7 +224,7 @@ export function DetailSurface({
           "min-h-0 bg-white",
           sheet
             ? open
-              ? "fixed inset-0 z-40 flex flex-col overscroll-contain lg:hidden"
+              ? "fixed inset-0 z-50 flex flex-col overscroll-contain lg:hidden"
               : "hidden"
             : cn(
                 "lg:static lg:z-auto lg:flex lg:w-[300px] lg:shrink-0 lg:flex-col lg:overflow-hidden lg:border-l lg:border-line-soft lg:!translate-y-0 lg:!transition-none",

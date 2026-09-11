@@ -35,13 +35,22 @@ import {
 } from "@/lib/format";
 import { practiceNoticeText } from "@/lib/notice";
 import { eventAttachments } from "@/lib/proof";
-import { isCompactViewport } from "@/lib/compact";
+import { COMPACT_QUERY, isCompactViewport } from "@/lib/compact";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
-import { ChevronLeft, ChevronRight, Copy, MoreHorizontal, Paperclip, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ChevronLeft, ChevronRight, Clock, Copy, MapPin, MoreHorizontal, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createPortal } from "react-dom";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -52,6 +61,29 @@ function barClass(type: string) {
   if (type === "회식") return "bg-[#FFF8E1] text-[#B78103]";
   if (type === "회의") return "bg-[#F2F4F6] text-sub";
   return "bg-brand-soft text-brand-text";
+}
+
+function typeAccentClass(type: string) {
+  if (type === "공연") return "bg-up";
+  if (type === "회식") return "bg-[#E8A317]";
+  if (type === "회의") return "bg-[#8b95a1]";
+  return "bg-brand";
+}
+
+function hourLabel(event: ClubEvent) {
+  if (event.allDay) return "종일";
+  const [h, m = "00"] = event.startTime.split(":");
+  const hour = Number(h);
+  if (!Number.isFinite(hour)) return event.startTime;
+  return `${hour}:${m.padStart(2, "0")}`;
+}
+
+function eventTimeRangeText(event: ClubEvent) {
+  if (event.allDay) return "하루 종일";
+  const start = formatTimeKo(event.startTime);
+  const end = formatTimeKo(event.endTime);
+  if (!end) return start;
+  return `${start} - ${end}`;
 }
 
 function barLabel(event: ClubEvent) {
@@ -221,6 +253,15 @@ export function CalendarView() {
   const [dragGhost, setDragGhost] = useState<DragGhost | null>(null);
   const [eventMenu, setEventMenu] = useState<EventMenu | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(COMPACT_QUERY);
+    const sync = () => setCompact(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -666,53 +707,27 @@ export function CalendarView() {
           ))}
         </div>
 
-        <section className="mt-3 shrink-0 overflow-auto lg:hidden max-lg:max-h-[min(40vh,16rem)]" onClick={(e) => e.stopPropagation()}>
-          {selected ? (
-            <>
-              <p className="text-compact font-semibold">
-                {formatDateKo(selected)} · {formatWeekday(selected)}
-              </p>
-              {selectedEvents.length === 0 ? (
-                <p className="mt-2 text-compact-caption text-faint">이 날짜에 일정이 없어요.</p>
-              ) : (
-                <ul className="mt-2 divide-y divide-line-soft">
-                  {selectedEvents
-                    .slice()
-                    .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                    .map((event) => (
-                      <li key={event.id}>
-                        <button
-                          type="button"
-                          className="flex min-h-row w-full items-center gap-3 py-2 text-left"
-                          onClick={() => {
-                            setActiveId(event.id);
-                            setSelectedEventIds([event.id]);
-                            setEditing(false);
-                          }}
-                        >
-                          <span className="w-14 shrink-0 tabular-nums text-compact-caption text-sub">
-                            {event.allDay ? "종일" : event.startTime}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-compact font-medium">{event.title}</span>
-                            <span className="block truncate text-compact-caption text-faint">{event.place}</span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </>
-          ) : (
-            <p className="text-compact-caption text-faint">날짜를 선택하면 그날 일정이 아래에 나와요.</p>
-          )}
-        </section>
       </main>
+
+      <DayAgendaSheet
+        open={compact && Boolean(selected)}
+        date={selected}
+        events={selectedEvents}
+        onClose={resetPanel}
+        onPickEvent={(id) => {
+          setActiveId(id);
+          setSelectedEventIds([id]);
+          setEditing(false);
+        }}
+        onAdd={() => {
+          if (selected) openCreate(selected);
+        }}
+      />
 
       <DetailSurface
         sheet
-        open={Boolean(active) && Boolean(selected)}
-        title={active?.title}
+        open={compact && Boolean(active) && Boolean(selected)}
+        title={editing ? active?.title : undefined}
         onClose={() => {
           setActiveId(null);
           setSelectedEventIds([]);
@@ -727,21 +742,37 @@ export function CalendarView() {
             : undefined
         }
         footer={
-          active ? (
-            <div className="flex gap-2">
-              {editing ? null : (
-                <GhostButton className="flex-1" onClick={() => setEditing(true)}>
-                  수정
-                </GhostButton>
-              )}
-              <GhostButton className="flex-1 text-up" onClick={() => confirmDelete(active)}>
+          active && !editing ? (
+            <div className="flex items-center justify-around">
+              <button
+                type="button"
+                className="flex min-h-touch flex-1 flex-col items-center justify-center gap-1 text-[11px] text-sub touch-manipulation"
+                onClick={copyEvent}
+              >
+                <Copy className="h-5 w-5" />
+                복사
+              </button>
+              <button
+                type="button"
+                className="flex min-h-touch flex-1 flex-col items-center justify-center gap-1 text-[11px] text-sub touch-manipulation"
+                onClick={() => setEditing(true)}
+              >
+                <Pencil className="h-5 w-5" />
+                수정
+              </button>
+              <button
+                type="button"
+                className="flex min-h-touch flex-1 flex-col items-center justify-center gap-1 text-[11px] text-up touch-manipulation"
+                onClick={() => confirmDelete(active)}
+              >
+                <Trash2 className="h-5 w-5" />
                 삭제
-              </GhostButton>
+              </button>
             </div>
           ) : null
         }
       >
-        {active ? (
+        {compact && active ? (
           editing ? (
             <EditEvent
               key={active.id}
@@ -753,7 +784,7 @@ export function CalendarView() {
               }}
             />
           ) : (
-            <EventDetail key={active.id} event={active} />
+            <CompactEventRead key={active.id} event={active} />
           )
         ) : null}
       </DetailSurface>
@@ -1169,6 +1200,292 @@ function EventContextMenu({ menu, onDelete }: { menu: EventMenu; onDelete: () =>
       </button>
     </div>,
     document.body,
+  );
+}
+
+const DAY_SHEET_FLAG = "__clubnoteDaySheet";
+const DAY_SHEET_SWIPE_PX = 88;
+
+function DayAgendaSheet({
+  open,
+  date,
+  events,
+  onClose,
+  onPickEvent,
+  onAdd,
+}: {
+  open: boolean;
+  date: string | null;
+  events: ClubEvent[];
+  onClose: () => void;
+  onPickEvent: (id: string) => void;
+  onAdd: () => void;
+}) {
+  const titleId = useId();
+  const sheetRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  const pushedRef = useRef(false);
+  const dragStartY = useRef<number | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const [entered, setEntered] = useState(false);
+  onCloseRef.current = onClose;
+
+  const close = useCallback(() => {
+    if (pushedRef.current && window.history.state?.[DAY_SHEET_FLAG]) {
+      window.history.back();
+      return;
+    }
+    onCloseRef.current?.();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open && window.matchMedia(COMPACT_QUERY).matches) {
+      document.documentElement.dataset.daySheetOpen = "true";
+    } else {
+      delete document.documentElement.dataset.daySheetOpen;
+    }
+    return () => {
+      delete document.documentElement.dataset.daySheetOpen;
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setEntered(false);
+      setDragY(0);
+      return;
+    }
+    setEntered(false);
+    const frame = window.requestAnimationFrame(() => setEntered(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !window.matchMedia(COMPACT_QUERY).matches) return;
+    const root = sheetRef.current;
+    root?.querySelector<HTMLElement>("[data-day-sheet-close]")?.focus();
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close, open]);
+
+  useEffect(() => {
+    if (!open || !window.matchMedia(COMPACT_QUERY).matches) return;
+
+    if (!window.history.state?.[DAY_SHEET_FLAG]) {
+      window.history.pushState({ ...window.history.state, [DAY_SHEET_FLAG]: true }, "", window.location.href);
+      pushedRef.current = true;
+    }
+
+    const onPop = () => {
+      if (window.history.state?.[DAY_SHEET_FLAG]) return;
+      pushedRef.current = false;
+      onCloseRef.current?.();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (!pushedRef.current) return;
+      pushedRef.current = false;
+      if (!window.history.state?.[DAY_SHEET_FLAG]) return;
+      const state = { ...window.history.state };
+      delete state[DAY_SHEET_FLAG];
+      window.history.replaceState(state, "", window.location.href);
+    };
+  }, [open]);
+
+  const onHeaderPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    if ((event.target as Element | null)?.closest("button")) return;
+    if (!window.matchMedia(COMPACT_QUERY).matches) return;
+    dragStartY.current = event.clientY;
+    setDragY(0);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onHeaderPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (dragStartY.current == null) return;
+    setDragY(Math.max(0, event.clientY - dragStartY.current));
+  };
+
+  const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (dragStartY.current == null) return;
+    const delta = Math.max(0, event.clientY - dragStartY.current);
+    dragStartY.current = null;
+    if (delta >= DAY_SHEET_SWIPE_PX) {
+      setDragY(0);
+      close();
+      return;
+    }
+    setDragY(0);
+  };
+
+  const dim = open ? Math.max(0, 1 - dragY / 420) : 0;
+  const shift = open ? (entered ? dragY : typeof window === "undefined" ? 0 : window.innerHeight) : 0;
+  const day = date ? parseISODate(date).getDate() : 0;
+  const weekday = date ? `${formatWeekday(date)}요일` : "";
+  const sorted = events.slice().sort((a, b) => {
+    if (Boolean(a.allDay) !== Boolean(b.allDay)) return a.allDay ? -1 : 1;
+    return a.startTime.localeCompare(b.startTime) || a.title.localeCompare(b.title);
+  });
+
+  return (
+    <div className="lg:hidden">
+      <div
+        data-calendar-day-backdrop
+        aria-hidden
+        className={cn(
+          "fixed inset-0 z-40 bg-black/30",
+          open ? "pointer-events-auto" : "pointer-events-none opacity-0",
+        )}
+        style={{
+          opacity: open ? dim : 0,
+          transition: dragY ? "none" : "opacity var(--motion) ease-out",
+        }}
+        onClick={close}
+      />
+      <section
+        ref={sheetRef}
+        tabIndex={-1}
+        data-calendar-day-sheet
+        data-day-sheet-open={open ? "true" : "false"}
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? true : undefined}
+        aria-labelledby={open && date ? titleId : undefined}
+        className={cn(
+          "fixed inset-x-3 z-40 flex flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_16px_40px_rgba(25,31,40,0.18)]",
+          open ? "pointer-events-auto" : "hidden",
+        )}
+        style={
+          open
+            ? {
+                top: "max(4.75rem, calc(env(safe-area-inset-top) + 3.25rem))",
+                bottom: "max(1rem, env(safe-area-inset-bottom))",
+                transform: `translateY(${shift}px)`,
+                transition: dragY || !entered ? "none" : "transform var(--motion) ease-out",
+              }
+            : undefined
+        }
+      >
+        <header
+          data-calendar-day-sheet-head
+          className="flex shrink-0 touch-none items-center gap-2 px-5 pb-2 pt-4"
+          onPointerDown={onHeaderPointerDown}
+          onPointerMove={onHeaderPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <div className="min-w-0 flex-1">
+            <p id={titleId} className="truncate text-[22px] font-semibold leading-7 text-ink">
+              {day} {weekday}
+            </p>
+          </div>
+          <button
+            type="button"
+            data-day-sheet-close
+            className="flex h-touch min-w-touch items-center justify-center text-compact text-sub touch-manipulation"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={close}
+          >
+            닫기
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 scrollbar-thin">
+          {sorted.length === 0 ? (
+            <p className="px-3 py-8 text-center text-compact-caption text-faint">이 날짜에 일정이 없어요.</p>
+          ) : (
+            <ul>
+              {sorted.map((event) => (
+                <li key={event.id}>
+                  <button
+                    type="button"
+                    data-calendar-day-event={event.id}
+                    className="flex min-h-row w-full items-start gap-3 rounded-[16px] px-3 py-3 text-left touch-manipulation active:bg-muted"
+                    onClick={() => onPickEvent(event.id)}
+                  >
+                    <span className="w-12 shrink-0 pt-0.5 text-right text-[15px] font-semibold tabular-nums text-ink">
+                      {hourLabel(event)}
+                    </span>
+                    <span className={cn("mt-1 h-10 w-1 shrink-0 rounded-full", typeAccentClass(event.type))} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[16px] font-semibold text-ink">{event.title}</span>
+                      <span className="mt-0.5 block truncate text-[13px] text-faint">{eventTimeRangeText(event)}</span>
+                      {event.place ? (
+                        <span className="mt-0.5 block truncate text-[13px] text-faint">{event.place}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
+          <button
+            type="button"
+            data-calendar-day-add
+            className="flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-muted text-compact font-medium text-ink touch-manipulation"
+            onClick={onAdd}
+          >
+            {date ? `${formatDateKo(date)}에 추가` : "일정 추가"}
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CompactEventRead({ event }: { event: ClubEvent }) {
+  const start = event.date;
+  const end = eventEndDate(event);
+  return (
+    <div className="space-y-5" data-event-fields="readonly">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-[22px] font-semibold leading-7 text-ink">{event.title || "제목 없음"}</h2>
+        <span className={cn("mt-2 h-2.5 w-2.5 shrink-0 rounded-full", typeAccentClass(event.type))} aria-hidden />
+      </div>
+      <div className="flex items-start gap-3">
+        <Clock className="mt-0.5 h-5 w-5 shrink-0 text-sub" aria-hidden />
+        <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-start gap-2">
+          <div>
+            <p className="text-[15px] font-medium text-ink">{formatDateWeekday(start)}</p>
+            <p className="mt-1 text-[14px] text-sub">{event.allDay ? "하루 종일" : formatTimeKo(event.startTime) || "-"}</p>
+          </div>
+          <span className="pt-1 text-faint" aria-hidden>
+            →
+          </span>
+          <div>
+            <p className="text-[15px] font-medium text-ink">{formatDateWeekday(end)}</p>
+            <p className="mt-1 text-[14px] text-sub">{event.allDay ? "하루 종일" : formatTimeKo(event.endTime) || "-"}</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-start gap-3 border-t border-line-soft pt-4">
+        <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-sub" aria-hidden />
+        <div>
+          <p className="text-[15px] text-ink">{event.place || "장소 없음"}</p>
+          {event.type && event.type !== event.title ? (
+            <p className="mt-1 text-[13px] text-faint">{event.type}</p>
+          ) : null}
+        </div>
+      </div>
+      {event.preview && event.preview !== event.title && event.preview !== event.type ? (
+        <p className="whitespace-pre-wrap border-t border-line-soft pt-4 text-[15px] leading-6 text-ink">{event.preview}</p>
+      ) : null}
+      <div className="border-t border-line-soft pt-4">
+        <p className="text-[12px] font-medium text-sub">첨부파일</p>
+        <div className="mt-1">
+          <EventAttachmentList eventId={event.id} />
+        </div>
+      </div>
+    </div>
   );
 }
 
