@@ -18,7 +18,7 @@ export function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center rounded-chip px-3 text-[13px] transition-colors",
+        "inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-chip px-3 text-[13px] transition-colors",
         plus && "px-2.5",
         active
           ? "bg-brand-soft font-semibold text-brand-text"

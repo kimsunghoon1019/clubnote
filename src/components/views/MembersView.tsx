@@ -442,7 +442,10 @@ export function MembersView() {
             <Plus className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-thin lg:hidden">
+        <div
+          data-members-chips
+          className="flex min-w-0 flex-nowrap gap-1 overflow-x-auto overscroll-x-contain px-3 py-2 scrollbar-thin lg:hidden"
+        >
           {["전체", ...categories].map((tab) => (
             <FilterChip key={tab} active={categoryTab === tab} onClick={() => setCategoryTab(tab)}>
               {tab}
