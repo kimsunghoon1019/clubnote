@@ -39,7 +39,7 @@ import { COMPACT_QUERY, isCompactViewport } from "@/lib/compact";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
-import type { WeatherDay } from "@/lib/weather";
+import { weatherVisual, type WeatherDay } from "@/lib/weather";
 import { ChevronLeft, ChevronRight, Clock, Copy, MapPin, MoreHorizontal, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   useCallback,
@@ -713,6 +713,7 @@ export function CalendarView() {
         open={compact && Boolean(selected)}
         date={selected}
         events={selectedEvents}
+        weather={selected ? forecast.get(selected) : undefined}
         onClose={resetPanel}
         onPickEvent={(id) => {
           setActiveId(id);
@@ -993,6 +994,9 @@ function WeekRow({
         const isSelected = cell.iso === selected;
         const isDrop = dropIsos.includes(cell.iso);
         const weather = forecast.get(cell.iso);
+        const weatherLabel = weather
+          ? ` ${weatherVisual(weather.code).label}${Number.isFinite(weather.tmax) ? ` ${Math.round(weather.tmax)}도` : ""}`
+          : "";
         const hasPractice = events.some(
           (event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso && isPracticeEvent(event),
         );
@@ -1003,7 +1007,7 @@ function WeekRow({
             type="button"
             data-iso={cell.iso}
             data-drop-hover={isDrop ? "true" : undefined}
-            aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}`}
+            aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}${weatherLabel}`}
             onPointerDown={() => startLong(cell.iso)}
             onPointerUp={() => endLong(cell.iso, true)}
             onPointerCancel={() => endLong(cell.iso, false)}
@@ -1028,8 +1032,7 @@ function WeekRow({
           >
             <span
               data-day-head
-              className="flex shrink-0 items-center justify-between gap-1 px-1.5"
-              style={{ height: CALENDAR_DAY_HEAD }}
+              className="flex h-8 shrink-0 items-center justify-between gap-1 px-1.5 max-lg:h-auto max-lg:flex-col max-lg:items-start max-lg:justify-start max-lg:gap-0.5 max-lg:px-1 max-lg:pt-1.5"
             >
               <span
                 className={cn(
@@ -1041,13 +1044,9 @@ function WeekRow({
               >
                 {cell.day}
               </span>
-              {weather ? (
-                <span className="hidden lg:inline-flex">
-                  <WeatherMark day={weather} />
-                </span>
-              ) : null}
+              {weather ? <WeatherMark day={weather} /> : null}
             </span>
-            <span className="flex gap-0.5 px-1.5 pb-1.5 lg:hidden">
+            <span className="flex gap-0.5 px-1 pb-1 lg:hidden">
               {events
                 .filter((event) => event.date <= cell.iso && eventEndDate(event) >= cell.iso)
                 .slice(0, 3)
@@ -1210,6 +1209,7 @@ function DayAgendaSheet({
   open,
   date,
   events,
+  weather,
   onClose,
   onPickEvent,
   onAdd,
@@ -1217,6 +1217,7 @@ function DayAgendaSheet({
   open: boolean;
   date: string | null;
   events: ClubEvent[];
+  weather?: WeatherDay;
   onClose: () => void;
   onPickEvent: (id: string) => void;
   onAdd: () => void;
@@ -1385,6 +1386,12 @@ function DayAgendaSheet({
             <p id={titleId} className="truncate text-[22px] font-semibold leading-7 text-ink">
               {day} {weekday}
             </p>
+            {weather ? (
+              <p data-calendar-day-weather className="mt-1 flex items-center gap-1 text-[13px] text-sub">
+                <WeatherMark day={weather} className="!flex-row" />
+                <span>{weatherVisual(weather.code).label}</span>
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
