@@ -109,7 +109,7 @@ export function AppHeader() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex h-full items-center px-3 text-[14px]",
+                  "relative flex h-full items-center whitespace-nowrap px-3 text-[14px]",
                   active ? "font-semibold text-ink" : "text-sub hover:text-ink",
                 )}
               >
@@ -129,14 +129,6 @@ export function AppHeader() {
             <Search className="h-3.5 w-3.5" />
             이름, 일정, 거래내역을 검색하세요
           </button>
-          <button
-            type="button"
-            className="flex h-touch w-touch items-center justify-center rounded-btn text-sub hover:bg-muted lg:hidden"
-            onClick={() => setSearchOpen(true)}
-            aria-label="검색"
-          >
-            <Search className="h-4 w-4" />
-          </button>
 
           {saving || saveFailed ? (
             <span
@@ -150,7 +142,7 @@ export function AppHeader() {
           <div className="relative" ref={bellRef}>
             <button
               type="button"
-              className="relative z-10 flex h-touch w-touch items-center justify-center rounded-btn text-sub hover:bg-muted lg:h-9 lg:w-9"
+              className="relative z-10 hidden h-9 w-9 items-center justify-center rounded-btn text-sub hover:bg-muted lg:flex"
               aria-label="알림"
               aria-expanded={bellOpen}
               aria-haspopup="dialog"

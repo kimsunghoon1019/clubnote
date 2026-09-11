@@ -40,7 +40,7 @@ import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
 import type { WeatherDay } from "@/lib/weather";
-import { ChevronLeft, ChevronRight, Copy, Paperclip, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, MoreHorizontal, Paperclip, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 
@@ -158,6 +158,42 @@ function eventRangeOf(event: ClubEvent): DateTimeRangeValue {
   };
 }
 
+function MonthSwitcher({
+  year,
+  monthIndex,
+  onPrev,
+  onNext,
+}: {
+  year: number;
+  monthIndex: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 items-center lg:h-8 lg:w-[176px] lg:min-w-[176px] lg:max-w-[176px] lg:flex-none lg:justify-between lg:overflow-hidden">
+      <button
+        type="button"
+        className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn hover:bg-muted lg:h-8 lg:w-8"
+        onClick={onPrev}
+        aria-label="이전 달"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <h1 className="min-w-0 truncate whitespace-nowrap px-0.5 text-center text-[18px] font-semibold tabular-nums lg:flex-1">
+        {year}년 {monthIndex + 1}월
+      </h1>
+      <button
+        type="button"
+        className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn hover:bg-muted lg:h-8 lg:w-8"
+        onClick={onNext}
+        aria-label="다음 달"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 export function CalendarView() {
   const {
     events,
@@ -184,6 +220,7 @@ export function CalendarView() {
   const [dropIsos, setDropIsos] = useState<string[]>([]);
   const [dragGhost, setDragGhost] = useState<DragGhost | null>(null);
   const [eventMenu, setEventMenu] = useState<EventMenu | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -359,6 +396,24 @@ export function CalendarView() {
   }, [draggingId]);
 
   useEffect(() => {
+    if (!moreOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-calendar-more], [data-calendar-more-menu]")) return;
+      setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointer);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
+  useEffect(() => {
     if (!eventMenu) return;
     const close = () => setEventMenu(null);
     const onPointerDown = (event: PointerEvent) => {
@@ -471,46 +526,83 @@ export function CalendarView() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <main
-        className="min-h-0 min-w-0 flex-1 overflow-auto p-4 scrollbar-thin lg:flex-[7] lg:p-5"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 pt-3 pb-2 lg:block lg:flex-[7] lg:overflow-auto lg:p-5 lg:pb-5"
         onClick={resetPanel}
       >
-        <div className="mb-4 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+        <div
+          data-calendar-compact-head
+          className="mb-2 flex min-w-0 items-center gap-0.5 lg:hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MonthSwitcher year={year} monthIndex={monthIndex} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} />
+          <GhostButton className="h-8 shrink-0 px-2.5 text-[12px]" onClick={goToday}>
+            오늘
+          </GhostButton>
+          <button
+            type="button"
+            data-calendar-add
+            aria-label="일정 생성"
+            className="ml-auto flex h-touch w-touch shrink-0 items-center justify-center text-brand-text"
+            onClick={() => openCreate(selected)}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              data-calendar-more
+              aria-label="더보기"
+              aria-expanded={moreOpen}
+              className="flex h-touch w-touch items-center justify-center text-sub"
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+            {moreOpen ? (
+              <div
+                data-calendar-more-menu
+                className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-btn border border-line bg-white py-1 shadow-toast"
+              >
+                <button
+                  type="button"
+                  className="flex min-h-touch w-full items-center px-3 text-left text-compact"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    void copyNotice();
+                  }}
+                >
+                  카톡 공지 복사
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div
+          data-calendar-console-head
+          className="mb-4 hidden items-center justify-between lg:flex"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-[176px] min-w-[176px] max-w-[176px] shrink-0 items-center justify-between overflow-hidden">
-              <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(-1)} aria-label="이전 달">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <h1 className="min-w-0 flex-1 whitespace-nowrap text-center text-[18px] font-semibold tabular-nums">
-                {year}년 {monthIndex + 1}월
-              </h1>
-              <button type="button" className="rounded-btn p-1 hover:bg-muted" onClick={() => shiftMonth(1)} aria-label="다음 달">
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            <MonthSwitcher year={year} monthIndex={monthIndex} onPrev={() => shiftMonth(-1)} onNext={() => shiftMonth(1)} />
             <GhostButton className="ml-1 h-8 px-2.5 text-[12px]" onClick={goToday}>
               오늘
             </GhostButton>
             {forecast.size > 0 ? <span className="ml-2 text-[12px] text-faint">신촌 예보</span> : null}
           </div>
-          <PrimaryButton className="hidden lg:inline-flex" onClick={() => openCreate(selected)}>
-            일정 생성
-          </PrimaryButton>
-          <button
-            type="button"
-            aria-label="일정 생성"
-            className="flex h-touch w-touch items-center justify-center text-brand-text lg:hidden"
-            onClick={() => openCreate(selected)}
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+          <PrimaryButton onClick={() => openCreate(selected)}>일정 생성</PrimaryButton>
         </div>
 
         <div
-          className={cn("border-l border-t border-line-soft", draggingId && "select-none")}
+          className={cn(
+            "flex min-h-0 flex-1 flex-col border-l border-t border-line-soft max-lg:overflow-hidden lg:block lg:flex-none",
+            draggingId && "select-none",
+          )}
+          data-calendar-grid
           data-calendar-dragging={draggingId ? "true" : undefined}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="grid grid-cols-7">
+          <div className="grid shrink-0 grid-cols-7">
             {WEEKDAYS.map((d) => (
               <div key={d} className="border-b border-r border-line-soft bg-muted px-2 py-2 text-[12px] text-faint">
                 {d}
@@ -520,6 +612,7 @@ export function CalendarView() {
           {weeks.map((week) => (
             <WeekRow
               key={week[0].iso}
+              className="max-lg:min-h-0 max-lg:flex-1"
               week={week}
               events={events}
               today={today}
@@ -573,7 +666,7 @@ export function CalendarView() {
           ))}
         </div>
 
-        <section className="mt-3 lg:hidden" onClick={(e) => e.stopPropagation()}>
+        <section className="mt-3 shrink-0 overflow-auto lg:hidden max-lg:max-h-[min(40vh,16rem)]" onClick={(e) => e.stopPropagation()}>
           {selected ? (
             <>
               <p className="text-compact font-semibold">
@@ -666,7 +759,7 @@ export function CalendarView() {
       </DetailSurface>
 
       <aside
-        className="hidden min-h-0 w-[32%] min-w-[300px] max-w-[360px] flex-col border-l border-line-soft lg:flex"
+        className="hidden min-h-0 flex-col border-l border-line-soft lg:flex lg:w-[32%] lg:min-w-[300px] lg:max-w-[360px]"
         data-event-selected-count={pickedEvents.length}
         data-active-event-id={active?.id ?? undefined}
         data-selected-date={selected ?? undefined}
@@ -802,6 +895,7 @@ function WeekRow({
   draggingId,
   dropIsos,
   forecast,
+  className,
   onSelectDay,
   onSelectEvent,
   onCreateDay,
@@ -817,6 +911,7 @@ function WeekRow({
   draggingId: string | null;
   dropIsos: string[];
   forecast: Map<string, WeatherDay>;
+  className?: string;
   onSelectDay: (iso: string) => void;
   onSelectEvent: (iso: string, id: string, additive: boolean) => void;
   onCreateDay: (iso: string) => void;
@@ -853,7 +948,10 @@ function WeekRow({
   return (
     <div
       ref={ref}
-      className="grid border-b border-line-soft max-lg:[grid-template-rows:2.75rem_1rem]"
+      className={cn(
+        "grid min-h-0 border-b border-line-soft max-lg:![grid-template-rows:2.75rem_minmax(1rem,1fr)]",
+        className,
+      )}
       style={{
         gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
         gridTemplateRows: `${CALENDAR_DAY_HEAD}px minmax(${bodyMin}px, auto)`,

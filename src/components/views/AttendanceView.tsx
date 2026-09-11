@@ -26,6 +26,7 @@ import {
   upcomingPractice,
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
+import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
@@ -58,14 +59,16 @@ export function AttendanceView() {
   }, [events]);
 
   const fallback =
-    latestPractice(events, todayISO()) ?? upcomingPractice(events, todayISO()) ?? practiceList[0];
+    upcomingPractice(events, todayISO()) ?? latestPractice(events, todayISO()) ?? practiceList[0];
   const [eventId, setEventId] = useState(fallback?.id ?? "");
   const [categoryFilter, setCategoryFilter] = useState("전체");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   const [saveFlash, setSaveFlash] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const saveFlashTimer = useRef(0);
+  const datePickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!practiceList.some((item) => item.id === eventId) && fallback) {
@@ -77,7 +80,25 @@ export function AttendanceView() {
     setSelectedIds([]);
     setSelectionAnchorId(null);
     inspectMember(null);
+    setDateOpen(false);
   }, [eventId, inspectMember]);
+
+  useEffect(() => {
+    if (!dateOpen) return;
+    const onPointer = (click: PointerEvent) => {
+      if (datePickerRef.current?.contains(click.target as Node)) return;
+      setDateOpen(false);
+    };
+    const onKey = (key: KeyboardEvent) => {
+      if (key.key === "Escape") setDateOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [dateOpen]);
 
   useEffect(() => {
     if (categoryFilter !== "전체" && !categories.includes(categoryFilter)) {
@@ -89,6 +110,17 @@ export function AttendanceView() {
 
   const event = events.find((item) => item.id === eventId) ?? fallback;
   const eventIndex = practiceList.findIndex((item) => item.id === event?.id);
+  const chronoList = useMemo(
+    () =>
+      events
+        .filter(isPracticeEvent)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)),
+    [events],
+  );
+  const chronoIndex = chronoList.findIndex((item) => item.id === event?.id);
+  const prevPractice = chronoIndex > 0 ? chronoList[chronoIndex - 1] : null;
+  const nextPractice =
+    chronoIndex >= 0 && chronoIndex < chronoList.length - 1 ? chronoList[chronoIndex + 1] : null;
 
   const roster = useMemo(
     () => (event ? sortMembersByCategory(membersForEvent(members, event), categories) : []),
@@ -164,6 +196,21 @@ export function AttendanceView() {
     setSelectedIds([row.id]);
   };
 
+  const handleCompactRowClick = (row: Member) => {
+    if (
+      inspectedMemberId === row.id &&
+      (selectedIds.length === 0 || (selectedIds.length === 1 && selectedIds[0] === row.id))
+    ) {
+      inspectMember(null);
+      setSelectedIds([]);
+      setSelectionAnchorId(null);
+      return;
+    }
+    setSelectionAnchorId(row.id);
+    inspectMember(row.id);
+    setSelectedIds([row.id]);
+  };
+
   const applyAttendance = (memberId: string, status: AttendanceStatus | null) => {
     if (!event) return;
     const rosterIds = new Set(roster.map((member) => member.id));
@@ -226,12 +273,35 @@ export function AttendanceView() {
     );
   }
 
-  const prevPractice = eventIndex > 0 ? practiceList[eventIndex - 1] : null;
-  const nextPractice = eventIndex >= 0 && eventIndex < practiceList.length - 1 ? practiceList[eventIndex + 1] : null;
+  const emptyRoster =
+    categoryFilter === "전체"
+      ? "이 요일 출석 대상자가 없어요. 회원관리에서 연습요일을 켜 주세요."
+      : "이 분류에 출석 대상자가 없어요.";
+
+  const categoryTabs = (chipClassName?: string) =>
+    ["전체", ...categories].map((tab) => (
+      <FilterChip
+        key={tab}
+        active={categoryFilter === tab}
+        className={chipClassName}
+        onClick={() => {
+          setCategoryFilter(tab);
+          setSelectedIds([]);
+          setSelectionAnchorId(null);
+          inspectMember(null);
+        }}
+      >
+        {tab}
+      </FilterChip>
+    ));
 
   return (
     <>
-      <aside className="hidden min-h-0 w-[160px] shrink-0 flex-col border-r border-line-soft lg:flex" onClick={dismissInspected}>
+      <aside
+        data-attendance-date-rail
+        className="hidden min-h-0 w-[160px] shrink-0 flex-col border-r border-line-soft lg:flex"
+        onClick={dismissInspected}
+      >
         <div className="flex items-center justify-between px-3 py-3">
           <p className="text-[13px] font-semibold">연습날짜</p>
           <div className="flex flex-col">
@@ -289,60 +359,6 @@ export function AttendanceView() {
       </aside>
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onClick={dismissInspected}>
-        <div className="flex shrink-0 items-center gap-1 border-b border-line-soft px-2 py-2 lg:hidden">
-          <button
-            type="button"
-            aria-label="이전 연습일"
-            disabled={!prevPractice}
-            className="flex h-touch w-touch items-center justify-center text-sub disabled:text-faint"
-            onClick={() => prevPractice && setEventId(prevPractice.id)}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <div className="min-w-0 flex-1 text-center">
-            <p className="text-compact-title font-semibold tabular-nums">{formatDateKo(event.date)}</p>
-            <p className="text-compact-caption text-sub">
-              {formatWeekday(event.date)} · {formatEventTime(event)}
-              {isAttendanceClosed(event) ? " · 마감" : ""}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="px-2 text-compact font-medium text-brand-text"
-            onClick={() => setSheetOpen(true)}
-          >
-            출석표
-          </button>
-          <button
-            type="button"
-            aria-label="다음 연습일"
-            disabled={!nextPractice}
-            className="flex h-touch w-touch items-center justify-center text-sub disabled:text-faint"
-            onClick={() => nextPractice && setEventId(nextPractice.id)}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-        <p className="shrink-0 px-5 py-2 text-compact-caption text-sub lg:hidden">
-          출석 {present} · 미체크 {unchecked}
-        </p>
-        <div className="flex shrink-0 gap-1 overflow-x-auto px-3 pb-2 scrollbar-thin lg:hidden">
-          {["전체", ...categories].map((tab) => (
-            <FilterChip
-              key={tab}
-              active={categoryFilter === tab}
-              onClick={() => {
-                setCategoryFilter(tab);
-                setSelectedIds([]);
-                setSelectionAnchorId(null);
-                inspectMember(null);
-              }}
-            >
-              {tab}
-            </FilterChip>
-          ))}
-        </div>
-
         <div className="hidden min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-soft px-5 py-2 lg:flex">
           <h1 className="text-[15px] font-semibold">출석대상자</h1>
           <span className="text-[13px] text-sub">
@@ -355,78 +371,186 @@ export function AttendanceView() {
           <GhostButton className="h-8 px-3 text-[12px]" onClick={() => setSheetOpen(true)}>
             출석표 보기
           </GhostButton>
-          <div className="ml-auto flex flex-wrap items-center gap-1">
-            {["전체", ...categories].map((tab) => (
-              <FilterChip
-                key={tab}
-                active={categoryFilter === tab}
-                onClick={() => {
-                  setCategoryFilter(tab);
-                  setSelectedIds([]);
-                  setSelectionAnchorId(null);
-                  inspectMember(null);
-                }}
+          <div className="ml-auto flex flex-wrap items-center gap-1">{categoryTabs()}</div>
+        </div>
+
+        <div
+          data-attendance-compact-head
+          className="relative flex shrink-0 flex-col gap-2.5 border-b border-line-soft px-4 py-3 lg:hidden"
+        >
+          <h1 className="sr-only">출석대상자</h1>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              data-attendance-prev
+              aria-label="이전 연습일"
+              disabled={!prevPractice}
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation disabled:text-faint"
+              onClick={() => {
+                if (prevPractice) setEventId(prevPractice.id);
+              }}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div ref={datePickerRef} className="relative min-w-0 flex-1">
+              <button
+                type="button"
+                data-attendance-date-picker
+                aria-haspopup="listbox"
+                aria-expanded={dateOpen}
+                aria-label="연습날짜 선택"
+                className="flex min-h-touch w-full items-center justify-between gap-2 rounded-btn border border-line px-3 py-2 text-left touch-manipulation"
+                onClick={() => setDateOpen((open) => !open)}
               >
-                {tab}
-              </FilterChip>
-            ))}
+              <span className="min-w-0">
+                <span className="block truncate text-compact font-semibold text-ink">
+                  {formatDateKo(event.date)} ({formatWeekday(event.date)})
+                </span>
+                <span className="block truncate text-compact-caption text-faint">
+                  {formatEventTime(event)}
+                  {isAttendanceClosed(event) ? " · 마감" : ""}
+                </span>
+              </span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-faint transition-transform", dateOpen && "rotate-180")} />
+            </button>
+            {dateOpen ? (
+              <div
+                data-attendance-date-sheet
+                role="listbox"
+                aria-label="연습날짜"
+                className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[min(420px,60vh)] overflow-auto rounded-card border border-line bg-white py-1.5 scrollbar-thin"
+              >
+                {practiceList.map((item) => {
+                  const active = item.id === event.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      className={cn(
+                        "flex min-h-touch w-full flex-col justify-center px-3 py-2 text-left touch-manipulation",
+                        active ? "bg-brand-soft" : "hover:bg-muted",
+                      )}
+                      onClick={() => {
+                        setEventId(item.id);
+                        setDateOpen(false);
+                      }}
+                    >
+                      <span className={cn("text-compact font-medium", active ? "text-brand-text" : "text-ink")}>
+                        {formatDateKo(item.date)}
+                      </span>
+                      <span className="text-compact-caption text-faint">
+                        {formatWeekday(item.date)} {formatEventTime(item)}
+                        {isAttendanceClosed(item) ? " · 마감" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+                <div className="border-t border-line-soft p-2">
+                  <GhostButton
+                    className="h-touch w-full text-[13px]"
+                    onClick={() => {
+                      setDateOpen(false);
+                      openModal("event");
+                    }}
+                  >
+                    일정 추가
+                  </GhostButton>
+                </div>
+              </div>
+            ) : null}
+            </div>
+            <button
+              type="button"
+              data-attendance-next
+              aria-label="다음 연습일"
+              disabled={!nextPractice}
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation disabled:text-faint"
+              onClick={() => {
+                if (nextPractice) setEventId(nextPractice.id);
+              }}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 text-compact-caption text-sub">
+              출석 {present}/{targetCount} · 미체크 {unchecked}명
+            </p>
+            <button
+              type="button"
+              data-attendance-sheet
+              className="inline-flex h-touch shrink-0 items-center justify-center rounded-btn border border-line bg-white px-3 text-[13px] font-semibold text-ink touch-manipulation hover:bg-muted"
+              onClick={() => setSheetOpen(true)}
+            >
+              출석표 보기
+            </button>
+          </div>
+          <StatusMixBar counts={counts} unchecked={unchecked} />
+          <div className="-mx-4 flex flex-nowrap gap-1 overflow-x-auto px-4 scrollbar-thin">
+            {categoryTabs("shrink-0")}
           </div>
         </div>
-        <ul className="min-h-0 flex-1 overflow-auto lg:hidden">
-          {rows.length === 0 ? (
-            <li className="px-5 py-8 text-center text-compact-caption text-faint">
-              {categoryFilter === "전체"
-                ? "이 요일 출석 대상자가 없어요."
-                : "이 분류에 출석 대상자가 없어요."}
-            </li>
-          ) : (
-            rows.map((row) => (
-              <li key={row.id} className="border-b border-line-soft">
-                <div data-roster-row className="flex min-h-row items-center gap-3 px-4 py-2">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                    onClick={() => inspectMember(row.id)}
-                  >
-                    <Avatar name={row.name} size={36} />
-                    <span className="min-w-0">
-                      <span className="block truncate text-compact font-medium">{row.name}</span>
-                      <span className="block truncate text-compact-caption text-sub">{row.category}</span>
-                    </span>
-                  </button>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <AttendanceToggle
-                      name={row.name}
-                      value={row.status}
-                      onChange={(status) => applyAttendance(row.id, status)}
-                    />
-                  </div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
 
-        <div className="hidden min-h-0 flex-1 overflow-auto px-2 pt-2 scrollbar-thin lg:block">
-          <DataTable
-            columns={columns}
-            rows={rows}
-            tableClassName="min-w-[920px]"
-            selectedIds={selectedIds}
-            onRowClick={handleRowClick}
-            empty={
-              <span>
-                {categoryFilter === "전체"
-                  ? "이 요일 출석 대상자가 없어요. 회원관리에서 연습요일을 켜 주세요."
-                  : "이 분류에 출석 대상자가 없어요."}
-              </span>
-            }
-          />
+        <div className="min-h-0 flex-1 overflow-auto scrollbar-thin">
+          <div data-attendance-table className="hidden px-2 pt-2 lg:block">
+            <DataTable
+              columns={columns}
+              rows={rows}
+              tableClassName="min-w-[920px]"
+              selectedIds={selectedIds}
+              onRowClick={handleRowClick}
+              empty={<span>{emptyRoster}</span>}
+            />
+          </div>
+          <ul data-attendance-list className="divide-y divide-line-soft lg:hidden">
+            {rows.length === 0 ? (
+              <li className="px-4 py-16 text-center text-[13px] text-faint">{emptyRoster}</li>
+            ) : (
+              rows.map((row) => {
+                const selected = selectedIds.includes(row.id);
+                return (
+                  <li key={row.id}>
+                    <div
+                      data-row-id={row.id}
+                      data-attendance-row
+                      className={cn("flex flex-col gap-2.5 px-4 py-3", selected && "bg-[#F7FBFF]")}
+                    >
+                      <button
+                        type="button"
+                        data-attendance-identity
+                        className="flex min-h-touch items-center gap-3 text-left touch-manipulation"
+                        onClick={() => handleCompactRowClick(row)}
+                      >
+                        <Avatar name={row.name} size={40} src={memberPhotoSrc(row)} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-compact font-semibold text-ink">{row.name}</span>
+                          <span className="block truncate text-compact-caption text-faint">
+                            {row.category} · {row.role}
+                          </span>
+                        </span>
+                      </button>
+                      <AttendanceToggle
+                        fill
+                        name={row.name}
+                        value={row.status}
+                        onChange={(status) => applyAttendance(row.id, status)}
+                      />
+                    </div>
+                  </li>
+                );
+              })
+            )}
+          </ul>
         </div>
-        <div className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-5 py-2.5 max-lg:justify-stretch max-lg:pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+        <div
+          data-attendance-save
+          className="flex shrink-0 justify-end gap-2 border-t border-line-soft bg-white px-4 py-2.5 max-lg:pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:px-5"
+        >
           <PrimaryButton
             className={cn(
-              "min-w-[88px] origin-center active:scale-90 max-lg:h-touch max-lg:w-full max-lg:text-compact",
+              "min-w-[88px] origin-center touch-manipulation active:scale-90 max-lg:h-touch max-lg:w-full lg:h-9",
               saveFlash && "animate-save-press",
             )}
             onClick={handleSave}
@@ -445,7 +569,7 @@ export function AttendanceView() {
 
       <DetailSurface
         open={Boolean(inspectedMemberId)}
-        title={members.find((item) => item.id === inspectedMemberId)?.name}
+        title={members.find((item) => item.id === inspectedMemberId)?.name ?? "회원"}
         onClose={() => inspectMember(null)}
       >
         {inspectedMemberId ? (
