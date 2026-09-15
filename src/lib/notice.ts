@@ -50,16 +50,37 @@ function formatPracticeNotice(header: string, emptyLine: string, week: ClubEvent
   return `${header}\n\n${week.map(formatNoticeEvent).join("\n\n")}\n\n\n${NOTICE_FOOTER}`;
 }
 
+/** 0=이번 주, 1=다음 주(기본 공지). */
+export function weekPracticeLabel(weekOffset: number) {
+  if (weekOffset === -1) return "지난 주";
+  if (weekOffset === 0) return "이번 주";
+  if (weekOffset === 1) return "다음 주";
+  if (weekOffset === 2) return "그다음 주";
+  if (weekOffset > 2) return `${weekOffset}주 뒤`;
+  return `${-weekOffset}주 전`;
+}
+
+export function weekRangeCaption(today: string, weekOffset: number) {
+  const { from, to } = weekBounds(today, weekOffset);
+  return `${formatNoticeDate(from)} – ${formatNoticeDate(to)}`;
+}
+
+export function weekPracticeNoticeText(events: ClubEvent[], weekOffset: number, today = todayISO()) {
+  const label = weekPracticeLabel(weekOffset);
+  const particle = label.endsWith("전") ? "은" : "는";
+  return formatPracticeNotice(
+    `${label} 연습 일정 공지`,
+    `${label}${particle} 예정된 연습 일정이 없습니다.`,
+    practicesInWeek(events, today, weekOffset),
+  );
+}
+
 export function practiceNoticeText(events: ClubEvent[], today = todayISO()) {
   return formatPracticeNotice("연습 일정 공지", "이번 주는 예정된 연습 일정이 없습니다.", weekPracticeEvents(events, today));
 }
 
 export function nextWeekPracticeNoticeText(events: ClubEvent[], today = todayISO()) {
-  return formatPracticeNotice(
-    "다음 주 연습 일정 공지",
-    "다음 주는 예정된 연습 일정이 없습니다.",
-    nextWeekPracticeEvents(events, today),
-  );
+  return weekPracticeNoticeText(events, 1, today);
 }
 
 export function expectedAttendanceNoticeText(event: ClubEvent, category: string, names: string[]) {
@@ -76,19 +97,24 @@ export type TodayMemo = {
   text: string;
 };
 
+/** 1명뿐이라 참석 확인 공지가 필요 없는 분류. */
+const SKIP_EXPECTED_NOTICE_CATEGORIES = new Set(["반주자", "지휘자"]);
+
 export function todayMemoItems(
   events: ClubEvent[],
   members: Member[],
   categories: string[],
   recordMap: Map<string, AttendanceStatus>,
   today = todayISO(),
+  weekOffset = 1,
 ): TodayMemo[] {
+  const label = weekPracticeLabel(weekOffset);
   const items: TodayMemo[] = [
     {
-      id: "next-week",
-      title: "다음 주 연습 일정",
-      caption: "전주 공지용",
-      text: nextWeekPracticeNoticeText(events, today),
+      id: "week-practice",
+      title: `${label} 연습 일정`,
+      caption: weekRangeCaption(today, weekOffset),
+      text: weekPracticeNoticeText(events, weekOffset, today),
     },
   ];
   const event = upcomingPractice(events, today);
@@ -111,6 +137,7 @@ export function todayMemoItems(
 
   for (const category of [...categories, ...extra]) {
     if (!rosterCats.has(category)) continue;
+    if (SKIP_EXPECTED_NOTICE_CATEGORIES.has(category)) continue;
     const names = expected
       .filter((member) => member.category === category)
       .map((member) => member.name)

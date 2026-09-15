@@ -29,7 +29,7 @@ import {
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { useClub } from "@/lib/store";
-import { Copy } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type MouseEvent } from "react";
 import {
@@ -75,6 +75,7 @@ export function HomeView() {
   );
   const selectableRows = participationByDate.filter((row) => !row.isPad && !row.isPlaceholder);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [practiceWeekOffset, setPracticeWeekOffset] = useState(1);
   const fallbackEventId =
     selectableRows.find((row) => row.isToday)?.id ??
     selectableRows.find((row) => row.date >= today)?.id ??
@@ -110,8 +111,8 @@ export function HomeView() {
   const paidCount = dues.rows.length - unpaidCount;
 
   const memos = useMemo(
-    () => todayMemoItems(events, members, categories, recordMap, today),
-    [events, members, categories, recordMap, today],
+    () => todayMemoItems(events, members, categories, recordMap, today, practiceWeekOffset),
+    [events, members, categories, recordMap, today, practiceWeekOffset],
   );
 
   const copyMemo = async (text: string) => {
@@ -393,7 +394,19 @@ export function HomeView() {
           </div>
           <div className="grid gap-2.5 lg:grid-cols-2">
             {memos.map((memo) => (
-              <CopyMemoCard key={memo.id} memo={memo} onCopy={() => copyMemo(memo.text)} />
+              <CopyMemoCard
+                key={memo.id}
+                memo={memo}
+                onCopy={() => copyMemo(memo.text)}
+                weekNav={
+                  memo.id === "week-practice"
+                    ? {
+                        onPrev: () => setPracticeWeekOffset((offset) => offset - 1),
+                        onNext: () => setPracticeWeekOffset((offset) => offset + 1),
+                      }
+                    : undefined
+                }
+              />
             ))}
           </div>
         </section>
@@ -426,13 +439,49 @@ export function HomeView() {
   );
 }
 
-function CopyMemoCard({ memo, onCopy }: { memo: TodayMemo; onCopy: () => void }) {
+function CopyMemoCard({
+  memo,
+  onCopy,
+  weekNav,
+}: {
+  memo: TodayMemo;
+  onCopy: () => void;
+  weekNav?: { onPrev: () => void; onNext: () => void };
+}) {
   return (
-    <div data-home-memo className="rounded-card border border-line-soft">
+    <div data-home-memo={memo.id} className="rounded-card border border-line-soft">
       <div className="flex items-start justify-between gap-2 px-3 py-1.5">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold">{memo.title}</p>
-          {memo.caption ? <p className="text-[12px] text-faint">{memo.caption}</p> : null}
+          {weekNav ? (
+            <div className="-ml-2 flex items-center">
+              <button
+                type="button"
+                data-practice-week-prev
+                aria-label="이전 주"
+                className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
+                onClick={weekNav.onPrev}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {memo.caption ? (
+                <p className="min-w-0 flex-1 truncate text-center text-[12px] text-faint">{memo.caption}</p>
+              ) : (
+                <span className="flex-1" />
+              )}
+              <button
+                type="button"
+                data-practice-week-next
+                aria-label="다음 주"
+                className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
+                onClick={weekNav.onNext}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          ) : memo.caption ? (
+            <p className="text-[12px] text-faint">{memo.caption}</p>
+          ) : null}
         </div>
         <GhostButton className="h-8 shrink-0 px-2.5 text-[12px]" onClick={onCopy}>
           <Copy className="h-3.5 w-3.5" />
