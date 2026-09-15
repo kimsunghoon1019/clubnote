@@ -4,12 +4,13 @@ import { cn } from "@/lib/cn";
 import { FILE_PREVIEW_MAX_BYTES } from "@/lib/fileLimits";
 import { isImageBlob, proofKind } from "@/lib/proof";
 import { getProofBlob, peekProofBlob, subscribeProofStore } from "@/lib/proofDb";
+import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import { cachedDbHealth, clubFileHref } from "@/lib/remoteClient";
 import type { EventAttachment, TxProof } from "@/lib/types";
 
 type FileMeta = TxProof | EventAttachment;
 import { FileText, X } from "lucide-react";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export type ThumbSize = "table" | "rail" | "tile";
@@ -170,6 +171,8 @@ function ProofLightbox({
   const image = isImageBlob(blob, blob?.type || proof.mime);
   const downloadHref = url || (cachedDbHealth()?.files ? clubFileHref(proof.id, true) : "");
 
+  const dismiss = useBackdropDismiss(onClose);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -178,15 +181,13 @@ function ProofLightbox({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const stop = (event: MouseEvent) => event.stopPropagation();
-
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-6"
       role="dialog"
       aria-modal
       aria-label={proof.name}
-      onClick={onClose}
+      {...dismiss}
     >
       <button
         type="button"
@@ -196,7 +197,7 @@ function ProofLightbox({
       >
         <X className="h-5 w-5" />
       </button>
-      <div className="flex max-h-full max-w-full flex-col items-center gap-3" onClick={stop}>
+      <div className="flex max-h-full max-w-full flex-col items-center gap-3">
         {image && url ? (
           <img src={url} alt={proof.name} className="max-h-[80vh] max-w-[90vw] rounded-md object-contain shadow-lg" />
         ) : kind === "pdf" && url ? (

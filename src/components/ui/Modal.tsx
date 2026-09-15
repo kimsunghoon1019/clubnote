@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
@@ -34,6 +35,8 @@ export function Modal({
     };
   }, [open, onClose]);
 
+  const dismiss = useBackdropDismiss(onClose, open);
+
   if (!open) return null;
 
   return (
@@ -42,7 +45,7 @@ export function Modal({
         "fixed inset-0 z-50 flex justify-center bg-black/30 p-0 lg:p-4",
         align === "top" ? "items-stretch lg:items-start lg:pt-[7vh]" : "items-stretch lg:items-center",
       )}
-      onClick={onClose}
+      {...dismiss}
     >
       <div
         role="dialog"
@@ -87,11 +90,13 @@ export function Drawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const dismiss = useBackdropDismiss(onClose, open);
+
   return (
     <div className={cn("fixed inset-0 z-50", open ? "pointer-events-auto" : "pointer-events-none")}>
       <div
         className={cn("absolute inset-0 bg-black/20 transition-opacity", open ? "opacity-100" : "opacity-0")}
-        onClick={onClose}
+        {...dismiss}
       />
       <aside
         className={cn(

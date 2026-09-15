@@ -36,6 +36,7 @@ import {
 import { practiceNoticeText } from "@/lib/notice";
 import { eventAttachments } from "@/lib/proof";
 import { COMPACT_QUERY, isCompactViewport } from "@/lib/compact";
+import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import { isPracticeEvent } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { ClubEvent } from "@/lib/types";
@@ -716,6 +717,7 @@ export function CalendarView() {
         weather={selected ? forecast.get(selected) : undefined}
         onClose={resetPanel}
         onPickEvent={(id) => {
+          swallowNextClick();
           setActiveId(id);
           setSelectedEventIds([id]);
           setEditing(false);
@@ -968,13 +970,12 @@ function WeekRow({
     window.clearTimeout(longTimer.current);
     longTimer.current = window.setTimeout(() => {
       longFired.current = true;
+      swallowNextClick();
       onCreateDay(iso);
     }, 500);
   };
-  const endLong = (iso: string, click: boolean) => {
+  const endLong = () => {
     window.clearTimeout(longTimer.current);
-    if (longFired.current) return;
-    if (click) onSelectDay(iso);
   };
 
   return (
@@ -1009,13 +1010,15 @@ function WeekRow({
             data-drop-hover={isDrop ? "true" : undefined}
             aria-label={`${formatDateKo(cell.iso)}${hasPractice ? " 연습" : ""}${weatherLabel}`}
             onPointerDown={() => startLong(cell.iso)}
-            onPointerUp={() => endLong(cell.iso, true)}
-            onPointerCancel={() => endLong(cell.iso, false)}
+            onPointerUp={endLong}
+            onPointerCancel={endLong}
             onClick={(event) => {
               if (longFired.current) {
                 event.preventDefault();
                 event.stopPropagation();
+                return;
               }
+              onSelectDay(cell.iso);
             }}
             onDoubleClick={(event) => {
               event.preventDefault();
@@ -1329,6 +1332,7 @@ function DayAgendaSheet({
 
   const dim = open ? Math.max(0, 1 - dragY / 420) : 0;
   const shift = open ? (entered ? dragY : typeof window === "undefined" ? 0 : window.innerHeight) : 0;
+  const dismiss = useBackdropDismiss(close, open);
   const day = date ? parseISODate(date).getDate() : 0;
   const weekday = date ? `${formatWeekday(date)}요일` : "";
   const sorted = events.slice().sort((a, b) => {
@@ -1343,13 +1347,13 @@ function DayAgendaSheet({
         aria-hidden
         className={cn(
           "fixed inset-0 z-40 bg-black/30",
-          open ? "pointer-events-auto" : "pointer-events-none opacity-0",
+          open && entered ? "pointer-events-auto" : "pointer-events-none opacity-0",
         )}
         style={{
           opacity: open ? dim : 0,
           transition: dragY ? "none" : "opacity var(--motion) ease-out",
         }}
-        onClick={close}
+        {...dismiss}
       />
       <section
         ref={sheetRef}

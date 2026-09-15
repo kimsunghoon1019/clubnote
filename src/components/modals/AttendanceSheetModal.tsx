@@ -4,6 +4,7 @@ import { AttendanceToggle } from "@/components/ui/AttendanceToggle";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { cn } from "@/lib/cn";
+import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import {
   attendanceRecordMap,
   downloadAttendanceSheetXlsx,
@@ -72,6 +73,8 @@ export function AttendanceSheetModal({
     (focusColRef.current ?? todayColRef.current)?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [open, practiceList.length, focusEventId]);
 
+  const dismiss = useBackdropDismiss(onClose, open);
+
   if (!open) return null;
 
   const exportSheet = async () => {
@@ -85,7 +88,7 @@ export function AttendanceSheetModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" {...dismiss}>
       <div
         role="dialog"
         aria-modal

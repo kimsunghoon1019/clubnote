@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { COMPACT_QUERY } from "@/lib/compact";
+import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import {
   useCallback,
   useEffect,
@@ -195,6 +196,7 @@ export function DetailSurface({
   const compactOpen = open;
   const dim = compactOpen ? Math.max(0, 1 - dragY / 420) : 0;
   const shift = compactOpen ? (entered ? dragY : typeof window === "undefined" ? 0 : window.innerHeight) : 0;
+  const dismiss = useBackdropDismiss(close, open);
 
   return (
     <>
@@ -204,13 +206,13 @@ export function DetailSurface({
         className={cn(
           "fixed inset-0 bg-black/30 lg:hidden",
           sheet ? "z-50" : "z-40",
-          open ? "pointer-events-auto" : "pointer-events-none opacity-0",
+          open && entered ? "pointer-events-auto" : "pointer-events-none opacity-0",
         )}
         style={{
           opacity: open ? dim : 0,
           transition: dragY ? "none" : "opacity var(--motion) ease-out",
         }}
-        onClick={close}
+        {...dismiss}
       />
       <aside
         ref={sheetRef}

@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDateKo, formatWon } from "@/lib/format";
+import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import { useClub } from "@/lib/store";
 import { Search, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,12 +32,13 @@ export function SearchOverlay() {
     };
   }, [q, members, events, transactions]);
 
-  if (!searchOpen) return null;
-
   const close = () => {
     setSearchOpen(false);
     setQuery("");
   };
+  const dismiss = useBackdropDismiss(close, searchOpen);
+
+  if (!searchOpen) return null;
 
   const goMember = (id: string) => {
     focusMember(id);
@@ -56,10 +58,7 @@ export function SearchOverlay() {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-white lg:bg-black/20"
-      onClick={() => setSearchOpen(false)}
-    >
+    <div className="fixed inset-0 z-50 bg-white lg:bg-black/20" {...dismiss}>
       <div
         className="flex h-full flex-col bg-white pt-[env(safe-area-inset-top)] lg:mx-auto lg:mt-20 lg:h-auto lg:max-h-[min(520px,calc(100%-96px))] lg:w-[560px] lg:max-w-[calc(100%-32px)] lg:rounded-card lg:border lg:border-line lg:pt-0"
         onClick={(e) => e.stopPropagation()}
