@@ -6,6 +6,7 @@ export function GhostButton({
   disabled,
   onClick,
   type = "button",
+  form,
   "aria-label": ariaLabel,
   "aria-expanded": ariaExpanded,
 }: {
@@ -14,12 +15,14 @@ export function GhostButton({
   disabled?: boolean;
   onClick?: () => void;
   type?: "button" | "submit";
+  form?: string;
   "aria-label"?: string;
   "aria-expanded"?: boolean;
 }) {
   return (
     <button
       type={type}
+      form={form}
       disabled={disabled}
       aria-label={ariaLabel}
       aria-expanded={ariaExpanded}

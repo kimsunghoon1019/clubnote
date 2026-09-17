@@ -290,9 +290,12 @@ export function parseBankWorkbook(
   return { rows: parsed };
 }
 
-export async function parseBankExcelFile(file: File, password?: string): Promise<ParseBankExcelResult> {
-  const buffer = await file.arrayBuffer();
-  let bytes = new Uint8Array(buffer);
+export async function parseBankExcelBytes(
+  input: Uint8Array,
+  fileName: string,
+  password?: string,
+): Promise<ParseBankExcelResult> {
+  let bytes = input;
   let unlocked = false;
 
   if (isEncryptedOffice(bytes)) {
@@ -309,7 +312,7 @@ export async function parseBankExcelFile(file: File, password?: string): Promise
   const XLSX = await import("xlsx");
   let workbook: import("xlsx").WorkBook;
   try {
-    const lower = file.name.toLowerCase();
+    const lower = fileName.toLowerCase();
     if (lower.endsWith(".csv") || lower.endsWith(".tsv")) {
       const text = new TextDecoder("utf-8").decode(bytes);
       workbook = XLSX.read(text, { type: "string", raw: true, FS: lower.endsWith(".tsv") ? "\t" : "," });
@@ -317,7 +320,7 @@ export async function parseBankExcelFile(file: File, password?: string): Promise
       workbook = XLSX.read(bytes, { type: "array", cellDates: false, raw: true });
     }
   } catch {
-    if (!unlocked && isEncryptedOffice(buffer)) {
+    if (!unlocked && isEncryptedOffice(input)) {
       return { rows: [], needsPassword: !password, error: password ? "비밀번호가 맞지 않아요" : undefined };
     }
     return { rows: [], error: "엑셀 파일을 읽지 못했어요" };
@@ -328,7 +331,11 @@ export async function parseBankExcelFile(file: File, password?: string): Promise
     rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: true, defval: "" }) as unknown[][],
   }));
 
-  return parseBankWorkbook(sheets, file.name);
+  return parseBankWorkbook(sheets, fileName);
+}
+
+export async function parseBankExcelFile(file: File, password?: string): Promise<ParseBankExcelResult> {
+  return parseBankExcelBytes(new Uint8Array(await file.arrayBuffer()), file.name, password);
 }
 
 export function newBankRows(existing: Transaction[], incoming: ParsedBankTx[]): ParsedBankTx[] {
