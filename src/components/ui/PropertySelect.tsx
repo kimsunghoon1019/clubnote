@@ -11,12 +11,14 @@ export function PropertySelect({
   onChange,
   children,
   className,
+  "aria-label": ariaLabel,
 }: {
   value: string;
   options: string[];
   onChange: (value: string) => void;
   children?: React.ReactNode;
   className?: string;
+  "aria-label"?: string;
 }) {
   const field = children == null;
   const [open, setOpen] = useState(false);
@@ -95,6 +97,7 @@ export function PropertySelect({
       <button
         ref={rootRef}
         type="button"
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(

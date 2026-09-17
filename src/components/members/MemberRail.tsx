@@ -4,7 +4,7 @@ import { ChartNotes } from "@/components/ui/ChartNotes";
 import { Avatar } from "@/components/ui/Avatar";
 import { PracticeDayToggles } from "@/components/ui/PracticeDayToggles";
 import { ScoreBar } from "@/components/ui/ScoreBar";
-import { FieldLabel, TextInput } from "@/components/ui/Field";
+import { TextInput } from "@/components/ui/Field";
 import { PropertySelect } from "@/components/ui/PropertySelect";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -16,7 +16,7 @@ import { diligenceScore, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
 import type { Gender } from "@/lib/types";
 import { Pencil, UserMinus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 type MemberDraft = {
   name: string;
@@ -29,7 +29,10 @@ type MemberDraft = {
   gender: Gender;
   category: string;
   role: string;
+  joinedAt: string;
 };
+
+const EDIT_CLASS = "h-touch px-2 text-compact lg:!h-8 lg:!px-2 lg:!text-[13px]";
 
 function draftFrom(member: {
   name: string;
@@ -42,6 +45,7 @@ function draftFrom(member: {
   gender: Gender;
   category: string;
   role: string;
+  joinedAt: string;
 }): MemberDraft {
   return {
     name: member.name,
@@ -54,7 +58,12 @@ function draftFrom(member: {
     gender: member.gender,
     category: member.category,
     role: member.role,
+    joinedAt: member.joinedAt,
   };
+}
+
+function withCurrent(options: string[], current: string) {
+  return current && !options.includes(current) ? [current, ...options] : options;
 }
 
 export function MemberRail({ memberId }: { memberId: string }) {
@@ -89,26 +98,54 @@ export function MemberRail({ memberId }: { memberId: string }) {
   const participation = participationScore(member, events, attendance);
   const presentCount = tallyMemberPresents(member, events, attendance);
   const memberNotes = notes.filter((note) => note.memberId === member.id);
+  const shown = editing && draft ? draft : null;
+  const patch = (next: Partial<MemberDraft>) => setDraft((current) => (current ? { ...current, ...next } : current));
 
   return (
     <div data-member-rail={member.id}>
       <div className="mb-4 flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <Avatar name={member.name} size={40} src={memberPhotoSrc(member)} />
-          <div>
-            <p className="flex items-baseline gap-1.5">
-              <span className="text-[15px] font-semibold">{member.name}</span>
-              {" "}
-              <span className="text-[12px] font-normal text-sub">{member.role}</span>
-              {member.active === false ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Avatar name={shown?.name ?? member.name} size={40} src={memberPhotoSrc(member)} />
+          <div className="min-w-0 flex-1">
+            {shown ? (
+              <div className="flex items-center gap-1.5">
+                <TextInput
+                  aria-label="이름"
+                  className={`${EDIT_CLASS} min-w-0 flex-1 font-semibold lg:!text-[15px]`}
+                  value={shown.name}
+                  onChange={(e) => patch({ name: e.target.value })}
+                />
+                <PropertySelect
+                  aria-label="직책"
+                  className={`${EDIT_CLASS} !w-[104px] shrink-0`}
+                  value={shown.role}
+                  options={withCurrent(roles, shown.role)}
+                  onChange={(value) => patch({ role: value })}
+                />
+              </div>
+            ) : (
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-[15px] font-semibold">{member.name}</span>
+                {" "}
+                <span className="text-[12px] font-normal text-sub">{member.role}</span>
+                {member.active === false ? (
+                  <>
+                    {" "}
+                    <span className="text-[12px] font-normal text-faint">비활동</span>
+                  </>
+                ) : null}
+              </p>
+            )}
+            <p className="mt-0.5 text-[12px] text-faint">
+              <span className="tabular-nums">{shown?.studentId ?? member.studentId}</span>
+              {" · "}
+              {shown?.major ?? member.major}
+              {shown && member.active === false ? (
                 <>
-                  {" "}
-                  <span className="text-[12px] font-normal text-faint">비활동</span>
+                  {" · "}
+                  <span>비활동</span>
                 </>
               ) : null}
-            </p>
-            <p className="text-[12px] text-faint">
-              <span className="tabular-nums">{member.studentId}</span> · {member.major}
             </p>
           </div>
         </div>
@@ -117,125 +154,131 @@ export function MemberRail({ memberId }: { memberId: string }) {
         </button>
       </div>
 
-      {editing && draft ? (
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <div className="col-span-2">
-            <FieldLabel>이름</FieldLabel>
+      <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+        <Info label="단과대학">
+          {shown ? (
+            <TextInput aria-label="단과대학" className={EDIT_CLASS} value={shown.college} onChange={(e) => patch({ college: e.target.value })} />
+          ) : (
+            member.college || "-"
+          )}
+        </Info>
+        <Info label="전공">
+          {shown ? (
             <TextInput
-              className="h-8 text-[13px]"
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>분류</FieldLabel>
-            <PropertySelect
-              className="h-8 text-[13px]"
-              value={draft.category}
-              options={categories}
-              onChange={(value) => setDraft({ ...draft, category: value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>직책</FieldLabel>
-            <PropertySelect
-              className="h-8 text-[13px]"
-              value={draft.role}
-              options={roles}
-              onChange={(value) => setDraft({ ...draft, role: value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>나이</FieldLabel>
-            <TextInput
-              className="h-8 text-[13px]"
-              inputMode="numeric"
-              value={draft.age}
-              onChange={(e) => setDraft({ ...draft, age: e.target.value.replace(/[^\d]/g, "") })}
-            />
-          </div>
-          <div>
-            <FieldLabel>생년월일</FieldLabel>
-            <TextInput
-              className="h-8 text-[13px] tabular-nums"
-              type="date"
-              value={draft.birthDate}
-              onChange={(e) => {
-                const birthDate = e.target.value;
-                setDraft({
-                  ...draft,
-                  birthDate,
-                  age: birthDate ? String(ageFromBirthDate(birthDate)) : draft.age,
-                });
-              }}
-            />
-          </div>
-          <div>
-            <FieldLabel>성별</FieldLabel>
-            <PropertySelect
-              className="h-8 text-[13px]"
-              value={draft.gender}
-              options={[...GENDER_OPTIONS]}
-              onChange={(value) => setDraft({ ...draft, gender: value as Gender })}
-            />
-          </div>
-          <div>
-            <FieldLabel>학번</FieldLabel>
-            <TextInput
-              className="h-8 text-[13px] tabular-nums"
-              inputMode="numeric"
-              maxLength={10}
-              value={draft.studentId}
-              onChange={(e) => setDraft({ ...draft, studentId: e.target.value.replace(/[^\d]/g, "").slice(0, 10) })}
-            />
-          </div>
-          <div>
-            <FieldLabel>단과대학</FieldLabel>
-            <TextInput
-              className="h-8 text-[13px]"
-              value={draft.college}
-              onChange={(e) => setDraft({ ...draft, college: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>전공</FieldLabel>
-            <TextInput
-              className="h-8 text-[13px]"
-              value={draft.major}
+              aria-label="전공"
+              className={EDIT_CLASS}
+              value={shown.major}
               onChange={(e) => {
                 const major = e.target.value;
                 const inferred = collegeFromMajor(major);
-                setDraft({
-                  ...draft,
-                  major,
-                  college: inferred || draft.college,
+                patch({ major, college: inferred || shown.college });
+              }}
+            />
+          ) : (
+            member.major
+          )}
+        </Info>
+        <Info label="분류">
+          {shown ? (
+            <PropertySelect
+              aria-label="분류"
+              className={EDIT_CLASS}
+              value={shown.category}
+              options={withCurrent(categories, shown.category)}
+              onChange={(value) => patch({ category: value })}
+            />
+          ) : (
+            member.category
+          )}
+        </Info>
+        <Info label="성별">
+          {shown ? (
+            <PropertySelect
+              aria-label="성별"
+              className={EDIT_CLASS}
+              value={shown.gender}
+              options={[...GENDER_OPTIONS]}
+              onChange={(value) => patch({ gender: value as Gender })}
+            />
+          ) : (
+            member.gender
+          )}
+        </Info>
+        <Info label="나이">
+          {shown ? (
+            <span className="flex items-center gap-1">
+              <TextInput
+                aria-label="나이"
+                className={EDIT_CLASS}
+                inputMode="numeric"
+                value={shown.age}
+                onChange={(e) => patch({ age: e.target.value.replace(/[^\d]/g, "") })}
+              />
+              <span className="shrink-0 text-sub">세</span>
+            </span>
+          ) : (
+            `${member.age}세`
+          )}
+        </Info>
+        <Info label="생년월일">
+          {shown ? (
+            <TextInput
+              aria-label="생년월일"
+              className={`${EDIT_CLASS} tabular-nums`}
+              type="date"
+              value={shown.birthDate}
+              onChange={(e) => {
+                const birthDate = e.target.value;
+                patch({
+                  birthDate,
+                  age: birthDate ? String(ageFromBirthDate(birthDate)) : shown.age,
                 });
               }}
             />
-          </div>
-          <div className="col-span-2">
-            <FieldLabel>연락처</FieldLabel>
+          ) : member.birthDate ? (
+            formatDateDot(member.birthDate)
+          ) : (
+            "-"
+          )}
+        </Info>
+        <Info label="근속" value={tenureLabel(shown?.joinedAt ?? member.joinedAt)} />
+        <Info label="학번">
+          {shown ? (
             <TextInput
-              className="h-8 text-[13px]"
-              value={draft.phone}
-              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+              aria-label="학번"
+              className={`${EDIT_CLASS} tabular-nums`}
+              inputMode="numeric"
+              maxLength={10}
+              value={shown.studentId}
+              onChange={(e) => patch({ studentId: e.target.value.replace(/[^\d]/g, "").slice(0, 10) })}
             />
-          </div>
-        </div>
-      ) : (
-        <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-          <Info label="단과대학" value={member.college || "-"} />
-          <Info label="전공" value={member.major} />
-          <Info label="분류" value={member.category} />
-          <Info label="성별" value={member.gender} />
-          <Info label="나이" value={`${member.age}세`} />
-          <Info label="생년월일" value={member.birthDate ? formatDateDot(member.birthDate) : "-"} />
-          <Info label="근속" value={tenureLabel(member.joinedAt)} />
-          <Info label="학번" value={member.studentId} />
-          <Info label="가입" value={member.joinedAt ? formatDateDot(member.joinedAt) : "-"} />
-          <Info label="연락처" value={member.phone || "-"} />
-        </dl>
-      )}
+          ) : (
+            member.studentId
+          )}
+        </Info>
+        <Info label="가입">
+          {shown ? (
+            <TextInput
+              aria-label="가입"
+              className={`${EDIT_CLASS} tabular-nums`}
+              type="date"
+              value={shown.joinedAt}
+              onChange={(e) => patch({ joinedAt: e.target.value })}
+            />
+          ) : member.joinedAt ? (
+            formatDateDot(member.joinedAt)
+          ) : (
+            "-"
+          )}
+        </Info>
+        <Info label="연락처">
+          {shown ? (
+            <TextInput aria-label="연락처" className={EDIT_CLASS} value={shown.phone} onChange={(e) => patch({ phone: e.target.value })} />
+          ) : (
+            member.phone || "-"
+          )}
+        </Info>
+      </dl>
 
       <div className="mb-4 space-y-2">
         <ScoreBar label="성실도" value={diligence} />
@@ -318,6 +361,7 @@ export function MemberRail({ memberId }: { memberId: string }) {
                   gender: draft.gender,
                   category: draft.category,
                   role: draft.role,
+                  joinedAt: draft.joinedAt,
                 });
                 setEditing(false);
                 setDraft(null);
@@ -360,11 +404,19 @@ export function MemberRail({ memberId }: { memberId: string }) {
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value?: string;
+  children?: ReactNode;
+}) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-[11px] text-faint">{label}</dt>
-      <dd className="text-ink">{value}</dd>
+      <dd className="min-w-0 text-ink">{children ?? value}</dd>
     </div>
   );
 }
