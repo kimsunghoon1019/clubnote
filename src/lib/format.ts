@@ -99,6 +99,15 @@ export function formatNoticeClock(hhmm: string) {
   return `${period} ${hour12}시 ${minutes}분`;
 }
 
+/** 카톡 공지용 시작~종료. */
+export function formatNoticeClockRange(start: string, end: string) {
+  const startLabel = formatNoticeClock(start);
+  const endLabel = formatNoticeClock(end);
+  if (!startLabel) return endLabel;
+  if (!endLabel || endLabel === startLabel) return startLabel;
+  return `${startLabel} ~ ${endLabel}`;
+}
+
 export function defaultPracticeRange(iso: string) {
   const day = parseISODate(iso).getDay();
   if (day === 6) return { startTime: "10:00", endTime: "13:00" };

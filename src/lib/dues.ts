@@ -1,5 +1,5 @@
 import { formatDateDot, parseISODate, toISODate, todayISO } from "./format";
-import { sortMembersByCategory } from "./stats";
+import { isActive, sortMembersByCategory } from "./stats";
 import type { DuesOverride, Member, Transaction } from "./types";
 
 export type DuesSemester = {
@@ -83,7 +83,8 @@ export function duesStatus(
   options: { today?: string; overrides?: DuesOverride[] } = {},
 ): { semester: DuesSemester; rows: DuesRow[] } {
   const semester = duesSemester(options.today ?? todayISO());
-  const names = [...new Set(members.map((member) => member.name).filter(Boolean))];
+  const activeMembers = members.filter(isActive);
+  const names = [...new Set(activeMembers.map((member) => member.name).filter(Boolean))];
   const byName = new Map<string, { amount: number; titles: string[] }>();
   const overrideByMember = new Map(
     (options.overrides ?? [])
@@ -104,7 +105,7 @@ export function duesStatus(
     }
   }
 
-  const rows = sortMembersByCategory(members, categories).map((member) => {
+  const rows = sortMembersByCategory(activeMembers, categories).map((member) => {
     const match = byName.get(member.name);
     const paidAmount = match?.amount ?? 0;
     const autoPaid = paidAmount > 0;

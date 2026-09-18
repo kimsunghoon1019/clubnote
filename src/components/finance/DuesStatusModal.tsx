@@ -84,7 +84,7 @@ export function DuesStatusModal({ open, onClose }: { open: boolean; onClose: () 
     <Modal open={open} title="단비 납부 여부" onClose={onClose} width={760} align="top">
       <p className="text-[13px] text-sub">
         {semester.label} · {formatDuesPeriod(semester)} 입금 적요에 이름이 들어 있으면 납부로 표시합니다. 다른 이름으로
-        보낸 경우 납부여부를 직접 바꿀 수 있어요.
+        보낸 경우 납부여부를 직접 바꿀 수 있어요. 비활동 단원은 납부·미납 목록에 넣지 않습니다.
       </p>
       <div className="mt-3 flex items-center gap-2">
         {(["전체", "미납", "납부"] as const).map((item) => (

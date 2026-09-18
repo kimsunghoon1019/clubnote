@@ -11,7 +11,7 @@ import { MemberRail } from "@/components/members/MemberRail";
 import { latestTransaction, transactionBalanceSpark } from "@/lib/bankExcel";
 import { duesStatus } from "@/lib/dues";
 import { formatDateKo, formatEventTime, formatWeekday, formatWon, todayISO } from "@/lib/format";
-import { todayMemoItems, type TodayMemo } from "@/lib/notice";
+import { todayMemoItems, weekOffsetForDate, type TodayMemo } from "@/lib/notice";
 import {
   attendanceStatusMap,
   categoryPresentCounts,
@@ -78,6 +78,7 @@ export function HomeView() {
   const selectableRows = participationByDate.filter((row) => !row.isPad && !row.isPlaceholder);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [practiceWeekOffset, setPracticeWeekOffset] = useState(1);
+  const [expectedWeekOffset, setExpectedWeekOffset] = useState<number | null>(null);
   const fallbackEventId =
     selectableRows.find((row) => row.isToday)?.id ??
     selectableRows.find((row) => row.date >= today)?.id ??
@@ -101,7 +102,10 @@ export function HomeView() {
     if (!selectableRows.some((row) => row.id === id)) return;
     setSelectedEventId(id);
   };
-  const nextEvent = upcomingPractice(events, today) ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
+  const upcoming = upcomingPractice(events, today);
+  const nextEvent = upcoming ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
+  const resolvedExpectedWeekOffset =
+    expectedWeekOffset ?? (upcoming ? weekOffsetForDate(upcoming.date, today) : 0);
   const balance = latestTransaction(transactions)?.balanceAfter ?? 0;
   const balanceSpark = useMemo(() => transactionBalanceSpark(transactions), [transactions]);
   const memberSpark = useMemo(() => memberCountSpark(members, today), [members, today]);
@@ -113,8 +117,8 @@ export function HomeView() {
   const paidCount = dues.rows.length - unpaidCount;
 
   const memos = useMemo(
-    () => todayMemoItems(events, members, categories, recordMap, today, practiceWeekOffset),
-    [events, members, categories, recordMap, today, practiceWeekOffset],
+    () => todayMemoItems(events, members, categories, recordMap, today, practiceWeekOffset, resolvedExpectedWeekOffset),
+    [events, members, categories, recordMap, today, practiceWeekOffset, resolvedExpectedWeekOffset],
   );
 
   const copyMemo = async (text: string) => {
@@ -440,12 +444,19 @@ export function HomeView() {
                 memo={memo}
                 onCopy={() => copyMemo(memo.text)}
                 weekNav={
-                  memo.id === "week-practice"
+                  memo.weekNav === "practice"
                     ? {
+                        kind: "practice",
                         onPrev: () => setPracticeWeekOffset((offset) => offset - 1),
                         onNext: () => setPracticeWeekOffset((offset) => offset + 1),
                       }
-                    : undefined
+                    : memo.weekNav === "expected"
+                      ? {
+                          kind: "expected",
+                          onPrev: () => setExpectedWeekOffset(resolvedExpectedWeekOffset - 1),
+                          onNext: () => setExpectedWeekOffset(resolvedExpectedWeekOffset + 1),
+                        }
+                      : undefined
                 }
               />
             ))}
@@ -487,8 +498,9 @@ function CopyMemoCard({
 }: {
   memo: TodayMemo;
   onCopy: () => void;
-  weekNav?: { onPrev: () => void; onNext: () => void };
+  weekNav?: { kind: "practice" | "expected"; onPrev: () => void; onNext: () => void };
 }) {
+  const expectedNav = weekNav?.kind === "expected";
   return (
     <div data-home-memo={memo.id} className="rounded-card border border-line-soft">
       <div className="flex items-start justify-between gap-2 px-3 py-1.5">
@@ -498,7 +510,8 @@ function CopyMemoCard({
             <div className="-ml-2 flex items-center">
               <button
                 type="button"
-                data-practice-week-prev
+                data-practice-week-prev={expectedNav ? undefined : true}
+                data-expected-week-prev={expectedNav ? true : undefined}
                 aria-label="이전 주"
                 className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
                 onClick={weekNav.onPrev}
@@ -512,7 +525,8 @@ function CopyMemoCard({
               )}
               <button
                 type="button"
-                data-practice-week-next
+                data-practice-week-next={expectedNav ? undefined : true}
+                data-expected-week-next={expectedNav ? true : undefined}
                 aria-label="다음 주"
                 className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
                 onClick={weekNav.onNext}
