@@ -3,6 +3,7 @@
 import { DetailSurface } from "@/components/layout/DetailSurface";
 import { RailSection } from "@/components/layout/RightRail";
 import { MemberRail } from "@/components/members/MemberRail";
+import { AddAttendanceMemberModal } from "@/components/modals/AddAttendanceMemberModal";
 import { AttendanceSheetModal } from "@/components/modals/AttendanceSheetModal";
 import { AttendanceToggle, StatusMixBar } from "@/components/ui/AttendanceToggle";
 import { Avatar } from "@/components/ui/Avatar";
@@ -10,18 +11,20 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { RolePill } from "@/components/ui/Pill";
+import { Pill, RolePill } from "@/components/ui/Pill";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { cn } from "@/lib/cn";
 import { isAttendanceClosed } from "@/lib/attendanceSheet";
 import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_META, isPresentStatus } from "@/lib/constants";
 import { formatDateKo, formatEventTime, formatWeekday, todayISO } from "@/lib/format";
 import {
+  addableMembersForEvent,
+  attendanceRoster,
   categoryAttendance,
   countByStatus,
+  isGuestForEvent,
   isPracticeEvent,
   latestPractice,
-  membersForEvent,
   sortMembersByCategory,
   upcomingPractice,
 } from "@/lib/stats";
@@ -29,7 +32,7 @@ import { isInspectDismissClick } from "@/lib/inspect";
 import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
@@ -65,6 +68,7 @@ export function AttendanceView() {
   const [eventId, setEventId] = useState(fallback?.id ?? "");
   const [categoryFilter, setCategoryFilter] = useState("전체");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   const [saveFlash, setSaveFlash] = useState(false);
@@ -83,6 +87,7 @@ export function AttendanceView() {
     setSelectionAnchorId(null);
     inspectMember(null);
     setDateOpen(false);
+    setAddOpen(false);
   }, [eventId, inspectMember]);
 
   useEffect(() => {
@@ -125,8 +130,12 @@ export function AttendanceView() {
     chronoIndex >= 0 && chronoIndex < chronoList.length - 1 ? chronoList[chronoIndex + 1] : null;
 
   const roster = useMemo(
-    () => (event ? sortMembersByCategory(membersForEvent(members, event), categories) : []),
-    [members, event, categories],
+    () => (event ? sortMembersByCategory(attendanceRoster(members, event, attendance), categories) : []),
+    [members, event, attendance, categories],
+  );
+  const addable = useMemo(
+    () => (event ? addableMembersForEvent(members, event, attendance) : []),
+    [members, event, attendance],
   );
   const records = attendance.filter((row) => event && row.eventId === event.id);
   const recordMap = new Map(records.map((row) => [row.memberId, row.status]));
@@ -225,6 +234,14 @@ export function AttendanceView() {
     }
   };
 
+  const addGuests = (ids: string[]) => {
+    if (!event || ids.length === 0) return;
+    for (const id of ids) {
+      setAttendanceStatus(event.id, id, "출석");
+    }
+    toast(ids.length === 1 ? "출석 명단에 넣었어요" : `${ids.length}명을 출석 명단에 넣었어요`);
+  };
+
   const handleSave = () => {
     if (!event) return;
     closeAttendance(event.id);
@@ -264,6 +281,7 @@ export function AttendanceView() {
         <span className="inline-flex items-center gap-2">
           <Avatar name={row.name} size={24} />
           <span className="font-medium">{row.name}</span>
+          {event && isGuestForEvent(row, event) ? <Pill tone="brand">추가</Pill> : null}
         </span>
       ),
     },
@@ -390,6 +408,10 @@ export function AttendanceView() {
             {formatWeekday(event.date)}요일 · 미체크 {unchecked}명
             {selectedIds.length > 1 ? ` · ${selectedIds.length}명 선택` : ""}
           </span>
+          <GhostButton className="h-8 px-3 text-[12px]" aria-label="대상 추가" onClick={() => setAddOpen(true)}>
+            <UserPlus className="h-3.5 w-3.5" />
+            대상 추가
+          </GhostButton>
           <GhostButton className="h-8 px-3 text-[12px]" onClick={() => setSheetOpen(true)}>
             출석표 보기
           </GhostButton>
@@ -500,14 +522,25 @@ export function AttendanceView() {
             <p className="min-w-0 text-compact-caption text-sub">
               출석 {present}/{targetCount} · 미체크 {unchecked}명
             </p>
-            <button
-              type="button"
-              data-attendance-sheet
-              className="inline-flex h-touch shrink-0 items-center justify-center rounded-btn border border-line bg-white px-3 text-[13px] font-semibold text-ink touch-manipulation hover:bg-muted"
-              onClick={() => setSheetOpen(true)}
-            >
-              출석표 보기
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                data-attendance-add
+                aria-label="대상 추가"
+                className="inline-flex h-touch w-touch items-center justify-center rounded-btn text-brand-text touch-manipulation hover:bg-muted"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                data-attendance-sheet
+                className="inline-flex h-touch shrink-0 items-center justify-center rounded-btn border border-line bg-white px-3 text-[13px] font-semibold text-ink touch-manipulation hover:bg-muted"
+                onClick={() => setSheetOpen(true)}
+              >
+                출석표 보기
+              </button>
+            </div>
           </div>
           <StatusMixBar counts={counts} unchecked={unchecked} />
           <div className="-mx-4 flex flex-nowrap gap-1 overflow-x-auto px-4 scrollbar-thin">
@@ -550,6 +583,7 @@ export function AttendanceView() {
                           <span className="block truncate text-compact font-semibold text-ink">{row.name}</span>
                           <span className="block truncate text-compact-caption text-faint">
                             {row.category} · {row.role}
+                            {event && isGuestForEvent(row, event) ? " · 추가" : ""}
                           </span>
                         </span>
                       </button>
@@ -638,6 +672,13 @@ export function AttendanceView() {
       </DetailSurface>
 
       <AttendanceSheetModal open={sheetOpen} onClose={() => setSheetOpen(false)} focusEventId={event.id} />
+      <AddAttendanceMemberModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        members={addable}
+        categories={categories}
+        onAdd={addGuests}
+      />
     </>
   );
 }

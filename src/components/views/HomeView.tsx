@@ -22,6 +22,7 @@ import {
   membersForEvent,
   monthlyHeldPracticeSpark,
   pooledRosterRate,
+  practiceCountsByWeekday,
   remainingPracticeEvents,
   thisWeekHeldPractices,
   upcomingPractice,
@@ -68,6 +69,7 @@ export function HomeView() {
   const recordMap = useMemo(() => attendanceStatusMap(attendance), [attendance]);
   const held = useMemo(() => heldPracticeEvents(events, today), [events, today]);
   const remaining = useMemo(() => remainingPracticeEvents(events, today), [events, today]);
+  const weekdayCounts = useMemo(() => practiceCountsByWeekday(events, today), [events, today]);
   const weekHeld = useMemo(() => thisWeekHeldPractices(events, today), [events, today]);
   const participationByDate = useMemo(
     () => centeredPracticeParticipation(events, members, recordMap, today, RECENT_PRACTICE_COUNT),
@@ -167,8 +169,47 @@ export function HomeView() {
           />
         </section>
 
+        <section data-home-practice-days className="order-4 border-b border-line-soft px-5 py-4 lg:order-2">
+          <div className="mb-3">
+            <h2 className="text-[15px] font-semibold">요일별 연습</h2>
+            <p className="mt-0.5 text-[12px] text-faint">오늘 기준 · 진행한 연습과 남은 연습</p>
+          </div>
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full min-w-[280px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-line-soft text-[12px] text-faint">
+                  <th className="py-1.5 pr-3 font-medium">요일</th>
+                  <th className="py-1.5 pr-3 text-right font-medium">진행</th>
+                  <th className="py-1.5 pr-3 text-right font-medium">남은</th>
+                  <th className="py-1.5 text-right font-medium">합계</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weekdayCounts.map((row) => (
+                  <tr key={row.day} data-practice-day={row.day} className="border-b border-line-soft">
+                    <td className="py-2 pr-3 font-medium text-ink">{row.day}요일</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.held}회</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-sub">{row.remaining}회</td>
+                    <td className="py-2 text-right tabular-nums text-ink">{row.total}회</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="text-[13px]">
+                  <th className="pt-2 pr-3 font-semibold text-ink">합계</th>
+                  <td className="pt-2 pr-3 text-right font-semibold tabular-nums text-ink">{held.length}회</td>
+                  <td className="pt-2 pr-3 text-right font-semibold tabular-nums text-sub">{remaining.length}회</td>
+                  <td className="pt-2 text-right font-semibold tabular-nums text-ink">
+                    {held.length + remaining.length}회
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+
         {nextEvent ? (
-          <section data-home-next-event className="order-4 border-b border-line-soft px-5 py-4 lg:hidden">
+          <section data-home-next-event className="order-5 border-b border-line-soft px-5 py-4 lg:hidden">
             <p className="text-compact-caption text-sub">다음 연습</p>
             <p className="mt-1 text-compact-title font-semibold">{formatDateKo(nextEvent.date)}</p>
             <p className="text-compact-caption text-sub">
@@ -177,7 +218,7 @@ export function HomeView() {
           </section>
         ) : null}
 
-        <section data-home-charts className="order-5 grid border-b border-line-soft lg:order-2 lg:grid-cols-2">
+        <section data-home-charts className="order-6 grid border-b border-line-soft lg:order-3 lg:grid-cols-2">
           <div className="border-b border-line-soft p-5 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">날짜별 연습 참여 인원</h2>
@@ -387,7 +428,7 @@ export function HomeView() {
           </div>
         </section>
 
-        <section data-home-memos className="order-2 min-w-0 border-b border-line-soft px-5 py-4 lg:order-3">
+        <section data-home-memos className="order-2 min-w-0 border-b border-line-soft px-5 py-4 lg:order-4">
           <div className="mb-2">
             <h2 className="text-[15px] font-semibold">오늘의 멘트</h2>
             <p className="mt-0.5 text-[12px] text-faint">카톡방에 바로 붙여넣을 수 있어요</p>

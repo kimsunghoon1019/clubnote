@@ -75,7 +75,7 @@ export function AttendanceSheetModal({
 
   const dismiss = useBackdropDismiss(onClose, open);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   const exportSheet = async () => {
     if (practiceList.length === 0 || people.length === 0) {
@@ -86,20 +86,33 @@ export function AttendanceSheetModal({
     toast("출석표 엑셀을 내려받았어요");
   };
 
-  return (
+  return createPortal(
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" {...dismiss}>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/30 p-0 lg:items-center lg:p-4" {...dismiss}>
       <div
         role="dialog"
         aria-modal
         aria-label="출석표"
-        className="flex h-[min(92vh,920px)] w-[min(96vw,1280px)] flex-col overflow-hidden rounded-card border border-line bg-white"
+        className="flex h-full w-full flex-col overflow-hidden rounded-none border-0 bg-white lg:h-[min(92vh,920px)] lg:w-[min(96vw,1280px)] lg:rounded-card lg:border lg:border-line"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center gap-3 border-b border-line-soft px-5 py-3.5">
-          <h2 className="text-[16px] font-semibold text-ink">출석표</h2>
-          <p className="text-[12px] text-faint">행이 회원, 열이 연습 날짜 · 마감한 연습만 표시</p>
-          <ul className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-sub">
+        <div className="flex shrink-0 flex-col gap-2 border-b border-line-soft px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:flex-row lg:items-center lg:gap-3 lg:px-5 lg:py-3.5 lg:pt-3.5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-compact font-semibold text-ink lg:text-[16px]">출석표</h2>
+            <p className="hidden min-w-0 flex-1 truncate text-[12px] text-faint lg:block">
+              행이 회원, 열이 연습 날짜 · 안 오는 요일도 눌러 출석할 수 있어요
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="ml-auto flex h-touch w-touch items-center justify-center rounded-btn text-faint hover:bg-muted hover:text-ink lg:hidden"
+              aria-label="닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-[12px] text-faint lg:hidden">안 오는 요일도 눌러 출석할 수 있어요</p>
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-sub lg:ml-auto">
             {ATTENDANCE_STATUSES.map((status) => (
               <li key={status} className="inline-flex items-center gap-1">
                 <StatusDot status={status} />
@@ -112,18 +125,20 @@ export function AttendanceSheetModal({
             </li>
             <li className="text-faint">미마감</li>
           </ul>
-          <GhostButton className="h-8 shrink-0 px-3 text-[12px]" onClick={() => void exportSheet()}>
-            <Download className="h-3.5 w-3.5" />
-            엑셀로 내보내기
-          </GhostButton>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-btn p-1 text-faint hover:bg-muted hover:text-ink"
-            aria-label="닫기"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <GhostButton className="h-touch flex-1 px-3 text-[13px] lg:h-8 lg:flex-none lg:text-[12px]" onClick={() => void exportSheet()}>
+              <Download className="h-3.5 w-3.5" />
+              엑셀로 내보내기
+            </GhostButton>
+            <button
+              type="button"
+              onClick={onClose}
+              className="hidden rounded-btn p-1 text-faint hover:bg-muted hover:text-ink lg:block"
+              aria-label="닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div
@@ -229,7 +244,8 @@ export function AttendanceSheetModal({
         onClose={() => setEdit(null)}
       />
     ) : null}
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -252,42 +268,42 @@ function SheetCell({
 }) {
   const scheduled = isScheduledFor(member, event);
   const meta = status ? ATTENDANCE_STATUS_META[status] : null;
+  const locked = scheduled && !closed;
+  const emptyLabel = scheduled ? "미체크" : "·";
+  const label = meta ? meta.short : emptyLabel;
 
   return (
     <td className={cn("border-b border-l border-line-soft p-0.5", today && "bg-brand-soft")}>
-      {scheduled ? (
-        closed ? (
-          <button
-            type="button"
-            aria-label={`${formatDateKo(event.date)} ${member.name} ${status ?? "미체크"}`}
-            aria-haspopup="dialog"
-            aria-expanded={editing}
-            data-sheet-cell
-            onClick={(e) => onEdit(e.currentTarget.getBoundingClientRect())}
-            className={cn(
-              "flex h-8 w-full items-center justify-center rounded-[8px] text-[10px] font-semibold",
-              editing && "ring-1 ring-brand",
-            )}
-            style={
-              meta
-                ? { background: meta.color, color: "#fff" }
-                : { background: "#F2F4F6", color: "#8B95A1" }
-            }
-          >
-            {meta ? meta.short : "미체크"}
-          </button>
-        ) : (
-          <span
-            className="flex h-8 items-center justify-center text-[10px] text-faint"
-            aria-label={`${formatDateKo(event.date)} ${member.name} 미마감`}
-          >
-            미마감
-          </span>
-        )
-      ) : (
-        <span className="flex h-8 items-center justify-center text-faint" aria-hidden>
-          ·
+      {locked ? (
+        <span
+          className="flex h-8 items-center justify-center text-[10px] text-faint"
+          aria-label={`${formatDateKo(event.date)} ${member.name} 미마감`}
+        >
+          미마감
         </span>
+      ) : (
+        <button
+          type="button"
+          aria-label={`${formatDateKo(event.date)} ${member.name} ${status ?? (scheduled ? "미체크" : "해당 없음")}`}
+          aria-haspopup="dialog"
+          aria-expanded={editing}
+          data-sheet-cell
+          data-sheet-guest={!scheduled ? "true" : undefined}
+          onClick={(e) => onEdit(e.currentTarget.getBoundingClientRect())}
+          className={cn(
+            "flex h-8 w-full items-center justify-center rounded-[8px] text-[10px] font-semibold",
+            editing && "ring-1 ring-brand",
+          )}
+          style={
+            meta
+              ? { background: meta.color, color: "#fff" }
+              : scheduled
+                ? { background: "#F2F4F6", color: "#8B95A1" }
+                : { background: "transparent", color: "#D1D6DB" }
+          }
+        >
+          {label}
+        </button>
       )}
     </td>
   );

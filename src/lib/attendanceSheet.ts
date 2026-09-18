@@ -111,7 +111,11 @@ export function sheetCellValue(
   event: ClubEvent,
   status?: AttendanceStatus,
 ): string | null {
-  if (!isScheduledFor(member, event)) return null;
+  if (!isScheduledFor(member, event)) {
+    if (!status) return null;
+    if (!isAttendanceClosed(event)) return "미마감";
+    return status;
+  }
   if (!isAttendanceClosed(event)) return "미마감";
   return status ?? "미체크";
 }

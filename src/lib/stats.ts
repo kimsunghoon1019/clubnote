@@ -1,6 +1,8 @@
-import { ATTENDANCE_STATUSES, isAbsentStatus, isPresentStatus } from "./constants";
+import { ATTENDANCE_STATUSES, PRACTICE_DAYS, isAbsentStatus, isPresentStatus } from "./constants";
 import { formatWeekday, parseISODate, startOfWeekMonday, toISODate, todayISO, weekdayToPracticeDay } from "./format";
 import type { Attendance, AttendanceStatus, ClubEvent, Member, PracticeDay } from "./types";
+
+const WEEKDAY_ORDER = ["월", "화", "수", "목", "금", "토", "일"] as const;
 
 export function isPracticeEvent(event: ClubEvent) {
   return event.type === "연습" || event.type === "정기연습";
@@ -23,6 +25,31 @@ export function isScheduledFor(member: Member, event: ClubEvent) {
 
 export function membersForEvent(members: Member[], event: ClubEvent) {
   return members.filter((member) => isScheduledFor(member, event));
+}
+
+/** 연습요일이 아닌데 이 연습에 출결이 있는 회원. */
+export function extraMembersForEvent(members: Member[], event: ClubEvent, attendance: Attendance[]) {
+  const scheduledIds = new Set(membersForEvent(members, event).map((member) => member.id));
+  const extraIds = new Set(
+    attendance
+      .filter((row) => row.eventId === event.id && !scheduledIds.has(row.memberId))
+      .map((row) => row.memberId),
+  );
+  return members.filter((member) => extraIds.has(member.id));
+}
+
+/** 그날 출석 명단: 스케줄 대상 + 추가로 출결을 넣은 사람. */
+export function attendanceRoster(members: Member[], event: ClubEvent, attendance: Attendance[]) {
+  return [...membersForEvent(members, event), ...extraMembersForEvent(members, event, attendance)];
+}
+
+export function addableMembersForEvent(members: Member[], event: ClubEvent, attendance: Attendance[]) {
+  const onRoster = new Set(attendanceRoster(members, event, attendance).map((member) => member.id));
+  return members.filter((member) => isActive(member) && !onRoster.has(member.id));
+}
+
+export function isGuestForEvent(member: Member, event: ClubEvent) {
+  return isPracticeEvent(event) && !isScheduledFor(member, event);
 }
 
 export function sortMembersByCategory(members: Member[], categories: string[]) {
@@ -169,6 +196,30 @@ export function remainingPracticeEvents(events: ClubEvent[], today = todayISO())
   return practiceEvents(events)
     .filter((event) => event.date > today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+}
+
+export type WeekdayPracticeCount = {
+  day: string;
+  held: number;
+  remaining: number;
+  total: number;
+};
+
+/** 화·목·토는 항상, 그 외 요일은 연습이 있을 때만. */
+export function practiceCountsByWeekday(events: ClubEvent[], today = todayISO()): WeekdayPracticeCount[] {
+  const map = new Map<string, { held: number; remaining: number }>();
+  for (const day of PRACTICE_DAYS) map.set(day, { held: 0, remaining: 0 });
+  for (const event of practiceEvents(events)) {
+    const day = formatWeekday(event.date);
+    const row = map.get(day) ?? { held: 0, remaining: 0 };
+    if (event.date <= today) row.held += 1;
+    else row.remaining += 1;
+    map.set(day, row);
+  }
+  return WEEKDAY_ORDER.filter((day) => map.has(day)).map((day) => {
+    const row = map.get(day) ?? { held: 0, remaining: 0 };
+    return { day, held: row.held, remaining: row.remaining, total: row.held + row.remaining };
+  });
 }
 
 /** 오늘 포함, 다가오는 연습 (오늘 → 미래) */

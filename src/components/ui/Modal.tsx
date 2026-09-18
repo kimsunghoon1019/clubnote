@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { useBackdropDismiss } from "@/lib/overlayDismiss";
 import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function Modal({
   open,
@@ -37,9 +38,9 @@ export function Modal({
 
   const dismiss = useBackdropDismiss(onClose, open);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       className={cn(
         "fixed inset-0 z-50 flex justify-center bg-black/30 p-0 lg:p-4",
@@ -66,7 +67,8 @@ export function Modal({
         </div>
         {footer ? <div className="shrink-0 border-t border-line-soft px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
