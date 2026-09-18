@@ -2,6 +2,7 @@
 
 import { DetailSurface } from "@/components/layout/DetailSurface";
 import { RailSection } from "@/components/layout/RightRail";
+import { CategoryPie, STAFF_CATEGORIES, type CategoryCount } from "@/components/members/CategoryPie";
 import { ChartInbox } from "@/components/members/ChartInbox";
 import { MemberRail } from "@/components/members/MemberRail";
 import { Avatar } from "@/components/ui/Avatar";
@@ -25,59 +26,12 @@ import { useClub } from "@/lib/store";
 import type { ChartNote, Member, PracticeDay } from "@/lib/types";
 import { Download, Plus, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { Cell, Pie, PieChart } from "recharts";
 
-const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
-const STAFF_CATEGORIES = new Set(["지휘자", "반주자"]);
 const WEEKDAY_PRACTICE: PracticeDay[] = ["화", "목"];
-const PRACTICE_PIE_DAYS: { day: PracticeDay; title: string }[] = [
-  { day: "화", title: "화요일 연습 파트별 참여인원" },
-  { day: "목", title: "목요일 연습 파트별 참여인원" },
-  { day: "토", title: "토요일 연습 파트별 참여인원" },
-];
 
-type CategoryCount = { name: string; count: number };
-
-function CategoryPie({ counts, total }: { counts: CategoryCount[]; total: number }) {
-  const slices = counts.filter((item) => item.count > 0);
-  return (
-    <div className="flex items-center gap-3">
-      <PieChart width={88} height={88}>
-        <Pie
-          data={slices}
-          dataKey="count"
-          innerRadius={26}
-          outerRadius={40}
-          paddingAngle={1.5}
-          stroke="none"
-          isAnimationActive={false}
-          cx="50%"
-          cy="50%"
-        >
-          {slices.map((entry) => {
-            const i = counts.findIndex((item) => item.name === entry.name);
-            return <Cell key={entry.name} fill={PIE_COLORS[Math.max(0, i) % PIE_COLORS.length]} />;
-          })}
-        </Pie>
-      </PieChart>
-      <ul className="min-w-0 space-y-1">
-        {counts.map((item, i) => (
-          <li key={item.name} className="flex items-center gap-2 text-[11px]">
-            <span className="inline-flex min-w-0 items-center gap-1.5 text-sub">
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-              />
-              <span className="truncate">{item.name}</span>
-            </span>
-            <span className="shrink-0 tabular-nums text-ink">
-              {total ? Math.round((item.count / total) * 100) : 0}% {item.count}명
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+function partPieOf(members: Member[], partCategories: string[]): { counts: CategoryCount[]; total: number } {
+  const counts = categoryCounts(members, partCategories);
+  return { counts, total: counts.reduce((sum, item) => sum + item.count, 0) };
 }
 
 type SortKey = "이름" | "나이" | "성실도" | "참여도" | "근속기간" | "학번";
@@ -292,21 +246,12 @@ export function MembersView() {
   const counts = categoryCounts(activeMembers, partCategories);
   const memberCount = activeMembers.length;
   const partCount = counts.reduce((sum, item) => sum + item.count, 0);
-  const weekdayCount = membersScheduledOn(activeMembers, WEEKDAY_PRACTICE).length;
-  const saturdayCount = membersScheduledOn(activeMembers, ["토"]).length;
-  const practicePies = useMemo(
-    () =>
-      PRACTICE_PIE_DAYS.map(({ day, title }) => {
-        const dayCounts = categoryCounts(membersScheduledOn(activeMembers, [day]), partCategories);
-        return {
-          day,
-          title,
-          counts: dayCounts,
-          total: dayCounts.reduce((sum, item) => sum + item.count, 0),
-        };
-      }),
-    [activeMembers, partCategories],
-  );
+  const weekdayMembers = membersScheduledOn(activeMembers, WEEKDAY_PRACTICE);
+  const saturdayMembers = membersScheduledOn(activeMembers, ["토"]);
+  const weekdayCount = weekdayMembers.length;
+  const saturdayCount = saturdayMembers.length;
+  const weekdayPie = partPieOf(weekdayMembers, partCategories);
+  const saturdayPie = partPieOf(saturdayMembers, partCategories);
   const scores = useMemo(() => {
     const map = new Map<string, { diligence: number; participation: number }>();
     members.forEach((member) => {
@@ -491,19 +436,25 @@ export function MembersView() {
   return (
     <>
       <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
-        <div className="flex items-stretch border-b border-line-soft lg:hidden">
+        <div className="flex items-start border-b border-line-soft lg:hidden">
           <div className="min-w-0 flex-1 px-4 py-2" data-kpi="weekday">
             <p className="text-compact-caption text-sub">1,4부 참여인원</p>
             <p className="text-compact-title font-semibold tabular-nums">{weekdayCount}명</p>
+            <div className="mt-2" data-kpi-pie="weekday">
+              <CategoryPie counts={weekdayPie.counts} total={weekdayPie.total} stacked />
+            </div>
           </div>
           <div className="min-w-0 flex-1 border-l border-line-soft px-4 py-2" data-kpi="saturday">
             <p className="text-compact-caption text-sub">이글소리</p>
             <p className="text-compact-title font-semibold tabular-nums">{saturdayCount}명</p>
+            <div className="mt-2" data-kpi-pie="saturday">
+              <CategoryPie counts={saturdayPie.counts} total={saturdayPie.total} stacked />
+            </div>
           </div>
           <button
             type="button"
             aria-label="회원 추가"
-            className="flex h-touch w-touch shrink-0 items-center justify-center self-center rounded-btn text-brand-text"
+            className="flex h-touch w-touch shrink-0 items-center justify-center self-start rounded-btn text-brand-text"
             onClick={() => openModal("member-add")}
           >
             <Plus className="h-5 w-5" />
@@ -531,27 +482,24 @@ export function MembersView() {
               <CategoryPie counts={counts} total={partCount} />
             </div>
           </div>
-          <div className="border-b border-r border-line-soft p-4" data-kpi="weekday">
-            <p className="text-[12px] text-sub">1,4부 참여인원</p>
-            <p className="mt-1 text-[20px] font-semibold tabular-nums">{weekdayCount}명</p>
-          </div>
-          <div className="border-b border-line-soft p-4" data-kpi="saturday">
-            <p className="text-[12px] text-sub">이글소리</p>
-            <p className="mt-1 text-[20px] font-semibold tabular-nums">{saturdayCount}명</p>
-          </div>
-          {practicePies.map((pie, index) => (
-            <div
-              key={pie.day}
-              className={cn("border-b border-line-soft p-4", index < practicePies.length - 1 && "border-r")}
-              data-practice-pie={pie.day}
-            >
-              <p className="text-[12px] text-sub">{pie.title}</p>
-              <p className="mt-1 text-[20px] font-semibold tabular-nums">{pie.total}명</p>
-              <div className="mt-3">
-                <CategoryPie counts={pie.counts} total={pie.total} />
-              </div>
+          <div className="flex flex-col justify-between border-b border-r border-line-soft p-4" data-kpi="weekday">
+            <div>
+              <p className="text-[12px] text-sub">1,4부 참여인원</p>
+              <p className="mt-1 text-[20px] font-semibold tabular-nums">{weekdayCount}명</p>
             </div>
-          ))}
+            <div className="mt-4" data-kpi-pie="weekday">
+              <CategoryPie counts={weekdayPie.counts} total={weekdayPie.total} />
+            </div>
+          </div>
+          <div className="flex flex-col justify-between border-b border-line-soft p-4" data-kpi="saturday">
+            <div>
+              <p className="text-[12px] text-sub">이글소리</p>
+              <p className="mt-1 text-[20px] font-semibold tabular-nums">{saturdayCount}명</p>
+            </div>
+            <div className="mt-4" data-kpi-pie="saturday">
+              <CategoryPie counts={saturdayPie.counts} total={saturdayPie.total} />
+            </div>
+          </div>
         </section>
 
         <div className="hidden flex-wrap items-center gap-2 border-b border-line-soft px-5 py-2 lg:flex">
