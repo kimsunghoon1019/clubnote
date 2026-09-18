@@ -20,14 +20,65 @@ import { cn } from "@/lib/cn";
 import { CLUB_NAME } from "@/lib/constants";
 import { formatChartStamp, formatDateDot, formatRatio, tenureLabel, tenureMonths } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
-import { categoryCounts, diligenceScore, isActive, participationScore } from "@/lib/stats";
+import { categoryCounts, diligenceScore, isActive, membersScheduledOn, participationScore } from "@/lib/stats";
 import { useClub } from "@/lib/store";
-import type { ChartNote, Member } from "@/lib/types";
+import type { ChartNote, Member, PracticeDay } from "@/lib/types";
 import { Download, Plus, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
 const PIE_COLORS = ["#3182F6", "#1B64DA", "#8B95A1", "#4E5968", "#F04452", "#FFB800"];
+const STAFF_CATEGORIES = new Set(["지휘자", "반주자"]);
+const WEEKDAY_PRACTICE: PracticeDay[] = ["화", "목"];
+const PRACTICE_PIE_DAYS: { day: PracticeDay; title: string }[] = [
+  { day: "화", title: "화요일 연습 파트별 참여인원" },
+  { day: "목", title: "목요일 연습 파트별 참여인원" },
+  { day: "토", title: "토요일 연습 파트별 참여인원" },
+];
+
+type CategoryCount = { name: string; count: number };
+
+function CategoryPie({ counts, total }: { counts: CategoryCount[]; total: number }) {
+  const slices = counts.filter((item) => item.count > 0);
+  return (
+    <div className="flex items-center gap-3">
+      <PieChart width={88} height={88}>
+        <Pie
+          data={slices}
+          dataKey="count"
+          innerRadius={26}
+          outerRadius={40}
+          paddingAngle={1.5}
+          stroke="none"
+          isAnimationActive={false}
+          cx="50%"
+          cy="50%"
+        >
+          {slices.map((entry) => {
+            const i = counts.findIndex((item) => item.name === entry.name);
+            return <Cell key={entry.name} fill={PIE_COLORS[Math.max(0, i) % PIE_COLORS.length]} />;
+          })}
+        </Pie>
+      </PieChart>
+      <ul className="min-w-0 space-y-1">
+        {counts.map((item, i) => (
+          <li key={item.name} className="flex items-center gap-2 text-[11px]">
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-sub">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+              />
+              <span className="truncate">{item.name}</span>
+            </span>
+            <span className="shrink-0 tabular-nums text-ink">
+              {total ? Math.round((item.count / total) * 100) : 0}% {item.count}명
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 type SortKey = "이름" | "나이" | "성실도" | "참여도" | "근속기간" | "학번";
 type SortDir = "asc" | "desc";
@@ -212,7 +263,6 @@ export function MembersView() {
   const [sort, setSort] = useState<SortState>(null);
   const [assignTo, setAssignTo] = useState(categories[0] ?? "");
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   const [inactiveOpen, setInactiveOpen] = useState(false);
 
   useEffect(() => {
@@ -235,8 +285,28 @@ export function MembersView() {
   }, [memberFocusSeq, inspectedMemberId]);
 
   const activeMembers = useMemo(() => members.filter(isActive), [members]);
-  const counts = categoryCounts(activeMembers, categories);
+  const partCategories = useMemo(
+    () => categories.filter((name) => !STAFF_CATEGORIES.has(name)),
+    [categories],
+  );
+  const counts = categoryCounts(activeMembers, partCategories);
   const memberCount = activeMembers.length;
+  const partCount = counts.reduce((sum, item) => sum + item.count, 0);
+  const weekdayCount = membersScheduledOn(activeMembers, WEEKDAY_PRACTICE).length;
+  const saturdayCount = membersScheduledOn(activeMembers, ["토"]).length;
+  const practicePies = useMemo(
+    () =>
+      PRACTICE_PIE_DAYS.map(({ day, title }) => {
+        const dayCounts = categoryCounts(membersScheduledOn(activeMembers, [day]), partCategories);
+        return {
+          day,
+          title,
+          counts: dayCounts,
+          total: dayCounts.reduce((sum, item) => sum + item.count, 0),
+        };
+      }),
+    [activeMembers, partCategories],
+  );
   const scores = useMemo(() => {
     const map = new Map<string, { diligence: number; participation: number }>();
     members.forEach((member) => {
@@ -249,13 +319,8 @@ export function MembersView() {
   }, [members, events, attendance]);
 
   const filtered = useMemo(() => {
-    const q = query.trim();
-    return members.filter((m) => {
-      if (categoryTab !== "전체" && m.category !== categoryTab) return false;
-      if (!q) return true;
-      return `${m.name}${m.role}${m.category}${m.studentId}`.includes(q);
-    });
-  }, [members, categoryTab, query]);
+    return members.filter((m) => categoryTab === "전체" || m.category === categoryTab);
+  }, [members, categoryTab]);
 
   const { activeSorted, inactiveSorted, sorted } = useMemo(() => {
     const active = sortMemberList(filtered.filter(isActive), sort, scores);
@@ -426,17 +491,19 @@ export function MembersView() {
   return (
     <>
       <main className="min-h-0 min-w-0 flex-1 overflow-auto scrollbar-thin" onClick={dismissInspected}>
-        <div className="flex items-center gap-2 border-b border-line-soft px-4 py-2 lg:hidden">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="이름, 학번, 직책"
-            className="h-touch min-w-0 flex-1 rounded-btn border border-line bg-white px-3 text-compact outline-none placeholder:text-faint"
-          />
+        <div className="flex items-stretch border-b border-line-soft lg:hidden">
+          <div className="min-w-0 flex-1 px-4 py-2" data-kpi="weekday">
+            <p className="text-compact-caption text-sub">1,4부 참여인원</p>
+            <p className="text-compact-title font-semibold tabular-nums">{weekdayCount}명</p>
+          </div>
+          <div className="min-w-0 flex-1 border-l border-line-soft px-4 py-2" data-kpi="saturday">
+            <p className="text-compact-caption text-sub">이글소리</p>
+            <p className="text-compact-title font-semibold tabular-nums">{saturdayCount}명</p>
+          </div>
           <button
             type="button"
             aria-label="회원 추가"
-            className="flex h-touch w-touch items-center justify-center rounded-btn text-brand-text"
+            className="flex h-touch w-touch shrink-0 items-center justify-center self-center rounded-btn text-brand-text"
             onClick={() => openModal("member-add")}
           >
             <Plus className="h-5 w-5" />
@@ -453,64 +520,37 @@ export function MembersView() {
           ))}
         </div>
 
-        <section className="hidden grid-cols-2 border-b border-line-soft md:grid-cols-3 lg:grid">
-          <div className="row-span-2 flex flex-col justify-between border-b border-r border-line-soft p-4 md:border-b-0">
+        <section className="hidden border-b border-line-soft lg:grid lg:grid-cols-3">
+          <div className="flex flex-col justify-between border-b border-r border-line-soft p-4">
             <div>
               <p className="text-[12px] text-sub">회원수</p>
               <p className="mt-1 text-[28px] font-semibold leading-8">{memberCount}</p>
             </div>
             <div className="mt-4">
-              <p className="mb-2 text-[12px] text-sub">분류 비율</p>
-              <div className="flex items-center gap-3">
-                <PieChart width={88} height={88}>
-                  <Pie
-                    data={counts.filter((item) => item.count > 0)}
-                    dataKey="count"
-                    innerRadius={26}
-                    outerRadius={40}
-                    paddingAngle={1.5}
-                    stroke="none"
-                    isAnimationActive={false}
-                    cx="50%"
-                    cy="50%"
-                  >
-                    {counts
-                      .filter((item) => item.count > 0)
-                      .map((entry) => {
-                        const i = counts.findIndex((item) => item.name === entry.name);
-                        return <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />;
-                      })}
-                  </Pie>
-                </PieChart>
-                <ul className="min-w-0 flex-1 space-y-1">
-                  {counts.map((item, i) => (
-                    <li key={item.name} className="flex items-center justify-between gap-2 text-[11px]">
-                      <span className="inline-flex min-w-0 items-center gap-1.5 text-sub">
-                        <span
-                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                        />
-                        <span className="truncate">{item.name}</span>
-                      </span>
-                      <span className="tabular-nums text-ink">
-                        {memberCount ? Math.round((item.count / memberCount) * 100) : 0}%
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <p className="mb-2 text-[12px] text-sub">파트별 회원수</p>
+              <CategoryPie counts={counts} total={partCount} />
             </div>
           </div>
-          {counts.map((item) => (
-            <button
-              key={item.name}
-              type="button"
-              onClick={() => setCategoryTab(item.name)}
-              className="border-b border-r border-line-soft p-4 text-left last:border-r-0 hover:bg-muted"
+          <div className="border-b border-r border-line-soft p-4" data-kpi="weekday">
+            <p className="text-[12px] text-sub">1,4부 참여인원</p>
+            <p className="mt-1 text-[20px] font-semibold tabular-nums">{weekdayCount}명</p>
+          </div>
+          <div className="border-b border-line-soft p-4" data-kpi="saturday">
+            <p className="text-[12px] text-sub">이글소리</p>
+            <p className="mt-1 text-[20px] font-semibold tabular-nums">{saturdayCount}명</p>
+          </div>
+          {practicePies.map((pie, index) => (
+            <div
+              key={pie.day}
+              className={cn("border-b border-line-soft p-4", index < practicePies.length - 1 && "border-r")}
+              data-practice-pie={pie.day}
             >
-              <p className="text-[12px] text-sub">{item.name} 회원수</p>
-              <p className="mt-1 text-[20px] font-semibold">{item.count}명</p>
-            </button>
+              <p className="text-[12px] text-sub">{pie.title}</p>
+              <p className="mt-1 text-[20px] font-semibold tabular-nums">{pie.total}명</p>
+              <div className="mt-3">
+                <CategoryPie counts={pie.counts} total={pie.total} />
+              </div>
+            </div>
           ))}
         </section>
 

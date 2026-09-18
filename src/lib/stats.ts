@@ -153,6 +153,11 @@ export function categoryCounts(members: Member[], categories: string[]) {
   }));
 }
 
+/** 연습요일 중 하나라도 켜진 회원. */
+export function membersScheduledOn(members: Member[], days: readonly PracticeDay[]) {
+  return members.filter((member) => days.some((day) => member.practiceDays.includes(day)));
+}
+
 export function categoryAttendance(
   category: string,
   members: Member[],
