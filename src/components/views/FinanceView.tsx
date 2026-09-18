@@ -1,6 +1,5 @@
 "use client";
 
-import { BankMailModal } from "@/components/finance/BankMailModal";
 import { DuesStatusModal } from "@/components/finance/DuesStatusModal";
 import { ProofThumbs } from "@/components/finance/ProofPreview";
 import { TransactionRail } from "@/components/finance/TransactionRail";
@@ -14,7 +13,6 @@ import { Modal } from "@/components/ui/Modal";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
 import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
-import { loadLocalBankMail, saveLocalBankMail } from "@/lib/bankMailClient";
 import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { duesSemester, inSemester, previousSemester } from "@/lib/dues";
@@ -24,7 +22,7 @@ import { isInspectDismissClick } from "@/lib/inspect";
 import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { Transaction, TxType } from "@/lib/types";
-import { ChevronDown, Download, Mail, MoreHorizontal, Paperclip, Plus, Upload, Wallet } from "lucide-react";
+import { ChevronDown, Download, MoreHorizontal, Paperclip, Plus, Upload, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 
@@ -57,8 +55,6 @@ export function FinanceView() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState<"ledger" | "proofs" | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [bankMailOpen, setBankMailOpen] = useState(false);
-  const [rememberPassword, setRememberPassword] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -173,18 +169,13 @@ export function FinanceView() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function importExcel(file: File, excelPassword?: string, triedSaved = false) {
-    const fromPasswordModal = Boolean(excelPassword) && !triedSaved;
+  async function importExcel(file: File, excelPassword?: string) {
+    const fromPasswordModal = Boolean(excelPassword);
     if (fromPasswordModal) setUnlocking(true);
     else setUploading(true);
     try {
       const { rows, error, needsPassword } = await parseBankExcelFile(file, excelPassword);
       if (needsPassword) {
-        const saved = loadLocalBankMail().excelPassword.trim();
-        if (!triedSaved && saved && saved !== excelPassword) {
-          await importExcel(file, saved, true);
-          return;
-        }
         setPendingFile(file);
         setPassword("");
         setPasswordError("");
@@ -192,13 +183,6 @@ export function FinanceView() {
         return;
       }
       if (error) {
-        if (triedSaved) {
-          setPendingFile(file);
-          setPassword("");
-          setPasswordError(error);
-          if (fileRef.current) fileRef.current.value = "";
-          return;
-        }
         if (fromPasswordModal) {
           setPasswordError(error);
           return;
@@ -208,14 +192,6 @@ export function FinanceView() {
         return;
       }
       const added = importBankTransactions(rows);
-      if (fromPasswordModal && rememberPassword && excelPassword?.trim()) {
-        saveLocalBankMail({ excelPassword: excelPassword.trim() });
-        void fetch("/api/bank-mail/settings", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ excelPassword: excelPassword.trim() }),
-        }).catch(() => undefined);
-      }
       toast(added === 0 ? "이미 있는 내역이에요. 새로 추가된 거래가 없어요" : `은행 엑셀에서 ${added}건을 추가했어요`);
       clearPendingExcel();
     } catch {
@@ -456,10 +432,6 @@ export function FinanceView() {
                 <Upload className="h-3.5 w-3.5" />
                 {uploading ? "읽는 중" : "엑셀 업로드"}
               </GhostButton>
-              <GhostButton className="whitespace-nowrap" onClick={() => setBankMailOpen(true)}>
-                <Mail className="h-3.5 w-3.5" />
-                메일 가져오기
-              </GhostButton>
               <GhostButton className="whitespace-nowrap" onClick={() => setDuesOpen(true)}>
                 <Wallet className="h-3.5 w-3.5" />
                 단비 납부 여부
@@ -579,16 +551,6 @@ export function FinanceView() {
                         className="h-touch w-full text-[13px]"
                         onClick={() => {
                           setMoreOpen(false);
-                          setBankMailOpen(true);
-                        }}
-                      >
-                        <Mail className="h-3.5 w-3.5" />
-                        메일 가져오기
-                      </GhostButton>
-                      <GhostButton
-                        className="h-touch w-full text-[13px]"
-                        onClick={() => {
-                          setMoreOpen(false);
                           setDuesOpen(true);
                         }}
                       >
@@ -670,11 +632,6 @@ export function FinanceView() {
       </DetailSurface>
 
       <DuesStatusModal open={duesOpen} onClose={() => setDuesOpen(false)} />
-      <BankMailModal
-        open={bankMailOpen}
-        onClose={() => setBankMailOpen(false)}
-        onImported={(rows) => importBankTransactions(rows)}
-      />
 
       <Modal open={Boolean(pendingFile)} title="엑셀 비밀번호" onClose={clearPendingExcel} width={400}>
         <p className="text-[14px] leading-6 text-ink">비밀번호가 걸려있나요? 걸려있다면 알려주세요.</p>
@@ -700,15 +657,6 @@ export function FinanceView() {
             autoComplete="off"
           />
           {passwordError ? <p className="mt-1.5 text-[12px] text-down">{passwordError}</p> : null}
-          <label className="mt-3 flex min-h-touch items-center gap-2 text-[13px] text-ink">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-brand"
-              checked={rememberPassword}
-              onChange={(event) => setRememberPassword(event.target.checked)}
-            />
-            이 비밀번호를 저장하고 다음부터 자동으로 열기
-          </label>
           <div className="mt-5 flex justify-end gap-2">
             <GhostButton type="button" onClick={clearPendingExcel}>
               취소

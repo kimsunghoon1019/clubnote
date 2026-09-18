@@ -11,7 +11,6 @@ import { SmsModal } from "@/components/modals/SmsModal";
 import { AddMemberModal } from "@/components/modals/AddMemberModal";
 import { TransactionModal } from "@/components/modals/TransactionModal";
 import { EventModal } from "@/components/modals/EventModal";
-import { BankMailSync } from "@/components/finance/BankMailSync";
 import { useClub } from "@/lib/store";
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
@@ -51,7 +50,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       <AddMemberModal />
       <TransactionModal />
       <EventModal />
-      <BankMailSync />
     </div>
   );
 }

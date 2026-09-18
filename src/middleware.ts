@@ -17,7 +17,6 @@ function isPublicPath(pathname: string) {
     pathname === "/api/auth/logout" ||
     pathname === "/api/auth/session" ||
     pathname.startsWith("/api/weather") ||
-    pathname === "/api/bank-mail/sync" ||
     pathname === "/favicon.ico" ||
     pathname === "/icon.svg"
   );

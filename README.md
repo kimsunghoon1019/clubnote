@@ -110,9 +110,6 @@ git push -u origin master
 | `R2_SECRET_ACCESS_KEY` | R2 토큰 Secret Access Key |
 | `R2_BUCKET` | `clubnote` |
 | `CLUB_SESSION_SECRET` | (선택) 긴 무작위 문자열. 없으면 service_role로 세션 서명 |
-| `BANK_MAIL_ADDRESS` | (선택) 거래내역을 받을 지메일. 기본 `yonseigleeclub@gmail.com` |
-| `BANK_MAIL_APP_PASSWORD` | (선택) 지메일 앱 비밀번호. 회계 화면에서 저장해도 됩니다 |
-| `BANK_EXCEL_PASSWORD` | (선택) 토스 거래내역 엑셀 암호. 회계 화면에서 저장해도 됩니다 |
 
 4. Deploy 끝나면 주소가 나옵니다. 예: `https://clubnote.vercel.app`
 5. GitHub `master`에 푸시하면 그 주소가 자동으로 다시 배포됩니다
@@ -135,16 +132,6 @@ git push -u origin master
 서버가 비어 있으면 시드 명단이 들어갑니다. 이 브라우저 `localStorage`에 테너1 같은 로컬 수정이 남아 있으면 **그때 한 번** 서버로 올라갑니다. 그래서 예전에 쓰던 크롬에서 먼저 로그인하는 것이 좋습니다.
 
 로그인 후 회계에서 영수증 하나, 캘린더에서 첨부 하나를 올려 보고 새로고침 뒤에도 열리는지 확인하세요.
-
-### 거래내역 메일 연동
-
-폰에서 토스뱅크 **거래내역 보내기**를 누르면 엑셀이 `yonseigleeclub@gmail.com`으로 옵니다. 회계 → **메일 가져오기**에서 지메일 앱 비밀번호와 엑셀 비밀번호를 저장하세요.
-
-1. 지메일 IMAP을 켭니다
-2. Google 계정 2단계 인증 후 [앱 비밀번호](https://myaccount.google.com/apppasswords)를 만듭니다
-3. 클럽노트 회계에서 받을 주소·앱 비밀번호·엑셀 암호를 저장합니다
-
-앱을 열어 두면 약 1.5분마다 새 메일을 확인하고, 배포 환경은 매일 한 번 더 확인합니다. 이미 있는 거래는 다시 넣지 않습니다. 비밀번호는 브라우저에 저장되고, 배포면 R2 `secrets/bank-mail.json`에도 둡니다. 앱 JSON(`club_state`)에는 넣지 않습니다.
 
 문자 발송은 1단계 목업입니다. 학기말 CSV는 회원관리 → 내보내기로 받습니다.
 
