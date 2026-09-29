@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ClubProvider } from "@/lib/store";
 import { AppFrame } from "@/components/layout/AppFrame";
+import { DesktopSiteBoot } from "@/components/layout/DesktopSiteBoot";
 import { CLUB_NAME } from "@/lib/constants";
+import { desktopSiteBoot } from "@/lib/desktopSite";
 
 export const preferredRegion = "icn1";
 
@@ -22,6 +24,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        <script dangerouslySetInnerHTML={{ __html: desktopSiteBoot }} />
+        <DesktopSiteBoot />
         <ClubProvider>
           <AppFrame>{children}</AppFrame>
         </ClubProvider>

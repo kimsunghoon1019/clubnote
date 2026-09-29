@@ -1,12 +1,13 @@
 import type { Config } from "tailwindcss";
 import defaultTheme from "tailwindcss/defaultTheme";
+import { CONSOLE_MIN_PX } from "./src/lib/compact";
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     screens: {
       md: "768px",
-      lg: "1024px",
+      lg: `${CONSOLE_MIN_PX}px`,
       xl: "1440px",
     },
     extend: {
