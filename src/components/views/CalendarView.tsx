@@ -798,7 +798,7 @@ export function CalendarView() {
         data-active-event-id={active?.id ?? undefined}
         data-selected-date={selected ?? undefined}
       >
-        <div className="flex-1 overflow-auto px-5 py-5 [scrollbar-gutter:stable] scrollbar-thin">
+        <div className="flex-1 overflow-auto px-5 py-5 scrollbar-thin">
           {multiSelected ? (
             <>
               <p className="text-[28px] font-semibold leading-8">{pickedEvents.length}개 선택</p>

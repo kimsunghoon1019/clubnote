@@ -125,7 +125,6 @@ function appendExpectedMemos(
   members: Member[],
   categories: string[],
   recordMap: Map<string, AttendanceStatus>,
-  weekLabel: string,
 ) {
   const expected = expectedMembersForEvent(event, members, recordMap);
   const roster = membersForEvent(members, event);
@@ -133,7 +132,6 @@ function appendExpectedMemos(
   const extra = [
     ...new Set(roster.map((member) => member.category).filter((name) => !categories.includes(name))),
   ];
-  const when = `${formatDateKo(event.date)} (${formatWeekday(event.date)})`;
 
   for (const category of [...categories, ...extra]) {
     if (!rosterCats.has(category)) continue;
@@ -144,8 +142,8 @@ function appendExpectedMemos(
       .sort((a, b) => a.localeCompare(b, "ko"));
     items.push({
       id: `expected-${event.id}-${category}`,
-      title: `${category} 참석 예정`,
-      caption: `${weekLabel} · ${when} · ${names.length}명`,
+      title: category,
+      caption: `${formatNoticeDate(event.date)} · ${names.length}명`,
       text: expectedAttendanceNoticeText(event, category, names),
       weekNav: "expected",
     });
@@ -161,11 +159,10 @@ export function todayMemoItems(
   weekOffset = 0,
   expectedWeekOffset = 0,
 ): TodayMemo[] {
-  const label = weekPracticeLabel(weekOffset);
   const items: TodayMemo[] = [
     {
       id: "week-practice",
-      title: `${label} 연습 일정`,
+      title: "연습일정",
       caption: weekRangeCaption(today, weekOffset),
       text: practiceNoticeText(events, today, weekOffset),
       weekNav: "practice",
@@ -178,7 +175,7 @@ export function todayMemoItems(
     const particle = expectedLabel.endsWith("전") ? "은" : "는";
     items.push({
       id: "expected-empty",
-      title: "참석 예정 인원",
+      title: "참석",
       caption: expectedCaption,
       text: `${expectedLabel}${particle} 예정된 연습이 없습니다.`,
       weekNav: "expected",
@@ -187,12 +184,12 @@ export function todayMemoItems(
   }
 
   for (const event of weekPractices) {
-    appendExpectedMemos(items, event, members, categories, recordMap, expectedLabel);
+    appendExpectedMemos(items, event, members, categories, recordMap);
   }
   if (!items.some((item) => item.weekNav === "expected")) {
     items.push({
       id: "expected-empty",
-      title: "참석 예정 인원",
+      title: "참석",
       caption: expectedCaption,
       text: `${expectedLabel}에는 참석 예정 공지를 만들 분류가 없습니다.`,
       weekNav: "expected",

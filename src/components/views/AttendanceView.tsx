@@ -32,7 +32,7 @@ import { isInspectDismissClick } from "@/lib/inspect";
 import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, UserPlus } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Plus, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
@@ -446,11 +446,11 @@ export function AttendanceView() {
                 className="flex min-h-touch w-full items-center justify-between gap-2 rounded-btn border border-line px-3 py-2 text-left touch-manipulation"
                 onClick={() => setDateOpen((open) => !open)}
               >
-              <span className="min-w-0">
-                <span className="block truncate text-compact font-semibold text-ink">
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span className="truncate text-compact font-semibold text-ink">
                   {formatDateKo(event.date)} ({formatWeekday(event.date)})
                 </span>
-                <span className="block truncate text-compact-caption text-faint">
+                <span className="shrink-0 text-compact-caption text-faint">
                   {formatEventTime(event)}
                   {isAttendanceClosed(event) ? " · 마감" : ""}
                 </span>
@@ -535,10 +535,11 @@ export function AttendanceView() {
               <button
                 type="button"
                 data-attendance-sheet
-                className="inline-flex h-touch shrink-0 items-center justify-center rounded-btn border border-line bg-white px-3 text-[13px] font-semibold text-ink touch-manipulation hover:bg-muted"
+                aria-label="출석표 보기"
+                className="inline-flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted"
                 onClick={() => setSheetOpen(true)}
               >
-                출석표 보기
+                <ClipboardList className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -579,9 +580,9 @@ export function AttendanceView() {
                         onClick={() => handleCompactRowClick(row)}
                       >
                         <Avatar name={row.name} size={40} src={memberPhotoSrc(row)} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-compact font-semibold text-ink">{row.name}</span>
-                          <span className="block truncate text-compact-caption text-faint">
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <span className="truncate text-compact font-semibold text-ink">{row.name}</span>
+                          <span className="ml-auto shrink-0 truncate text-compact-caption text-faint">
                             {row.category} · {row.role}
                             {event && isGuestForEvent(row, event) ? " · 추가" : ""}
                           </span>

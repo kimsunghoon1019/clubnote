@@ -442,7 +442,7 @@ export function FinanceView() {
             </div>
           </div>
 
-          <div data-finance-table className="min-h-0 flex-1 overflow-auto px-2 py-2 [scrollbar-gutter:stable] scrollbar-thin">
+          <div data-finance-table className="min-h-0 flex-1 overflow-auto px-2 py-2 scrollbar-thin">
             <DataTable
               columns={columns}
               rows={filtered}

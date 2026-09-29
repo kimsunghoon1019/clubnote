@@ -535,14 +535,12 @@ export function MembersView() {
                   onClick={() => inspectMember(row.id)}
                 >
                   <Avatar name={row.name} size={40} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate text-compact font-medium">{row.name}</span>
-                      <RolePill role={row.role} />
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-2 text-compact-caption text-sub">
-                      <span>{row.category}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="truncate text-compact font-medium">{row.name}</span>
+                    <RolePill role={row.role} />
+                    <span className="ml-auto flex shrink-0 items-center gap-2 text-compact-caption text-sub">
                       <RatioBar value={diligence * 100} color="var(--up)" width={64} className="h-[3px]" />
+                      <span>{row.category}</span>
                     </span>
                   </span>
                 </button>
@@ -570,9 +568,9 @@ export function MembersView() {
                       onClick={() => inspectMember(row.id)}
                     >
                       <Avatar name={row.name} size={40} />
-                      <span className="min-w-0 flex-1">
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
                         <span className="truncate text-compact font-medium">{row.name}</span>
-                        <span className="block text-compact-caption text-faint">비활동 · {row.category}</span>
+                        <span className="ml-auto shrink-0 text-compact-caption text-faint">비활동 · {row.category}</span>
                       </span>
                     </button>
                   ))

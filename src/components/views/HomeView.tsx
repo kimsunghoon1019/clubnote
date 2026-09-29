@@ -183,9 +183,9 @@ export function HomeView() {
         </section>
 
         <section data-home-memos className="order-2 min-w-0 border-b border-line-soft px-5 py-4 lg:order-3">
-          <div className="mb-2">
-            <h2 className="text-[15px] font-semibold">오늘의 멘트</h2>
-            <p className="mt-0.5 text-[12px] text-faint">카톡방에 바로 붙여넣을 수 있어요</p>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="shrink-0 text-[15px] font-semibold">오늘의 멘트</h2>
+            <p className="min-w-0 truncate text-right text-[12px] text-faint">카톡방에 바로 붙여넣을 수 있어요</p>
           </div>
           <div className="grid gap-2.5 lg:grid-cols-2">
             {memos.map((memo) => (
@@ -253,26 +253,16 @@ function CopyMemoCard({
   const expectedNav = weekNav?.kind === "expected";
   return (
     <div data-home-memo={memo.id} className="rounded-card border border-line-soft">
-      <div className="px-3 pt-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[13px] font-semibold">{memo.title}</p>
-          <button
-            type="button"
-            onClick={onCopy}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-btn px-1.5 text-[13px] font-medium text-sub touch-manipulation hover:bg-muted hover:text-ink"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            복사
-          </button>
-        </div>
+      <div className="flex items-center gap-0.5 px-1.5 py-0.5">
+        <p className="shrink-0 px-1 text-[13px] font-semibold">{memo.title}</p>
         {weekNav ? (
-          <div className="flex min-w-0 items-center justify-center pb-0.5">
+          <div className="flex min-w-0 flex-1 items-center justify-center">
             <button
               type="button"
               data-practice-week-prev={expectedNav ? undefined : true}
               data-expected-week-prev={expectedNav ? true : undefined}
               aria-label="이전 주"
-              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
+              className="flex h-touch w-9 shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
               onClick={weekNav.onPrev}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -280,24 +270,30 @@ function CopyMemoCard({
             {memo.caption ? (
               <p className="min-w-0 truncate text-center text-[12px] text-faint">{memo.caption}</p>
             ) : (
-              <span className="w-4 shrink-0" />
+              <span className="w-2 shrink-0" />
             )}
             <button
               type="button"
               data-practice-week-next={expectedNav ? undefined : true}
               data-expected-week-next={expectedNav ? true : undefined}
               aria-label="다음 주"
-              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
+              className="flex h-touch w-9 shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
               onClick={weekNav.onNext}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-        ) : memo.caption ? (
-          <p className="pb-1.5 text-[12px] text-faint">{memo.caption}</p>
         ) : (
-          <div className="pb-1.5" />
+          <span className="min-w-0 flex-1 truncate px-1 text-[12px] text-faint">{memo.caption}</span>
         )}
+        <button
+          type="button"
+          aria-label="복사"
+          onClick={onCopy}
+          className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-sub touch-manipulation hover:bg-muted hover:text-ink lg:h-8 lg:w-8"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
       </div>
       <pre className="whitespace-pre-wrap break-keep border-t border-line-soft bg-muted px-3.5 py-2 text-[13px] leading-5 text-ink">
         {memo.text}

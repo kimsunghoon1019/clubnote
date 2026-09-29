@@ -63,18 +63,15 @@ textarea {
   box-shadow: inset 0 -1px 0 var(--line-soft);
 }
 
+.scrollbar-thin {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 .scrollbar-thin::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #d1d6db;
-  border-radius: 999px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 html[data-detail-open] [data-bottom-nav],

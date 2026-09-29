@@ -62,7 +62,7 @@ export function Modal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 [scrollbar-gutter:stable] scrollbar-thin">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 scrollbar-thin">
           {children}
         </div>
         {footer ? <div className="shrink-0 border-t border-line-soft px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div> : null}
