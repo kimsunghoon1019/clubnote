@@ -38,7 +38,7 @@ export function AttendanceToggle({
             className={cn(
               "flex flex-col items-center justify-center font-semibold transition-colors",
               fill
-                ? "h-touch min-w-0 flex-1 text-[11px] leading-[13px] touch-manipulation"
+                ? "h-touch min-w-0 flex-1 overflow-hidden px-0 text-[10px] leading-[12px] touch-manipulation"
                 : "h-8 w-[3.35rem] text-[10px] leading-[11px]",
               index > 0 && "border-l border-line",
               !active && "text-faint hover:bg-muted",

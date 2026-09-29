@@ -11,7 +11,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { GhostButton } from "@/components/ui/GhostButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { Pill, RolePill } from "@/components/ui/Pill";
+import { Pill } from "@/components/ui/Pill";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { cn } from "@/lib/cn";
 import { isAttendanceClosed } from "@/lib/attendanceSheet";
@@ -29,7 +29,6 @@ import {
   upcomingPractice,
 } from "@/lib/stats";
 import { isInspectDismissClick } from "@/lib/inspect";
-import { memberPhotoSrc } from "@/lib/proof";
 import { useClub } from "@/lib/store";
 import type { AttendanceStatus, Member } from "@/lib/types";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Plus, UserPlus } from "lucide-react";
@@ -272,8 +271,6 @@ export function AttendanceView() {
   };
 
   const columns: Column<Member & { status?: AttendanceStatus }>[] = [
-    { key: "category", header: "분류", render: (row) => <span className="text-sub">{row.category}</span> },
-    { key: "role", header: "직책", render: (row) => <RolePill role={row.role} /> },
     {
       key: "name",
       header: "이름",
@@ -286,13 +283,9 @@ export function AttendanceView() {
       ),
     },
     {
-      key: "days",
-      header: "연습요일",
-      render: (row) => <span className="text-[12px] text-sub">{row.practiceDays.join(" ")}</span>,
-    },
-    {
       key: "status",
       header: "출결",
+      width: "280px",
       render: (row) => (
         <div onClick={(e) => e.stopPropagation()}>
           <AttendanceToggle
@@ -302,6 +295,12 @@ export function AttendanceView() {
           />
         </div>
       ),
+    },
+    {
+      key: "category",
+      header: "분류",
+      align: "right",
+      render: (row) => <span className="text-sub">{row.category}</span>,
     },
   ];
 
@@ -543,7 +542,6 @@ export function AttendanceView() {
               </button>
             </div>
           </div>
-          <StatusMixBar counts={counts} unchecked={unchecked} />
           <div className="-mx-4 flex flex-nowrap gap-1 overflow-x-auto px-4 scrollbar-thin">
             {categoryTabs("shrink-0")}
           </div>
@@ -554,7 +552,7 @@ export function AttendanceView() {
             <DataTable
               columns={columns}
               rows={rows}
-              tableClassName="min-w-[920px]"
+              tableClassName="min-w-[560px]"
               selectedIds={selectedIds}
               onRowClick={handleRowClick}
               empty={<span>{emptyRoster}</span>}
@@ -566,27 +564,24 @@ export function AttendanceView() {
             ) : (
               rows.map((row) => {
                 const selected = selectedIds.includes(row.id);
+                const guest = Boolean(event && isGuestForEvent(row, event));
                 return (
                   <li key={row.id}>
                     <div
                       data-row-id={row.id}
                       data-attendance-row
-                      className={cn("flex flex-col gap-2.5 px-4 py-3", selected && "bg-[#F7FBFF]")}
+                      className={cn(
+                        "grid grid-cols-[4.75rem_minmax(0,1fr)_auto] items-center gap-1.5 px-3",
+                        selected && "bg-[#F7FBFF]",
+                      )}
                     >
                       <button
                         type="button"
                         data-attendance-identity
-                        className="flex min-h-touch items-center gap-3 text-left touch-manipulation"
+                        className="flex h-touch min-w-0 items-center text-left touch-manipulation"
                         onClick={() => handleCompactRowClick(row)}
                       >
-                        <Avatar name={row.name} size={40} src={memberPhotoSrc(row)} />
-                        <span className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="truncate text-compact font-semibold text-ink">{row.name}</span>
-                          <span className="ml-auto shrink-0 truncate text-compact-caption text-faint">
-                            {row.category} · {row.role}
-                            {event && isGuestForEvent(row, event) ? " · 추가" : ""}
-                          </span>
-                        </span>
+                        <span className="truncate text-[15px] font-semibold text-ink">{row.name}</span>
                       </button>
                       <AttendanceToggle
                         fill
@@ -594,6 +589,17 @@ export function AttendanceView() {
                         value={row.status}
                         onChange={(status) => applyAttendance(row.id, status)}
                       />
+                      <button
+                        type="button"
+                        data-attendance-category
+                        className="flex h-touch max-w-[5.5rem] items-center justify-end text-right touch-manipulation"
+                        onClick={() => handleCompactRowClick(row)}
+                      >
+                        <span className="truncate text-[13px] text-faint">
+                          {row.category}
+                          {guest ? " · 추가" : ""}
+                        </span>
+                      </button>
                     </div>
                   </li>
                 );
