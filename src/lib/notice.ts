@@ -51,7 +51,7 @@ function formatPracticeNotice(header: string, emptyLine: string, week: ClubEvent
   return `${header}\n\n${week.map(formatNoticeEvent).join("\n\n")}\n\n\n${NOTICE_FOOTER}`;
 }
 
-/** 0=이번 주, 1=다음 주(기본 공지). */
+/** 0=이번 주(캘린더 카톡 공지), 1=다음 주. */
 export function weekPracticeLabel(weekOffset: number) {
   if (weekOffset === -1) return "지난 주";
   if (weekOffset === 0) return "이번 주";
@@ -72,18 +72,23 @@ export function weekOffsetForDate(iso: string, today = todayISO()) {
   return Math.round((to - from) / (7 * 24 * 60 * 60 * 1000));
 }
 
-export function weekPracticeNoticeText(events: ClubEvent[], weekOffset: number, today = todayISO()) {
+/** 캘린더 카톡 공지. weekOffset 0은 그 문구 그대로이고, 다른 주는 같은 일정 조회로 제목만 바뀐다. */
+export function practiceNoticeText(events: ClubEvent[], today = todayISO(), weekOffset = 0) {
+  const week = practicesInWeek(events, today, weekOffset);
+  if (weekOffset === 0) {
+    return formatPracticeNotice("연습 일정 공지", "이번 주는 예정된 연습 일정이 없습니다.", week);
+  }
   const label = weekPracticeLabel(weekOffset);
   const particle = label.endsWith("전") ? "은" : "는";
   return formatPracticeNotice(
     `${label} 연습 일정 공지`,
     `${label}${particle} 예정된 연습 일정이 없습니다.`,
-    practicesInWeek(events, today, weekOffset),
+    week,
   );
 }
 
-export function practiceNoticeText(events: ClubEvent[], today = todayISO()) {
-  return formatPracticeNotice("연습 일정 공지", "이번 주는 예정된 연습 일정이 없습니다.", weekPracticeEvents(events, today));
+export function weekPracticeNoticeText(events: ClubEvent[], weekOffset: number, today = todayISO()) {
+  return practiceNoticeText(events, today, weekOffset);
 }
 
 export function nextWeekPracticeNoticeText(events: ClubEvent[], today = todayISO()) {
@@ -153,7 +158,7 @@ export function todayMemoItems(
   categories: string[],
   recordMap: Map<string, AttendanceStatus>,
   today = todayISO(),
-  weekOffset = 1,
+  weekOffset = 0,
   expectedWeekOffset = 0,
 ): TodayMemo[] {
   const label = weekPracticeLabel(weekOffset);
@@ -162,7 +167,7 @@ export function todayMemoItems(
       id: "week-practice",
       title: `${label} 연습 일정`,
       caption: weekRangeCaption(today, weekOffset),
-      text: weekPracticeNoticeText(events, weekOffset, today),
+      text: practiceNoticeText(events, today, weekOffset),
       weekNav: "practice",
     },
   ];

@@ -34,7 +34,7 @@ export function HomeView() {
   const weekdayCounts = useMemo(() => practiceCountsByWeekday(events, today), [events, today]);
   const heldTotal = weekdayCounts.reduce((sum, row) => sum + row.held, 0);
   const remainingTotal = weekdayCounts.reduce((sum, row) => sum + row.remaining, 0);
-  const [practiceWeekOffset, setPracticeWeekOffset] = useState(1);
+  const [practiceWeekOffset, setPracticeWeekOffset] = useState(0);
   const [expectedWeekOffset, setExpectedWeekOffset] = useState<number | null>(null);
   const upcoming = upcomingPractice(events, today);
   const nextEvent = upcoming ?? events.find((e) => e.date >= today) ?? events[events.length - 1];
