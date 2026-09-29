@@ -1,6 +1,5 @@
 "use client";
 
-import { GhostButton } from "@/components/ui/GhostButton";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { MiniCalendar } from "@/components/ui/MiniCalendar";
 import { DetailSurface } from "@/components/layout/DetailSurface";
@@ -77,9 +76,12 @@ export function HomeView() {
   return (
     <>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto scrollbar-thin" onClick={dismissInspected}>
-        <section data-home-greeting className="order-1 border-b border-line-soft px-5 py-4 lg:hidden">
-          <p className="text-compact-title font-semibold">{currentMember?.name} 님</p>
-          <div className="mt-1">
+        <section
+          data-home-greeting
+          className="order-1 flex items-center justify-between gap-3 border-b border-line-soft px-5 py-4 lg:hidden"
+        >
+          <p className="min-w-0 truncate text-compact-title font-semibold">{currentMember?.name} 님</p>
+          <div className="shrink-0 text-right">
             <LiveClock />
           </div>
         </section>
@@ -251,45 +253,51 @@ function CopyMemoCard({
   const expectedNav = weekNav?.kind === "expected";
   return (
     <div data-home-memo={memo.id} className="rounded-card border border-line-soft">
-      <div className="flex items-start justify-between gap-2 px-3 py-1.5">
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold">{memo.title}</p>
-          {weekNav ? (
-            <div className="-ml-2 flex items-center">
-              <button
-                type="button"
-                data-practice-week-prev={expectedNav ? undefined : true}
-                data-expected-week-prev={expectedNav ? true : undefined}
-                aria-label="이전 주"
-                className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
-                onClick={weekNav.onPrev}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              {memo.caption ? (
-                <p className="min-w-0 flex-1 truncate text-center text-[12px] text-faint">{memo.caption}</p>
-              ) : (
-                <span className="flex-1" />
-              )}
-              <button
-                type="button"
-                data-practice-week-next={expectedNav ? undefined : true}
-                data-expected-week-next={expectedNav ? true : undefined}
-                aria-label="다음 주"
-                className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
-                onClick={weekNav.onNext}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          ) : memo.caption ? (
-            <p className="text-[12px] text-faint">{memo.caption}</p>
-          ) : null}
+      <div className="px-3 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[13px] font-semibold">{memo.title}</p>
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-btn px-1.5 text-[13px] font-medium text-sub touch-manipulation hover:bg-muted hover:text-ink"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            복사
+          </button>
         </div>
-        <GhostButton className="h-8 shrink-0 px-2.5 text-[12px]" onClick={onCopy}>
-          <Copy className="h-3.5 w-3.5" />
-          복사
-        </GhostButton>
+        {weekNav ? (
+          <div className="flex min-w-0 items-center justify-center pb-0.5">
+            <button
+              type="button"
+              data-practice-week-prev={expectedNav ? undefined : true}
+              data-expected-week-prev={expectedNav ? true : undefined}
+              aria-label="이전 주"
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
+              onClick={weekNav.onPrev}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            {memo.caption ? (
+              <p className="min-w-0 truncate text-center text-[12px] text-faint">{memo.caption}</p>
+            ) : (
+              <span className="w-4 shrink-0" />
+            )}
+            <button
+              type="button"
+              data-practice-week-next={expectedNav ? undefined : true}
+              data-expected-week-next={expectedNav ? true : undefined}
+              aria-label="다음 주"
+              className="flex h-touch w-touch shrink-0 items-center justify-center rounded-btn text-ink touch-manipulation hover:bg-muted lg:h-8 lg:w-8"
+              onClick={weekNav.onNext}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        ) : memo.caption ? (
+          <p className="pb-1.5 text-[12px] text-faint">{memo.caption}</p>
+        ) : (
+          <div className="pb-1.5" />
+        )}
       </div>
       <pre className="whitespace-pre-wrap break-keep border-t border-line-soft bg-muted px-3.5 py-2 text-[13px] leading-5 text-ink">
         {memo.text}
