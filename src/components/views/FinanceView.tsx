@@ -15,13 +15,13 @@ import { TaxonomyEditor } from "@/components/ui/TaxonomyEditor";
 import { compareTxDesc, parseBankExcelFile } from "@/lib/bankExcel";
 import { TX_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { duesSemester, inSemester, previousSemester } from "@/lib/dues";
+import { inSemester, resolveFinancePeriods } from "@/lib/dues";
 import { downloadLedgerXlsx, isProofNumberedTx } from "@/lib/financeExport";
 import { formatSignedWon, formatTxWhen, formatWon } from "@/lib/format";
 import { isInspectDismissClick } from "@/lib/inspect";
 import { txProofs } from "@/lib/proof";
 import { useClub } from "@/lib/store";
-import type { Transaction, TxType } from "@/lib/types";
+import type { FinancePeriodRange, Transaction, TxType } from "@/lib/types";
 import { ChevronDown, Download, MoreHorizontal, Paperclip, Plus, Upload, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Cell, Pie, PieChart } from "recharts";
@@ -41,6 +41,8 @@ export function FinanceView() {
     openModal,
     importBankTransactions,
     toast,
+    financePeriods,
+    setFinancePeriod,
   } = useClub();
   const [period, setPeriod] = useState<Period>("당기");
   const [type, setType] = useState<"전체" | TxType>("전체");
@@ -60,8 +62,10 @@ export function FinanceView() {
   const moreRef = useRef<HTMLDivElement>(null);
 
   const ordered = useMemo(() => [...transactions].sort(compareTxDesc), [transactions]);
-  const currentSemester = useMemo(() => duesSemester(), []);
-  const priorSemester = useMemo(() => previousSemester(), []);
+  const { current: currentSemester, prior: priorSemester } = useMemo(
+    () => resolveFinancePeriods(financePeriods),
+    [financePeriods],
+  );
 
   const periodRange = period === "당기" ? currentSemester : period === "전기" ? priorSemester : null;
 
@@ -205,18 +209,18 @@ export function FinanceView() {
 
   const byCategory = useMemo(() => {
     const names = [...txCategories];
-    for (const row of transactions) {
+    for (const row of periodRows) {
       if (row.category && !names.includes(row.category)) names.push(row.category);
     }
     return names
       .map((cat) => ({
         name: cat,
         value: Math.abs(
-          transactions.filter((t) => t.category === cat && t.amount < 0).reduce((s, t) => s + t.amount, 0),
+          periodRows.filter((t) => t.category === cat && t.amount < 0).reduce((s, t) => s + t.amount, 0),
         ),
       }))
       .filter((d) => d.value > 0);
-  }, [transactions, txCategories]);
+  }, [periodRows, txCategories]);
 
   const dismissInspected = (event: MouseEvent<HTMLElement>) => {
     if (!inspectedTxId) return;
@@ -325,6 +329,32 @@ export function FinanceView() {
     },
   ];
 
+  const periodDates = (
+    <div data-finance-period-dates className="flex min-w-0 flex-col gap-2">
+      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2">
+        <PeriodRangeFields
+          label="당기"
+          periodKey="current"
+          start={currentSemester.start}
+          end={currentSemester.end}
+          custom={Boolean(financePeriods.current)}
+          onChange={(range) => setFinancePeriod("current", range)}
+          onReset={() => setFinancePeriod("current", null)}
+        />
+        <PeriodRangeFields
+          label="전기"
+          periodKey="prior"
+          start={priorSemester.start}
+          end={priorSemester.end}
+          custom={Boolean(financePeriods.prior)}
+          onChange={(range) => setFinancePeriod("prior", range)}
+          onReset={() => setFinancePeriod("prior", null)}
+        />
+      </div>
+      <p className="text-[12px] text-faint">지정한 날짜로 유지됩니다</p>
+    </div>
+  );
+
   const periodChips = (chipClass?: string) =>
     PERIODS.map((item) => (
       <FilterChip
@@ -384,6 +414,8 @@ export function FinanceView() {
             <Kpi label={`수입 (${period})`} value={formatSignedWon(income)} up />
             <Kpi label={`지출 (${period})`} value={formatSignedWon(expense)} />
           </section>
+
+          <div className="shrink-0 border-b border-line-soft px-5 py-2">{periodDates}</div>
 
           <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-line-soft px-5 py-1.5">
             {periodChips()}
@@ -562,6 +594,7 @@ export function FinanceView() {
                 ) : null}
               </div>
             </div>
+            {periodDates}
             <div data-finance-chips className="-mx-4 flex flex-nowrap gap-1 overflow-x-auto px-4 scrollbar-thin md:-mx-6 md:px-6">
               {typeChips("shrink-0")}
               <span className="mx-1 h-4 w-px shrink-0 self-center bg-line" />
@@ -597,36 +630,42 @@ export function FinanceView() {
           <TransactionRail txId={inspectedTxId} onClose={() => setInspectedTxId(null)} />
         ) : (
           <RailSection title="카테고리별 지출">
-            <div className="mx-auto h-[168px] w-[168px]">
-              <PieChart width={168} height={168}>
-                <Pie
-                  data={byCategory}
-                  dataKey="value"
-                  innerRadius={50}
-                  outerRadius={74}
-                  paddingAngle={1.5}
-                  stroke="none"
-                  isAnimationActive={false}
-                  cx="50%"
-                  cy="50%"
-                >
-                  {byCategory.map((entry, i) => (
-                    <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+            {byCategory.length === 0 ? (
+              <p className="py-8 text-center text-[12px] text-faint">이 기간 지출이 없어요</p>
+            ) : (
+              <>
+                <div className="mx-auto h-[168px] w-[168px]">
+                  <PieChart width={168} height={168}>
+                    <Pie
+                      data={byCategory}
+                      dataKey="value"
+                      innerRadius={50}
+                      outerRadius={74}
+                      paddingAngle={1.5}
+                      stroke="none"
+                      isAnimationActive={false}
+                      cx="50%"
+                      cy="50%"
+                    >
+                      {byCategory.map((entry, i) => (
+                        <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </div>
+                <ul className="mt-2 space-y-1.5">
+                  {byCategory.map((item, i) => (
+                    <li key={item.name} className="flex items-center justify-between text-[12px]">
+                      <span className="inline-flex items-center gap-1.5 text-sub">
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                        {item.name}
+                      </span>
+                      <span>{formatWon(item.value)}</span>
+                    </li>
                   ))}
-                </Pie>
-              </PieChart>
-            </div>
-            <ul className="mt-2 space-y-1.5">
-              {byCategory.map((item, i) => (
-                <li key={item.name} className="flex items-center justify-between text-[12px]">
-                  <span className="inline-flex items-center gap-1.5 text-sub">
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    {item.name}
-                  </span>
-                  <span>{formatWon(item.value)}</span>
-                </li>
-              ))}
-            </ul>
+                </ul>
+              </>
+            )}
           </RailSection>
         )}
       </DetailSurface>
@@ -668,6 +707,68 @@ export function FinanceView() {
         </form>
       </Modal>
     </>
+  );
+}
+
+function PeriodRangeFields({
+  label,
+  periodKey,
+  start,
+  end,
+  custom,
+  onChange,
+  onReset,
+}: {
+  label: string;
+  periodKey: "current" | "prior";
+  start: string;
+  end: string;
+  custom: boolean;
+  onChange: (range: FinancePeriodRange) => void;
+  onReset: () => void;
+}) {
+  const fieldClass =
+    "h-touch min-w-0 flex-1 rounded-btn border border-line bg-white px-2 text-compact tabular-nums text-ink [color-scheme:light] lg:h-8 lg:w-[138px] lg:flex-none lg:px-2 lg:text-[13px]";
+
+  return (
+    <div data-finance-period-range={periodKey} className="flex min-w-0 items-center gap-1.5">
+      <span className="w-8 shrink-0 text-[13px] font-medium text-sub">{label}</span>
+      <input
+        type="date"
+        aria-label={`${label} 시작일`}
+        data-finance-period-start={periodKey}
+        value={start}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (!next) return;
+          onChange({ start: next, end: end < next ? next : end });
+        }}
+        className={fieldClass}
+      />
+      <span className="shrink-0 text-[13px] text-faint">~</span>
+      <input
+        type="date"
+        aria-label={`${label} 종료일`}
+        data-finance-period-end={periodKey}
+        value={end}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (!next) return;
+          onChange({ start: start > next ? next : start, end: next });
+        }}
+        className={fieldClass}
+      />
+      {custom ? (
+        <button
+          type="button"
+          data-finance-period-reset={periodKey}
+          className="flex h-touch shrink-0 items-center px-1 text-[13px] font-medium text-brand-text lg:h-8"
+          onClick={onReset}
+        >
+          기본
+        </button>
+      ) : null}
+    </div>
   );
 }
 

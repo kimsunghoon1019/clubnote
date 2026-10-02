@@ -4,7 +4,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/cn";
-import { duesStatus, formatDuesPeriod, type DuesRow } from "@/lib/dues";
+import { duesStatus, formatDuesPeriod, resolveFinancePeriods, type DuesRow } from "@/lib/dues";
 import { formatWon } from "@/lib/format";
 import { useClub } from "@/lib/store";
 import { useEffect, useMemo, useState } from "react";
@@ -12,16 +12,17 @@ import { useEffect, useMemo, useState } from "react";
 type Filter = "전체" | "미납" | "납부";
 
 export function DuesStatusModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { members, transactions, categories, duesOverrides, setDuesOverride } = useClub();
+  const { members, transactions, categories, duesOverrides, setDuesOverride, financePeriods } = useClub();
   const [filter, setFilter] = useState<Filter>("전체");
 
   useEffect(() => {
     if (open) setFilter("전체");
   }, [open]);
 
+  const semesterRange = useMemo(() => resolveFinancePeriods(financePeriods).current, [financePeriods]);
   const { semester, rows } = useMemo(
-    () => duesStatus(members, transactions, categories, { overrides: duesOverrides }),
-    [members, transactions, categories, duesOverrides],
+    () => duesStatus(members, transactions, categories, { overrides: duesOverrides, semester: semesterRange }),
+    [members, transactions, categories, duesOverrides, semesterRange],
   );
 
   const paidCount = rows.filter((row) => row.paid).length;

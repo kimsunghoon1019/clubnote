@@ -1,6 +1,6 @@
 import { formatDateDot, parseISODate, toISODate, todayISO } from "./format";
 import { isActive, sortMembersByCategory } from "./stats";
-import type { DuesOverride, Member, Transaction } from "./types";
+import type { DuesOverride, FinancePeriodRange, FinancePeriods, Member, Transaction } from "./types";
 
 export type DuesSemester = {
   start: string;
@@ -49,6 +49,43 @@ export function previousSemester(today = todayISO()): DuesSemester {
   return duesSemester(toISODate(start));
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function normalizeFinanceRange(value: unknown): FinancePeriodRange | null {
+  if (!value || typeof value !== "object") return null;
+  const start = (value as { start?: unknown }).start;
+  const end = (value as { end?: unknown }).end;
+  if (typeof start !== "string" || typeof end !== "string") return null;
+  if (!ISO_DATE.test(start) || !ISO_DATE.test(end)) return null;
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+export function normalizeFinancePeriods(raw: unknown): FinancePeriods {
+  if (!raw || typeof raw !== "object") return {};
+  const record = raw as { current?: unknown; prior?: unknown };
+  const current = normalizeFinanceRange(record.current);
+  const prior = normalizeFinanceRange(record.prior);
+  return {
+    ...(current ? { current } : {}),
+    ...(prior ? { prior } : {}),
+  };
+}
+
+function semesterFromRange(range: FinancePeriodRange, fallback: DuesSemester, customLabel: string): DuesSemester {
+  if (range.start === fallback.start && range.end === fallback.end) return fallback;
+  return { start: range.start, end: range.end, label: customLabel };
+}
+
+/** 저장값이 있으면 그 날짜를 쓰고, 없으면 오늘 기준 학기를 쓴다. */
+export function resolveFinancePeriods(saved: FinancePeriods | undefined, today = todayISO()) {
+  const currentDefault = duesSemester(today);
+  const priorDefault = previousSemester(today);
+  return {
+    current: saved?.current ? semesterFromRange(saved.current, currentDefault, "당기") : currentDefault,
+    prior: saved?.prior ? semesterFromRange(saved.prior, priorDefault, "전기") : priorDefault,
+  };
+}
+
 export function inSemester(iso: string, semester: DuesSemester) {
   return iso >= semester.start && iso <= semester.end;
 }
@@ -80,9 +117,9 @@ export function duesStatus(
   members: Member[],
   transactions: Transaction[],
   categories: string[],
-  options: { today?: string; overrides?: DuesOverride[] } = {},
+  options: { today?: string; overrides?: DuesOverride[]; semester?: DuesSemester } = {},
 ): { semester: DuesSemester; rows: DuesRow[] } {
-  const semester = duesSemester(options.today ?? todayISO());
+  const semester = options.semester ?? duesSemester(options.today ?? todayISO());
   const activeMembers = members.filter(isActive);
   const names = [...new Set(activeMembers.map((member) => member.name).filter(Boolean))];
   const byName = new Map<string, { amount: number; titles: string[] }>();

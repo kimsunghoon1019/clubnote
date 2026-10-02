@@ -25,6 +25,7 @@ import {
   normalizeAttendanceStatus,
 } from "./constants";
 import { closePastPracticeEvents, withFineTallies } from "./attendanceSheet";
+import { normalizeFinancePeriods } from "./dues";
 import { collegeFromMajor, msUntilNextLocalMidnight, todayISO } from "./format";
 import { isPracticeEvent } from "./stats";
 import {
@@ -85,6 +86,8 @@ import type {
   ChartNote,
   ClubEvent,
   DuesOverride,
+  FinancePeriodRange,
+  FinancePeriods,
   Member,
   PracticeDay,
   Transaction,
@@ -171,6 +174,8 @@ type ClubContextValue = {
   closeModal: () => void;
   duesOverrides: DuesOverride[];
   setDuesOverride: (memberId: string, semesterStart: string, paid: boolean | null) => void;
+  financePeriods: FinancePeriods;
+  setFinancePeriod: (key: "current" | "prior", range: FinancePeriodRange | null) => void;
   sessionReady: boolean;
   sessionMemberId: string | null;
   currentMember: Member | null;
@@ -425,6 +430,7 @@ function toPersistPayload(input: {
   eventsClearedBefore: string;
   seedPracticesKeptDate: string;
   duesOverrides: DuesOverride[];
+  financePeriods: FinancePeriods;
   stripPhotos?: boolean;
 }): Persisted {
   const members = withFineTallies(input.members, input.events, input.attendance);
@@ -445,6 +451,7 @@ function toPersistPayload(input: {
     eventsClearedBefore: input.eventsClearedBefore,
     seedPracticesKeptDate: input.seedPracticesKeptDate,
     duesOverrides: input.duesOverrides,
+    financePeriods: input.financePeriods,
     legacyTaxonomyMerged: true,
     profileDatesCleared: true,
   };
@@ -500,6 +507,7 @@ function parsedClubSnapshot(data: Persisted, ignoreLegacy = false) {
     ),
     chartSeenByAccount: normalizeChartSeen(data.chartSeenByAccount),
     duesOverrides: normalizeDuesOverrides(data.duesOverrides),
+    financePeriods: normalizeFinancePeriods(data.financePeriods),
     transactions: data.transactions ?? [],
   };
 }
@@ -532,6 +540,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const [accountId, setAccountId] = useState(LOCAL_ACCOUNT_ID);
   const [chartSeenByAccount, setChartSeenByAccount] = useState<ChartSeenByAccount>({});
   const [duesOverrides, setDuesOverrides] = useState<DuesOverride[]>([]);
+  const [financePeriods, setFinancePeriods] = useState<FinancePeriods>({});
   const [sessionMemberId, setSessionMemberId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [remoteDb, setRemoteDb] = useState(false);
@@ -612,6 +621,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setTxCategories(snap.txCategories);
     setChartSeenByAccount(snap.chartSeenByAccount);
     setDuesOverrides(snap.duesOverrides);
+    setFinancePeriods(snap.financePeriods);
     setTransactions((prev) => mergeProofsDuringHydrate(prev, txs));
     const pushed = toPersistPayload({
       members: snap.members,
@@ -630,6 +640,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventsClearedBefore: snap.eventsClearedBefore,
       seedPracticesKeptDate: snap.seedPracticesKeptDate,
       duesOverrides: snap.duesOverrides,
+      financePeriods: snap.financePeriods,
       stripPhotos: remoteDbRef.current,
     });
     const hadEmbeddedPhotos = data.members.some(
@@ -884,6 +895,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       eventsClearedBefore,
       seedPracticesKeptDate,
       duesOverrides,
+      financePeriods,
       stripPhotos: false,
     });
     persistPayloadRef.current = payload;
@@ -913,7 +925,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       persistFlushRef.current();
     }, 280);
     return () => window.clearTimeout(persistTimerRef.current);
-  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, seedPracticesKeptDate, duesOverrides, sessionMemberId]);
+  }, [ready, members, events, attendance, notes, transactions, categories, roles, eventTypes, places, txCategories, chartSeenByAccount, weatherDays, weatherFetchedAt, eventsClearedBefore, seedPracticesKeptDate, duesOverrides, financePeriods, sessionMemberId]);
 
   useEffect(() => {
     if (!remoteDb || !ready || !sessionMemberId) return;
@@ -1421,6 +1433,22 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setFinancePeriod = useCallback((key: "current" | "prior", range: FinancePeriodRange | null) => {
+    setFinancePeriods((prev) => {
+      if (!range) {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      const normalized = normalizeFinancePeriods({ [key]: range })[key];
+      if (!normalized) return prev;
+      const current = prev[key];
+      if (current && current.start === normalized.start && current.end === normalized.end) return prev;
+      return { ...prev, [key]: normalized };
+    });
+  }, []);
+
   const signIn = useCallback(async (studentId: string, pin: string) => {
     const health = await fetchDbHealth();
     const remote = health.remote && health.ready;
@@ -1557,6 +1585,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       closeModal,
       duesOverrides,
       setDuesOverride,
+      financePeriods,
+      setFinancePeriod,
       sessionReady,
       sessionMemberId,
       currentMember,
@@ -1638,6 +1668,8 @@ export function ClubProvider({ children }: { children: ReactNode }) {
       closeModal,
       duesOverrides,
       setDuesOverride,
+      financePeriods,
+      setFinancePeriod,
       sessionReady,
       sessionMemberId,
       currentMember,

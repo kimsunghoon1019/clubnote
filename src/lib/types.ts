@@ -115,4 +115,15 @@ export type DuesOverride = {
   paid: boolean;
 };
 
+/** 회계 탭에서 지정한 당기·전기. 없는 쪽은 학기 기본값을 쓴다. */
+export type FinancePeriodRange = {
+  start: string;
+  end: string;
+};
+
+export type FinancePeriods = {
+  current?: FinancePeriodRange;
+  prior?: FinancePeriodRange;
+};
+
 export type NavKey = "home" | "members" | "attendance" | "finance" | "calendar";

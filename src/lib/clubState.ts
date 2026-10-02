@@ -19,6 +19,7 @@ import type {
   ChartNote,
   ClubEvent,
   DuesOverride,
+  FinancePeriods,
   Member,
   Transaction,
 } from "./types";
@@ -44,6 +45,8 @@ export type Persisted = {
   /** 시드 연습 일정을 이 날짜만 남기고 걷어낸 뒤 기록. */
   seedPracticesKeptDate?: string;
   duesOverrides?: DuesOverride[];
+  /** 회계 당기·전기. 비어 있으면 학기 기본값. */
+  financePeriods?: FinancePeriods;
   legacyTaxonomyMerged?: boolean;
   /** 시드에 넣었던 생년월일·가입일을 한 번 비운 뒤 true. */
   profileDatesCleared?: boolean;
